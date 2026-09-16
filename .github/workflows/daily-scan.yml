@@ -1,0 +1,35 @@
+name: Daily NEL scan
+
+on:
+  schedule:
+    # One of these two UTC times is 4:10 PM in New York; the runner ignores
+    # the other one and handles daylight-saving time itself.
+    - cron: "10 20,21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run after the US market close
+        run: python scripts/run_after_close.py
+
+      - name: Commit the refreshed dashboard and daily outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs industry_flow_dashboard.html index.html
+          git diff --cached --quiet || git commit -m "Update NEL scan for $(date -u +%F)"
+          git push

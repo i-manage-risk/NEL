@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.py[cod]
+logs/
+.daily_scan.lock/
+.DS_Store
