@@ -42,6 +42,8 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
         ] if column in frame.columns]
         liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
         nel_path = output_dir / f"non_extended_leaders_{match.group(1)}.csv"
+        universe_path = output_dir / f"filtered_universe_{match.group(1)}.csv"
+        universe_count = len(pd.read_csv(universe_path)) if universe_path.exists() else 0
         nel_records = []
         if nel_path.exists():
             nel = pd.read_csv(nel_path)
@@ -52,7 +54,7 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
         # `groups` comes only from full momentum-leader files. The NEL subset
         # below is a display table and cannot influence theme leadership.
-        snapshots.append({"date": match.group(1), "groups": groups, "liquid": liquid_records, "nel": nel_records})
+        snapshots.append({"date": match.group(1), "groups": groups, "universe_count": universe_count, "liquid": liquid_records, "nel": nel_records})
     return snapshots
 
 
@@ -131,17 +133,20 @@ def write_dashboard(output_dir: Path) -> Path:
 </head>
 <body>
 <main>
-  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 class="dashboard-title">Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>
+  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 id="thematic-title" class="dashboard-title">Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>
   <div id="leadership-sections" class="window-sections"></div>
-  <div class="section-heading"><h2>Liquid Leaders (LL)</h2><button id="download-ll" class="download-btn" type="button">Export LL</button></div>
+  <div class="section-heading"><h2 id="liquid-title">Liquid Leaders (LL)</h2><button id="download-ll" class="download-btn" type="button">Export LL</button></div>
   <div id="liquid-sections" class="window-sections"></div>
-  <div class="section-heading"><h2>Non-Extended Leaders (NEL)</h2><button id="download-nel" class="download-btn" type="button">Export NEL</button></div>
+  <div class="section-heading"><h2 id="nel-title">Non-Extended Leaders (NEL)</h2><button id="download-nel" class="download-btn" type="button">Export NEL</button></div>
   <div id="nel-sections" class="window-sections"></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 const history = __DATA__;
 const dateSelect = document.getElementById('date');
+const thematicTitle = document.getElementById('thematic-title');
+const liquidTitle = document.getElementById('liquid-title');
+const nelTitle = document.getElementById('nel-title');
 const leadershipSections = document.getElementById('leadership-sections');
 const liquidSections = document.getElementById('liquid-sections');
 const nelSections = document.getElementById('nel-sections');
@@ -208,6 +213,9 @@ function renderNEL(snapshot) {
 }
 function render() {
   const current = currentSnapshot(), index = Number(dateSelect.value), previous = history[index-1];
+  thematicTitle.textContent = `Thematic Leadership - ${current.universe_count || 0} Tickers`;
+  liquidTitle.textContent = `Liquid Leaders (LL) - ${(current.liquid || []).length} Tickers`;
+  nelTitle.textContent = `Non-Extended Leaders (NEL) - ${(current.nel || []).length} Tickers`;
   leadershipSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="panel" data-frame="${frame}"><h2 style="color:${meta.color}">${meta.label} leadership</h2><div id="bars-${frame}" class="bars"></div><h2 style="margin-top:22px">Leadership over time</h2><svg id="trend-${frame}" role="img" aria-label="${meta.label} industry leader counts across available snapshots"></svg></section>`).join('');
   liquidSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} LL</h3><div id="liquid-theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap scrollable-table"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="liquid-table-${frame}"></tbody></table></div></section>`).join('');
   nelSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} NEL</h3><div id="theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="nel-table-${frame}"></tbody></table></div></section>`).join('');
@@ -226,7 +234,7 @@ async function downloadPageImage() {
   if (typeof html2canvas !== 'function') { window.alert('The image exporter could not load. Check your connection and try again.'); return; }
   downloadButton.disabled = true; downloadButton.textContent = 'Creating image…';
   try {
-    const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><h1 class="dashboard-title">Thematic Leadership</h1><span></span>`; } });
+    const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><h1 class="dashboard-title">${thematicTitle.textContent}</h1><span></span>`; } });
     const link = document.createElement('a'); link.download = `industry-leadership-${currentSnapshot().date}.png`; link.href = canvas.toDataURL('image/png'); link.click();
   } finally { downloadButton.disabled = false; downloadButton.textContent = 'Snapshot'; }
 }
