@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime
 from math import ceil
 from pathlib import Path
 from typing import Iterable
@@ -158,12 +158,12 @@ def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def write_outputs(universe: pd.DataFrame, leaders: pd.DataFrame, nel: pd.DataFrame, settings: Settings, output_dir: Path) -> list[Path]:
+def write_outputs(universe: pd.DataFrame, leaders: pd.DataFrame, nel: pd.DataFrame, settings: Settings, output_dir: Path, snapshot_date: date | None = None) -> list[Path]:
     """Write each review view as a plain CSV file."""
     output_dir.mkdir(parents=True, exist_ok=True)
     export_dir = output_dir / "EXPORT"
     export_dir.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y-%m-%d")
+    stamp = (snapshot_date or datetime.now().date()).isoformat()
     settings_frame = pd.DataFrame(list(asdict(settings).items()), columns=["setting", "value"])
     outputs = {
         "non_extended_leaders": prepare_for_export(nel),
@@ -187,6 +187,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-pct", type=float, default=0.05, help="Top share from each 1-, 3-, and 6-month ranking before deduplication (default: 0.05).")
     parser.add_argument("--max-extension", type=float, default=4.0, help="Maximum ATRs extended from SMA50 (default: 4).")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"), help="CSV output directory.")
+    parser.add_argument("--snapshot-date", type=date.fromisoformat, help="Date to use in output filenames (YYYY-MM-DD).")
     return parser.parse_args()
 
 
@@ -199,7 +200,7 @@ def main() -> None:
     settings = Settings(min_adr_pct=args.min_adr_pct, top_pct=args.top_pct, max_atr_extension=args.max_extension)
     raw = fetch_universe()
     universe, leaders, nel = calculate_nel(raw, settings)
-    paths = write_outputs(universe, leaders, nel, settings, args.output_dir)
+    paths = write_outputs(universe, leaders, nel, settings, args.output_dir, args.snapshot_date)
     paths.append(write_dashboard(args.output_dir))
     print(f"Scanned: {len(raw):,} | eligible: {len(universe):,} | leaders: {len(leaders):,} | NEL: {len(nel):,}")
     print("Saved:\n" + "\n".join(str(path) for path in paths))

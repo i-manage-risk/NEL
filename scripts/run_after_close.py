@@ -98,7 +98,7 @@ def main() -> int:
         with log_path.open("a", encoding="utf-8") as log:
             log.write(f"\n--- Scheduled run started {now.isoformat()} ---\n")
             result = subprocess.run(
-                [str(scanner_python), "focus_list.py"],
+                [str(scanner_python), "focus_list.py", "--snapshot-date", now.date().isoformat()],
                 cwd=PROJECT_DIR,
                 stdout=log,
                 stderr=subprocess.STDOUT,
