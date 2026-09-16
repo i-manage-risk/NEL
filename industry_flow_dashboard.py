@@ -37,7 +37,7 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
             )
             groups[label] = {str(industry): int(count) for industry, count in counts.items()}
         leader_columns = [column for column in [
-            "name", "industry", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M",
+            "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M",
             "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m",
         ] if column in frame.columns]
         liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
@@ -46,7 +46,7 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
         if nel_path.exists():
             nel = pd.read_csv(nel_path)
             columns = [column for column in [
-                "name", "industry", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M",
+                "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M",
                 "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m",
             ] if column in nel.columns]
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
@@ -157,6 +157,7 @@ function escapeHTML(value) { return String(value ?? '—').replace(/[&<>'"]/g, c
 function formatPct(value) { return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : '—'; }
 function formatNumber(value) { return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '—'; }
 function formatDollarVolume(value) { const amount = Number(value); if (!Number.isFinite(amount) || amount <= 0) return '—'; if (amount >= 1_000_000_000) return `$${Math.ceil(amount / 1_000_000_000)}B`; return `$${Math.ceil(amount / 10_000_000) * 10}M`; }
+function averageDollarVolume(row) { return row.average_dollar_volume_30d ?? row.dollar_volume_30d; }
 function updateDates() {
   dateSelect.innerHTML = history.map((d,i) => `<option value="${i}">${d.date}</option>`).join('');
   dateSelect.value = Math.max(0, history.length - 1);
@@ -191,7 +192,7 @@ function renderLiquid(snapshot) {
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    table.innerHTML = rows.length ? rows.map(row => { const highLiquidity = Number(row.dollar_volume_30d) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(row.dollar_volume_30d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
+    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = averageDollarVolume(row); const highLiquidity = Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
   });
 }
 function renderNEL(snapshot) {
@@ -202,7 +203,7 @@ function renderNEL(snapshot) {
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    nelTable.innerHTML = rows.length ? rows.map(row => { const highLiquidity = Number(row.dollar_volume_30d) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(row.dollar_volume_30d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No NEL leaders.</td></tr>';
+    nelTable.innerHTML = rows.length ? rows.map(row => { const dollarVolume = averageDollarVolume(row); const highLiquidity = Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No NEL leaders.</td></tr>';
   });
 }
 function render() {

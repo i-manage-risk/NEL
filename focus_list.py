@@ -30,6 +30,7 @@ SCAN_COLUMNS = [
     "exchange",
     "industry",
     "close",
+    "SMA30",
     "SMA50",
     "ADRP",
     "ATRP",
@@ -85,9 +86,9 @@ def _assign_exact_top_flags(frame: pd.DataFrame, metric: str, rank_column: str, 
 
 def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Return the eligible universe, leaders, and non-extended leaders (NEL)."""
-    _require_columns(raw, ["name", "industry", "close", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc"])
+    _require_columns(raw, ["name", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc"])
     df = raw.copy()
-    numeric = ["close", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc"]
+    numeric = ["close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc"]
     for column in numeric:
         df[column] = pd.to_numeric(df[column], errors="coerce")
 
@@ -95,12 +96,13 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
     # ADRP is used only for the initial activity filter. ATRP feeds the
     # extension calculation exactly as in your manual spreadsheet.
     df["dollar_volume_30d"] = df["close"] * df["average_volume_30d_calc"]
+    df["average_dollar_volume_30d"] = df["SMA30"] * df["average_volume_30d_calc"]
     df["atr_extension_from_50d"] = (df["close"] - df["SMA50"]) / (
         df["SMA50"] * (df["ATRP"] / 100)
     )
 
     valid_industry = ~df["industry"].fillna("").str.contains("biotech", case=False, regex=False)
-    valid_metrics = (df[["close", "SMA50", "ADRP", "ATRP"]] > 0).all(axis=1)
+    valid_metrics = (df[["close", "SMA30", "SMA50", "ADRP", "ATRP"]] > 0).all(axis=1)
     has_performance = df[["Perf.1M", "Perf.3M", "Perf.6M"]].notna().all(axis=1)
     universe = df.loc[
         valid_industry
@@ -142,16 +144,16 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
 def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     """Order and round the columns so the daily review sheet is scan-friendly."""
     preferred = [
-        "name", "description", "exchange", "industry", "close", "SMA50", "ADRP", "ATRP",
-        "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d",
+        "name", "description", "exchange", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP",
+        "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d", "average_dollar_volume_30d",
         "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank",
         "momentum_score", "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m",
     ]
     columns = [column for column in preferred if column in frame.columns]
     result = frame.loc[:, columns].copy()
     return result.round({
-        "close": 2, "SMA50": 2, "ADRP": 2, "ATRP": 2,
-        "dollar_volume_30d": 0, "Perf.1M": 2, "Perf.3M": 2, "Perf.6M": 2,
+        "close": 2, "SMA30": 2, "SMA50": 2, "ADRP": 2, "ATRP": 2,
+        "dollar_volume_30d": 0, "average_dollar_volume_30d": 0, "Perf.1M": 2, "Perf.3M": 2, "Perf.6M": 2,
         "momentum_score": 2, "atr_extension_from_50d": 2,
     })
 
