@@ -74,7 +74,7 @@ def write_dashboard(output_dir: Path) -> Path:
     :root { color-scheme: dark; --bg:#141414; --panel:#2A2A2A; --line:#454545; --text:#F5F2E8; --muted:#F5F2E8; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --previous:#727272; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    main { width:100%; max-width:2200px; margin:0 auto; padding:24px 52px 40px; }
+    main { width:100%; max-width:2200px; margin:0 auto; padding:24px 40px 40px; }
     h2 { font-size:17px; margin:0 0 14px; }
     .topbar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:22px; }
     .dashboard-title { margin:0; color:var(--text); font-size:19px; font-weight:650; letter-spacing:-.01em; }
