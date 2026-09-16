@@ -15,6 +15,7 @@ LOG_DIR = PROJECT_DIR / "logs"
 MARKER = PROJECT_DIR / "outputs" / ".last_scheduled_run.txt"
 LOCK_DIR = PROJECT_DIR / ".daily_scan.lock"
 NY_TZ = ZoneInfo("America/New_York")
+PAKISTAN_TZ = ZoneInfo("Asia/Karachi")
 
 
 def nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
@@ -79,6 +80,11 @@ def should_run(now: datetime) -> bool:
     )
 
 
+def next_session_date(now: datetime) -> date:
+    """Date post-close output for the next trading session in Pakistan time."""
+    return now.astimezone(PAKISTAN_TZ).date()
+
+
 def main() -> int:
     now = datetime.now(NY_TZ)
     if not should_run(now):
@@ -98,7 +104,7 @@ def main() -> int:
         with log_path.open("a", encoding="utf-8") as log:
             log.write(f"\n--- Scheduled run started {now.isoformat()} ---\n")
             result = subprocess.run(
-                [str(scanner_python), "focus_list.py", "--snapshot-date", now.date().isoformat()],
+                [str(scanner_python), "focus_list.py", "--snapshot-date", next_session_date(now).isoformat()],
                 cwd=PROJECT_DIR,
                 stdout=log,
                 stderr=subprocess.STDOUT,

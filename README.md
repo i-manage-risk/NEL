@@ -27,7 +27,7 @@ python focus_list.py
 
 ## Automatic daily run (macOS)
 
-The installed scheduler checks once per minute and runs the scanner once after 4:10 PM New York time on regular US market days. If the Mac wakes later that evening, it catches up automatically. It handles daylight-saving changes and writes each run to `logs/daily_scan_YYYY-MM-DD.log`.
+The installed scheduler checks once per minute and runs the scanner once after 4:10 PM New York time on regular US market days. It uses New York time for market-close and holiday checks, but stamps the output with the Pakistan date because the post-close list is for the next session. If the Mac wakes later that evening, it catches up automatically. It handles daylight-saving changes and writes each run to `logs/daily_scan_YYYY-MM-DD.log`.
 
 The CSV files appear in `outputs/`:
 
