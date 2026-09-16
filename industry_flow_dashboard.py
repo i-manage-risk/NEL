@@ -42,8 +42,6 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
         ] if column in frame.columns]
         liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
         nel_path = output_dir / f"non_extended_leaders_{match.group(1)}.csv"
-        universe_path = output_dir / f"filtered_universe_{match.group(1)}.csv"
-        universe_count = len(pd.read_csv(universe_path)) if universe_path.exists() else 0
         nel_records = []
         if nel_path.exists():
             nel = pd.read_csv(nel_path)
@@ -54,7 +52,7 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
         # `groups` comes only from full momentum-leader files. The NEL subset
         # below is a display table and cannot influence theme leadership.
-        snapshots.append({"date": match.group(1), "groups": groups, "universe_count": universe_count, "liquid": liquid_records, "nel": nel_records})
+        snapshots.append({"date": match.group(1), "groups": groups, "liquid": liquid_records, "nel": nel_records})
     return snapshots
 
 
@@ -213,7 +211,6 @@ function renderNEL(snapshot) {
 }
 function render() {
   const current = currentSnapshot(), index = Number(dateSelect.value), previous = history[index-1];
-  thematicTitle.textContent = `Thematic Leadership - ${current.universe_count || 0} Tickers`;
   liquidTitle.textContent = `Liquid Leaders (LL) - ${(current.liquid || []).length} Tickers`;
   nelTitle.textContent = `Non-Extended Leaders (NEL) - ${(current.nel || []).length} Tickers`;
   leadershipSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="panel" data-frame="${frame}"><h2 style="color:${meta.color}">${meta.label} leadership</h2><div id="bars-${frame}" class="bars"></div><h2 style="margin-top:22px">Leadership over time</h2><svg id="trend-${frame}" role="img" aria-label="${meta.label} industry leader counts across available snapshots"></svg></section>`).join('');
