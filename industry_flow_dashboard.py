@@ -74,7 +74,7 @@ def write_dashboard(output_dir: Path) -> Path:
     :root { color-scheme: dark; --bg:#141414; --panel:#2A2A2A; --line:#454545; --text:#F5F2E8; --muted:#F5F2E8; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --previous:#727272; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    main { width:100%; max-width:none; margin:0; padding:24px 36px 40px; }
+    main { width:100%; max-width:2200px; margin:0 auto; padding:24px 52px 40px; }
     h2 { font-size:17px; margin:0 0 14px; }
     .topbar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:22px; }
     .dashboard-title { margin:0; color:var(--text); font-size:19px; font-weight:650; letter-spacing:-.01em; }
@@ -171,8 +171,11 @@ function renderLiquid(snapshot) {
   const records = snapshot?.liquid || [];
   [['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m']].forEach(([frame, performance, flag]) => {
     const table = document.getElementById(`liquid-table-${frame}`);
+    const themeCard = document.getElementById(`liquid-theme-${frame}`);
+    const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
+    themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    table.innerHTML = rows.length ? rows.map(row => { const highLiquidity = Number(row.dollar_volume_30d) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(row.dollar_volume_30d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No extended leaders.</td></tr>';
+    table.innerHTML = rows.length ? rows.map(row => { const highLiquidity = Number(row.dollar_volume_30d) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(row.dollar_volume_30d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
   });
 }
 function renderNEL(snapshot) {
@@ -189,7 +192,7 @@ function renderNEL(snapshot) {
 function render() {
   const current = currentSnapshot(), index = Number(dateSelect.value), previous = history[index-1];
   leadershipSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="panel" data-frame="${frame}"><h2 style="color:${meta.color}">${meta.label} leadership</h2><div id="bars-${frame}" class="bars"></div><h2 style="margin-top:22px">Leadership over time</h2><svg id="trend-${frame}" role="img" aria-label="${meta.label} industry leader counts across available snapshots"></svg></section>`).join('');
-  liquidSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} LL</h3><div class="table-wrap scrollable-table"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="liquid-table-${frame}"></tbody></table></div></section>`).join('');
+  liquidSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} LL</h3><div id="liquid-theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap scrollable-table"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="liquid-table-${frame}"></tbody></table></div></section>`).join('');
   nelSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} NEL</h3><div id="theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="nel-table-${frame}"></tbody></table></div></section>`).join('');
   Object.keys(flowMeta).forEach(frame => { const rankedNames = renderBars(current, previous, frame, document.getElementById(`bars-${frame}`)); renderTrend(frame, document.getElementById(`trend-${frame}`), rankedNames); });
   renderLiquid(current);
