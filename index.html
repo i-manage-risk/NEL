@@ -93,7 +93,7 @@ function renderBars(current, previous, frame, container) {
 function renderTrend(frame, svg, names) {
   const active = history.filter(d => d.groups?.[frame]);
   if (active.length < 2) { svg.innerHTML = '<text x="20" y="45" fill="#c0bdb4">Add future daily snapshots to see industry leadership trends.</text>'; return; }
-  const width = Math.max(620, svg.clientWidth || 900), height = 300, left = 42, right = 120, top = 18, bottom = 34;
+  const width = Math.max(620, svg.clientWidth || 900), height = 300, left = 42, right = 28, top = 18, bottom = 34;
   const max = Math.max(1, ...active.flatMap(d => Object.values(counts(d, frame))));
   const x = i => left + i * ((width-left-right) / Math.max(1, active.length-1));
   const y = value => top + (max-value) * ((height-top-bottom)/max);
