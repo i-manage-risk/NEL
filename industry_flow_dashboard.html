@@ -15,7 +15,9 @@
     .topbar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:22px; }
     .dashboard-title { margin:0; color:var(--text); font-size:22px; font-weight:650; letter-spacing:-.02em; }
     select { width:150px; height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:8px 10px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    .download-btn { width:150px; height:38px; justify-self:end; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:9px 12px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; cursor:pointer; }
+    .topbar-actions { display:flex; justify-self:end; gap:10px; }
+    .download-btn { height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:9px 12px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; cursor:pointer; }
+    #download-image { width:150px; } #download-nel { min-width:180px; }
     .download-btn:disabled { cursor:wait; opacity:.7; }
     .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
     .panel { padding:18px; margin:0; }
@@ -42,11 +44,12 @@
     .empty { color:var(--text); padding:30px 0; }
     .snapshot-date { color:#F5F2E8; font-size:14px; font-weight:600; }
     @media (max-width:980px) { .window-sections { grid-template-columns:1fr; } .bar-row { grid-template-columns:130px 1fr 34px; font-size:12px; } main { padding:18px 16px; } }
+    @media (max-width:640px) { .topbar { grid-template-columns:1fr; justify-items:start; gap:12px; } .dashboard-title { justify-self:center; } .topbar-actions { justify-self:start; flex-wrap:wrap; } }
   </style>
 </head>
 <body>
 <main>
-  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 class="dashboard-title">Liquid Leadership</h1><button id="download-image" class="download-btn" type="button">Download</button></div>
+  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 class="dashboard-title">Liquid Leadership</h1><div class="topbar-actions"><button id="download-nel" class="download-btn" type="button">NEL Symbols</button><button id="download-image" class="download-btn" type="button">Download</button></div></div>
   <div id="leadership-sections" class="window-sections"></div>
   <h2 class="nel-section-title">Non-Extended Leaders (NEL)</h2>
   <div id="nel-sections" class="window-sections"></div>
@@ -58,6 +61,7 @@ const dateSelect = document.getElementById('date');
 const leadershipSections = document.getElementById('leadership-sections');
 const nelSections = document.getElementById('nel-sections');
 const downloadButton = document.getElementById('download-image');
+const downloadNelButton = document.getElementById('download-nel');
 const flowMeta = { '1m': { label:'1 month', color:'#ff9900' }, '3m': { label:'3 months', color:'#00ffff' }, '6m': { label:'6 months', color:'#ff3366' } };
 const rankColors = ['#5C7CFA', '#E9C46A', '#E76F51', '#70C1B3', '#C77DFF'];
 
@@ -111,6 +115,13 @@ function render() {
   Object.keys(flowMeta).forEach(frame => { const rankedNames = renderBars(current, previous, frame, document.getElementById(`bars-${frame}`)); renderTrend(frame, document.getElementById(`trend-${frame}`), rankedNames); });
   renderNEL(current);
 }
+function downloadNelSymbols() {
+  const snapshot = currentSnapshot();
+  const symbols = [...new Set((snapshot?.nel || []).map(row => String(row.name || '').trim()).filter(Boolean))].sort();
+  const csv = ['symbol', ...symbols.map(symbol => `"${symbol.replaceAll('"', '""')}"`)].join('\n') + '\n';
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const link = document.createElement('a'); link.download = `nel_symbols_${snapshot.date}.csv`; link.href = URL.createObjectURL(blob); link.click(); URL.revokeObjectURL(link.href);
+}
 async function downloadPageImage() {
   if (typeof html2canvas !== 'function') { window.alert('The image exporter could not load. Check your connection and try again.'); return; }
   downloadButton.disabled = true; downloadButton.textContent = 'Creating image…';
@@ -119,7 +130,7 @@ async function downloadPageImage() {
     const link = document.createElement('a'); link.download = `industry-leadership-${currentSnapshot().date}.png`; link.href = canvas.toDataURL('image/png'); link.click();
   } finally { downloadButton.disabled = false; downloadButton.textContent = 'Download'; }
 }
-if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); window.addEventListener('resize', render); render(); }
+if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadNelButton.addEventListener('click', downloadNelSymbols); window.addEventListener('resize', render); render(); }
 </script>
 </body>
 </html>
