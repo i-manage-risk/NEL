@@ -40,9 +40,7 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
             "name", "industry", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M",
             "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m",
         ] if column in frame.columns]
-        liquid_records = json.loads(
-            frame.loc[frame["atr_extension_from_50d"] > 4, leader_columns].to_json(orient="records")
-        ) if "atr_extension_from_50d" in frame.columns else []
+        liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
         nel_path = output_dir / f"non_extended_leaders_{match.group(1)}.csv"
         nel_records = []
         if nel_path.exists():
@@ -70,13 +68,16 @@ def write_dashboard(output_dir: Path) -> Path:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Industry leadership flow</title>
+  <link rel="icon" type="image/png" href="assets/nel-favicon.png">
+  <link rel="apple-touch-icon" href="assets/nel-favicon.png">
   <style>
     :root { color-scheme: dark; --bg:#141414; --panel:#2A2A2A; --line:#454545; --text:#F5F2E8; --muted:#F5F2E8; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --previous:#727272; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     main { width:100%; max-width:none; margin:0; padding:24px 36px 40px; }
     h2 { font-size:17px; margin:0 0 14px; }
-    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; }
+    .topbar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:22px; }
+    .dashboard-title { margin:0; color:var(--text); font-size:19px; font-weight:650; letter-spacing:-.01em; }
     select { width:150px; height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:8px 10px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     .download-btn { width:150px; height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:9px 12px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; cursor:pointer; }
     .download-btn:disabled { cursor:wait; opacity:.7; }
@@ -92,7 +93,6 @@ def write_dashboard(output_dir: Path) -> Path:
     .value { color:var(--text); text-align:right; font-variant-numeric:tabular-nums; }
     svg { width:100%; height:300px; display:block; overflow:visible; }
     .window-sections { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; align-items:start; }
-    .thematic-title { margin:0 0 14px; color:var(--text); font-size:19px; letter-spacing:-.01em; text-align:center; }
     .section-heading { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin:28px 0 14px; }
     .section-heading h2 { grid-column:2; margin:0; color:var(--text); font-size:19px; letter-spacing:-.01em; text-align:center; }
     .section-heading .download-btn { grid-column:3; justify-self:end; }
@@ -109,13 +109,12 @@ def write_dashboard(output_dir: Path) -> Path:
     .empty { color:var(--text); padding:30px 0; }
     .snapshot-date { color:#F5F2E8; font-size:14px; font-weight:600; }
     @media (max-width:980px) { .window-sections { grid-template-columns:1fr; } .bar-row { grid-template-columns:130px 1fr 34px; font-size:12px; } main { padding:18px 16px; } }
-    @media (max-width:640px) { .topbar { gap:12px; } .section-heading { grid-template-columns:1fr auto; } .section-heading h2 { grid-column:1; text-align:left; } .section-heading .download-btn { grid-column:2; } }
+    @media (max-width:640px) { .topbar { grid-template-columns:1fr; justify-items:start; gap:12px; } .dashboard-title { justify-self:center; } .topbar .download-btn { justify-self:start; } .section-heading { grid-template-columns:1fr auto; } .section-heading h2 { grid-column:1; text-align:left; } .section-heading .download-btn { grid-column:2; } }
   </style>
 </head>
 <body>
 <main>
-  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><button id="download-image" class="download-btn" type="button">Download</button></div>
-  <h2 class="thematic-title">Thematic Leadership</h2>
+  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 class="dashboard-title">Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>
   <div id="leadership-sections" class="window-sections"></div>
   <div class="section-heading"><h2>Liquid Leaders (LL)</h2><button id="download-ll" class="download-btn" type="button">Export LL</button></div>
   <div id="liquid-sections" class="window-sections"></div>
@@ -206,9 +205,9 @@ async function downloadPageImage() {
   if (typeof html2canvas !== 'function') { window.alert('The image exporter could not load. Check your connection and try again.'); return; }
   downloadButton.disabled = true; downloadButton.textContent = 'Creating image…';
   try {
-    const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><span></span>`; } });
+    const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><h1 class="dashboard-title">Thematic Leadership</h1><span></span>`; } });
     const link = document.createElement('a'); link.download = `industry-leadership-${currentSnapshot().date}.png`; link.href = canvas.toDataURL('image/png'); link.click();
-  } finally { downloadButton.disabled = false; downloadButton.textContent = 'Download'; }
+  } finally { downloadButton.disabled = false; downloadButton.textContent = 'Snapshot'; }
 }
 if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadLiquidButton.addEventListener('click', () => downloadSymbols('liquid', 'liquid_leaders')); downloadNelButton.addEventListener('click', () => downloadSymbols('nel', 'nel')); window.addEventListener('resize', render); render(); }
 </script>
