@@ -36,6 +36,13 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
                 .to_dict()
             )
             groups[label] = {str(industry): int(count) for industry, count in counts.items()}
+        leader_columns = [column for column in [
+            "name", "industry", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M",
+            "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m",
+        ] if column in frame.columns]
+        liquid_records = json.loads(
+            frame.loc[frame["atr_extension_from_50d"] > 4, leader_columns].to_json(orient="records")
+        ) if "atr_extension_from_50d" in frame.columns else []
         nel_path = output_dir / f"non_extended_leaders_{match.group(1)}.csv"
         nel_records = []
         if nel_path.exists():
@@ -47,7 +54,7 @@ def collect_industry_history(output_dir: Path) -> list[dict]:
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
         # `groups` comes only from full momentum-leader files. The NEL subset
         # below is a display table and cannot influence theme leadership.
-        snapshots.append({"date": match.group(1), "groups": groups, "nel": nel_records})
+        snapshots.append({"date": match.group(1), "groups": groups, "liquid": liquid_records, "nel": nel_records})
     return snapshots
 
 
@@ -68,15 +75,10 @@ def write_dashboard(output_dir: Path) -> Path:
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     main { width:100%; max-width:none; margin:0; padding:24px 36px 40px; }
-    h1 { margin:0; font-size:28px; letter-spacing:-.02em; }
     h2 { font-size:17px; margin:0 0 14px; }
-    .subtitle { color:var(--muted); margin:6px 0 24px; }
-    .topbar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:22px; }
-    .dashboard-title { margin:0; color:var(--text); font-size:22px; font-weight:650; letter-spacing:-.02em; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; }
     select { width:150px; height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:8px 10px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    .topbar-actions { display:flex; justify-self:end; gap:10px; }
-    .download-btn { height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:9px 12px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; cursor:pointer; }
-    #download-image { width:150px; } #download-nel { min-width:180px; }
+    .download-btn { width:150px; height:38px; background:#F5F2E8; color:#141414; border:0; border-radius:7px; padding:9px 12px; font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; cursor:pointer; }
     .download-btn:disabled { cursor:wait; opacity:.7; }
     .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
     .panel { padding:18px; margin:0; }
@@ -90,7 +92,10 @@ def write_dashboard(output_dir: Path) -> Path:
     .value { color:var(--text); text-align:right; font-variant-numeric:tabular-nums; }
     svg { width:100%; height:300px; display:block; overflow:visible; }
     .window-sections { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; align-items:start; }
-    .nel-section-title { margin:28px 0 14px; color:var(--text); font-size:19px; letter-spacing:-.01em; text-align:center; }
+    .thematic-title { margin:0 0 14px; color:var(--text); font-size:19px; letter-spacing:-.01em; text-align:center; }
+    .section-heading { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin:28px 0 14px; }
+    .section-heading h2 { grid-column:2; margin:0; color:var(--text); font-size:19px; letter-spacing:-.01em; text-align:center; }
+    .section-heading .download-btn { grid-column:3; justify-self:end; }
     .theme-card { padding:10px 12px; background:#141414; border-radius:4px; border-left:3px solid var(--orange); margin-bottom:12px; }
     .theme-card.frame-3m { border-color:var(--cyan); } .theme-card.frame-6m { border-color:var(--pink); }
     .theme-line { display:block; color:var(--text); font-size:13px; }
@@ -98,19 +103,23 @@ def write_dashboard(output_dir: Path) -> Path:
     .nel-window { background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--orange); border-radius:10px; padding:18px; } .nel-window[data-frame="3m"] { border-top-color:var(--cyan); } .nel-window[data-frame="6m"] { border-top-color:var(--pink); }
     .nel-window h3 { margin:8px 0; font-size:14px; color:var(--orange); } .nel-window[data-frame="3m"] h3 { color:var(--cyan); } .nel-window[data-frame="6m"] h3 { color:var(--pink); }
     .table-wrap { overflow-x:auto; } table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+    .scrollable-table { max-height:251px; overflow:auto; } .scrollable-table th { position:sticky; top:0; background:var(--panel); z-index:1; }
     th, td { padding:10px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; } th:first-child, th:nth-child(2), td:first-child, td:nth-child(2) { text-align:left; } th { color:var(--text); font-size:12px; font-weight:600; } td:first-child { font-weight:650; }
     .high-liquidity { color:#ccff00; }
     .empty { color:var(--text); padding:30px 0; }
     .snapshot-date { color:#F5F2E8; font-size:14px; font-weight:600; }
     @media (max-width:980px) { .window-sections { grid-template-columns:1fr; } .bar-row { grid-template-columns:130px 1fr 34px; font-size:12px; } main { padding:18px 16px; } }
-    @media (max-width:640px) { .topbar { grid-template-columns:1fr; justify-items:start; gap:12px; } .dashboard-title { justify-self:center; } .topbar-actions { justify-self:start; flex-wrap:wrap; } }
+    @media (max-width:640px) { .topbar { gap:12px; } .section-heading { grid-template-columns:1fr auto; } .section-heading h2 { grid-column:1; text-align:left; } .section-heading .download-btn { grid-column:2; } }
   </style>
 </head>
 <body>
 <main>
-  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 class="dashboard-title">Liquid Leadership</h1><div class="topbar-actions"><button id="download-nel" class="download-btn" type="button">NEL Symbols</button><button id="download-image" class="download-btn" type="button">Download</button></div></div>
+  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><button id="download-image" class="download-btn" type="button">Download</button></div>
+  <h2 class="thematic-title">Thematic Leadership</h2>
   <div id="leadership-sections" class="window-sections"></div>
-  <h2 class="nel-section-title">Non-Extended Leaders (NEL)</h2>
+  <div class="section-heading"><h2>Liquid Leaders (LL)</h2><button id="download-ll" class="download-btn" type="button">Export LL</button></div>
+  <div id="liquid-sections" class="window-sections"></div>
+  <div class="section-heading"><h2>Non-Extended Leaders (NEL)</h2><button id="download-nel" class="download-btn" type="button">Export NEL</button></div>
   <div id="nel-sections" class="window-sections"></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -118,8 +127,10 @@ def write_dashboard(output_dir: Path) -> Path:
 const history = __DATA__;
 const dateSelect = document.getElementById('date');
 const leadershipSections = document.getElementById('leadership-sections');
+const liquidSections = document.getElementById('liquid-sections');
 const nelSections = document.getElementById('nel-sections');
 const downloadButton = document.getElementById('download-image');
+const downloadLiquidButton = document.getElementById('download-ll');
 const downloadNelButton = document.getElementById('download-nel');
 const flowMeta = { '1m': { label:'1 month', color:'#ff9900' }, '3m': { label:'3 months', color:'#00ffff' }, '6m': { label:'6 months', color:'#ff3366' } };
 const rankColors = ['#5C7CFA', '#E9C46A', '#E76F51', '#70C1B3', '#C77DFF'];
@@ -156,6 +167,14 @@ function renderTrend(frame, svg, names) {
   names.forEach((name, index) => { const color = rankColors[index]; const points = active.map((d,i) => `${x(i)},${y(counts(d,frame)[name]||0)}`).join(' '); markup += `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5"/>`; active.forEach((d,i) => markup += `<circle cx="${x(i)}" cy="${y(counts(d,frame)[name]||0)}" r="3" fill="${color}"><title>${escapeHTML(name)}: ${counts(d,frame)[name]||0} on ${d.date}</title></circle>`); });
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.innerHTML = markup;
 }
+function renderLiquid(snapshot) {
+  const records = snapshot?.liquid || [];
+  [['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m']].forEach(([frame, performance, flag]) => {
+    const table = document.getElementById(`liquid-table-${frame}`);
+    const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
+    table.innerHTML = rows.length ? rows.map(row => { const highLiquidity = Number(row.dollar_volume_30d) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(row.dollar_volume_30d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No extended leaders.</td></tr>';
+  });
+}
 function renderNEL(snapshot) {
   const records = snapshot?.nel || [];
   [['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m']].forEach(([frame, performance, flag]) => {
@@ -170,26 +189,28 @@ function renderNEL(snapshot) {
 function render() {
   const current = currentSnapshot(), index = Number(dateSelect.value), previous = history[index-1];
   leadershipSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="panel" data-frame="${frame}"><h2 style="color:${meta.color}">${meta.label} leadership</h2><div id="bars-${frame}" class="bars"></div><h2 style="margin-top:22px">Leadership over time</h2><svg id="trend-${frame}" role="img" aria-label="${meta.label} industry leader counts across available snapshots"></svg></section>`).join('');
+  liquidSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} LL</h3><div class="table-wrap scrollable-table"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="liquid-table-${frame}"></tbody></table></div></section>`).join('');
   nelSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} NEL</h3><div id="theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="nel-table-${frame}"></tbody></table></div></section>`).join('');
   Object.keys(flowMeta).forEach(frame => { const rankedNames = renderBars(current, previous, frame, document.getElementById(`bars-${frame}`)); renderTrend(frame, document.getElementById(`trend-${frame}`), rankedNames); });
+  renderLiquid(current);
   renderNEL(current);
 }
-function downloadNelSymbols() {
+function downloadSymbols(key, filePrefix) {
   const snapshot = currentSnapshot();
-  const symbols = [...new Set((snapshot?.nel || []).map(row => String(row.name || '').trim()).filter(Boolean))].sort();
+  const symbols = [...new Set((snapshot?.[key] || []).map(row => String(row.name || '').trim()).filter(Boolean))].sort();
   const csv = ['symbol', ...symbols.map(symbol => `"${symbol.replaceAll('"', '""')}"`)].join('\n') + '\n';
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
-  const link = document.createElement('a'); link.download = `nel_symbols_${snapshot.date}.csv`; link.href = URL.createObjectURL(blob); link.click(); URL.revokeObjectURL(link.href);
+  const link = document.createElement('a'); link.download = `${filePrefix}_symbols_${snapshot.date}.csv`; link.href = URL.createObjectURL(blob); link.click(); URL.revokeObjectURL(link.href);
 }
 async function downloadPageImage() {
   if (typeof html2canvas !== 'function') { window.alert('The image exporter could not load. Check your connection and try again.'); return; }
   downloadButton.disabled = true; downloadButton.textContent = 'Creating image…';
   try {
-    const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><h1 class="dashboard-title">Liquid Leadership</h1><span></span>`; } });
+    const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><span></span>`; } });
     const link = document.createElement('a'); link.download = `industry-leadership-${currentSnapshot().date}.png`; link.href = canvas.toDataURL('image/png'); link.click();
   } finally { downloadButton.disabled = false; downloadButton.textContent = 'Download'; }
 }
-if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadNelButton.addEventListener('click', downloadNelSymbols); window.addEventListener('resize', render); render(); }
+if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadLiquidButton.addEventListener('click', () => downloadSymbols('liquid', 'liquid_leaders')); downloadNelButton.addEventListener('click', () => downloadSymbols('nel', 'nel')); window.addEventListener('resize', render); render(); }
 </script>
 </body>
 </html>'''
