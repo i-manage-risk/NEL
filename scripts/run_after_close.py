@@ -93,10 +93,12 @@ def main() -> int:
         return 0
     try:
         log_path = LOG_DIR / f"daily_scan_{now.date().isoformat()}.log"
+        local_python = PROJECT_DIR / ".venv" / "bin" / "python"
+        scanner_python = local_python if local_python.exists() else Path(sys.executable)
         with log_path.open("a", encoding="utf-8") as log:
             log.write(f"\n--- Scheduled run started {now.isoformat()} ---\n")
             result = subprocess.run(
-                [str(PROJECT_DIR / ".venv" / "bin" / "python"), "focus_list.py"],
+                [str(scanner_python), "focus_list.py"],
                 cwd=PROJECT_DIR,
                 stdout=log,
                 stderr=subprocess.STDOUT,
