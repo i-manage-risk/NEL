@@ -108,7 +108,7 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
         valid_industry
         & valid_metrics
         & has_performance
-        & (df["dollar_volume_30d"] > settings.min_dollar_volume)
+        & (df["average_dollar_volume_30d"] > settings.min_dollar_volume)
         & (df["ADRP"] > settings.min_adr_pct)
         & (df["average_volume_10d_calc"] > settings.min_avg_volume_10d)
     ].copy()

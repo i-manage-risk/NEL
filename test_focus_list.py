@@ -30,6 +30,14 @@ class FocusListTests(unittest.TestCase):
         self.assertEqual(set(leaders.name), {"MOM_1M", "MOM_3M", "MOM_6M"})
         self.assertEqual(len(leaders), 3)
 
+    def test_liquidity_filter_uses_30_day_price_sma(self):
+        raw = pd.DataFrame([
+            {"name": "PASS", "industry": "Technology Services", "close": 120, "SMA30": 100, "SMA50": 100, "ADRP": 5, "ATRP": 10, "Perf.1M": 50, "Perf.3M": 50, "Perf.6M": 50, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+            {"name": "FAIL", "industry": "Technology Services", "close": 120, "SMA30": 70, "SMA50": 100, "ADRP": 5, "ATRP": 10, "Perf.1M": 40, "Perf.3M": 40, "Perf.6M": 40, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+        ])
+        universe, _, _ = calculate_nel(raw, Settings(top_pct=1))
+        self.assertEqual(list(universe.name), ["PASS"])
+
     def test_top_group_has_an_exact_size_when_performance_values_tie(self):
         raw = pd.DataFrame([
             {"name": name, "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.1M": 50, "Perf.3M": 50, "Perf.6M": 50, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000}
