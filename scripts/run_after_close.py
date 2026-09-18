@@ -15,7 +15,6 @@ LOG_DIR = PROJECT_DIR / "logs"
 MARKER = PROJECT_DIR / "outputs" / ".last_scheduled_run.txt"
 LOCK_DIR = PROJECT_DIR / ".daily_scan.lock"
 NY_TZ = ZoneInfo("America/New_York")
-PAKISTAN_TZ = ZoneInfo("Asia/Karachi")
 
 
 def nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
@@ -81,8 +80,15 @@ def should_run(now: datetime) -> bool:
 
 
 def next_session_date(now: datetime) -> date:
-    """Date post-close output for the next trading session in Pakistan time."""
-    return now.astimezone(PAKISTAN_TZ).date()
+    """Return the next regular NYSE session date after today's close.
+
+    A Friday post-close scan is therefore labelled for Monday, rather than
+    for Saturday in Pakistan time.  The same applies to US market holidays.
+    """
+    candidate = now.astimezone(NY_TZ).date() + timedelta(days=1)
+    while candidate.weekday() >= 5 or candidate in nyse_holidays(candidate.year):
+        candidate += timedelta(days=1)
+    return candidate
 
 
 def main() -> int:
