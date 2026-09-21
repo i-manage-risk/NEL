@@ -29,6 +29,12 @@ python focus_list.py
 
 The installed scheduler checks once per minute and runs the scanner once after 4:10 PM New York time on regular US market days. It uses New York time for market-close and holiday checks, but stamps the output with the Pakistan date because the post-close list is for the next session. If the Mac wakes later that evening, it catches up automatically. It handles daylight-saving changes and writes each run to `logs/daily_scan_YYYY-MM-DD.log`.
 
+## Premarket RVOL scanner
+
+`python premarket_rvol.py` finds the 20 highest-RVOL premarket stocks that meet the NEL liquidity rules (30-day SMA price × 30-day average volume above $30M, ADR% above 4%, 10-day average volume above 350K), are at least 3% above the prior close, and trade on NASDAQ, NYSE, or AMEX. It writes a dated CSV to `outputs/` and refreshes the minimal copy-ready list at `premarket_rvol.html` (published at `/NEL/premarket_rvol.html`).
+
+GitHub Actions runs this scanner at 9:00 AM New York time on regular US market days, without requiring your Mac to be awake.
+
 The CSV files appear in `outputs/`:
 
 - `Non-Extended Leaders`: leaders below the 4× ATR% extension threshold
