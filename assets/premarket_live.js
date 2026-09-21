@@ -1,5 +1,6 @@
 const output = document.querySelector('#tickers');
 const copyButton = document.querySelector('#copy');
+let currentTickers = [];
 
 const query = {
   markets: ['america'],
@@ -47,7 +48,22 @@ function ranked(records) {
       return volumeDifference || String(a.s).localeCompare(String(b.s));
     })
     .slice(0, 20)
-    .map(record => record.s);
+}
+
+function premarketRvol(record) {
+  return Number(record.d[9]) / Number(record.d[11]);
+}
+
+function atrExtension(record) {
+  return (Number(record.d[7]) - Number(record.d[5])) / (Number(record.d[5]) * (Number(record.d[6]) / 100));
+}
+
+function render(records) {
+  const header = `${'Symbol'.padEnd(22)}${'PM RVOL'.padStart(8)}  ${'50d Ext.'.padStart(8)}`;
+  const rows = records.map(record => (
+    `${String(record.s).padEnd(22)}${`${premarketRvol(record).toFixed(2)}×`.padStart(8)}  ${`${atrExtension(record).toFixed(2)}×`.padStart(8)}`
+  ));
+  return [header, ...rows].join('\n');
 }
 
 async function refresh() {
@@ -60,15 +76,17 @@ async function refresh() {
     });
     if (!response.ok) throw new Error(`TradingView returned ${response.status}`);
     const payload = await response.json();
-    const tickers = ranked(payload.data || []);
-    output.textContent = tickers.join('\n') || 'No matching premarket movers.';
+    const records = ranked(payload.data || []);
+    currentTickers = records.map(record => record.s);
+    output.textContent = records.length ? render(records) : 'No matching premarket movers.';
   } catch {
+    currentTickers = [];
     output.textContent = 'Live data unavailable. Refresh to try again.';
   }
 }
 
 copyButton.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(output.textContent.trim());
+  await navigator.clipboard.writeText(currentTickers.join('\n'));
   copyButton.textContent = 'Copied';
   setTimeout(() => { copyButton.textContent = 'Copy'; }, 1200);
 });
