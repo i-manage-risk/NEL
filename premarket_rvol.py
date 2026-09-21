@@ -113,14 +113,7 @@ def write_premarket_page(frame: pd.DataFrame, destination: Path) -> Path:
     <button id=\"copy\" type=\"button\">Copy</button>
     <pre id=\"tickers\">{display}</pre>
   </main>
-  <script>
-    const button = document.querySelector('#copy');
-    button.addEventListener('click', async () => {{
-      await navigator.clipboard.writeText(document.querySelector('#tickers').textContent.trim());
-      button.textContent = 'Copied';
-      setTimeout(() => {{ button.textContent = 'Copy'; }}, 1200);
-    }});
-  </script>
+  <script src="assets/premarket_live.js"></script>
 </body>
 </html>
 """

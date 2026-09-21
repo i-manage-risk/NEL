@@ -31,9 +31,9 @@ The installed scheduler checks once per minute and runs the scanner once after 4
 
 ## Premarket RVOL scanner
 
-`python premarket_rvol.py` finds the 20 highest-RVOL premarket stocks with 30-day SMA price × 30-day average volume above $30M and 10-day average volume above 350K, that are at least 3% above the prior close and trade on NASDAQ, NYSE, or AMEX. It writes a dated CSV to `outputs/` and refreshes the minimal copy-ready list at `premarket_rvol.html` (published at `/NEL/premarket_rvol.html`).
+`python premarket_rvol.py` finds the 20 highest-RVOL premarket stocks with 30-day SMA price × 30-day average volume above $30M and 10-day average volume above 350K, that are at least 3% above the prior close and trade on NASDAQ, NYSE, or AMEX. It writes a dated CSV to `outputs/`.
 
-GitHub Actions runs this scanner at 9:00 AM New York time on regular US market days, without requiring your Mac to be awake.
+The minimal copy-ready page at `/NEL/premarket_rvol.html` queries TradingView directly in the browser when it opens and refreshes every minute; it does not use a scheduled GitHub Action.
 
 The CSV files appear in `outputs/`:
 
