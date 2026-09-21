@@ -16,6 +16,7 @@ from focus_list import Settings
 PREMARKET_COLUMNS = [
     "name",
     "exchange",
+    "industry",
     "close",
     "SMA30",
     "ADRP",
@@ -53,7 +54,7 @@ def fetch_premarket_universe() -> pd.DataFrame:
 def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int = 20) -> pd.DataFrame:
     """Apply the NEL liquidity filters, then rank eligible gainers by RVOL."""
     required = {
-        "ticker", "name", "exchange", "close", "SMA30", "ADRP", "premarket_change",
+        "ticker", "name", "exchange", "industry", "close", "SMA30", "ADRP", "premarket_change",
         "premarket_volume", "relative_volume_10d_calc", "average_volume_10d_calc",
         "average_volume_30d_calc",
     }
@@ -73,6 +74,7 @@ def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int =
     valid_metrics = (df[["close", "SMA30", "ADRP", "average_volume_10d_calc", "average_volume_30d_calc"]] > 0).all(axis=1)
     eligible = df.loc[
         valid_metrics
+        & ~df["industry"].fillna("").str.contains("biotech", case=False, regex=False)
         & (df["average_dollar_volume_30d"] > settings.min_dollar_volume)
         & (df["ADRP"] > settings.min_adr_pct)
         & (df["average_volume_10d_calc"] > settings.min_avg_volume_10d)
