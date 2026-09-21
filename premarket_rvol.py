@@ -19,7 +19,6 @@ PREMARKET_COLUMNS = [
     "industry",
     "close",
     "SMA30",
-    "ADRP",
     "premarket_change",
     "premarket_volume",
     "relative_volume_10d_calc",
@@ -54,7 +53,7 @@ def fetch_premarket_universe() -> pd.DataFrame:
 def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int = 20) -> pd.DataFrame:
     """Apply the NEL liquidity filters, then rank eligible gainers by RVOL."""
     required = {
-        "ticker", "name", "exchange", "industry", "close", "SMA30", "ADRP", "premarket_change",
+        "ticker", "name", "exchange", "industry", "close", "SMA30", "premarket_change",
         "premarket_volume", "relative_volume_10d_calc", "average_volume_10d_calc",
         "average_volume_30d_calc",
     }
@@ -64,19 +63,18 @@ def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int =
 
     df = raw.copy()
     numeric = [
-        "close", "SMA30", "ADRP", "premarket_change", "premarket_volume",
+        "close", "SMA30", "premarket_change", "premarket_volume",
         "relative_volume_10d_calc", "average_volume_10d_calc", "average_volume_30d_calc",
     ]
     for column in numeric:
         df[column] = pd.to_numeric(df[column], errors="coerce")
     df["average_dollar_volume_30d"] = df["SMA30"] * df["average_volume_30d_calc"]
 
-    valid_metrics = (df[["close", "SMA30", "ADRP", "average_volume_10d_calc", "average_volume_30d_calc"]] > 0).all(axis=1)
+    valid_metrics = (df[["close", "SMA30", "average_volume_10d_calc", "average_volume_30d_calc"]] > 0).all(axis=1)
     eligible = df.loc[
         valid_metrics
         & ~df["industry"].fillna("").str.contains("biotech", case=False, regex=False)
         & (df["average_dollar_volume_30d"] > settings.min_dollar_volume)
-        & (df["ADRP"] > settings.min_adr_pct)
         & (df["average_volume_10d_calc"] > settings.min_avg_volume_10d)
         & (df["premarket_change"] >= 3)
         & df["relative_volume_10d_calc"].notna()
