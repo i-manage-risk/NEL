@@ -7,21 +7,20 @@ const query = {
   options: { lang: 'en' },
   columns: [
     'name', 'exchange', 'industry', 'close', 'SMA30', 'premarket_change',
-    'premarket_volume', 'relative_volume_10d_calc', 'average_volume_10d_calc',
-    'average_volume_30d_calc',
+    'premarket_volume', 'average_volume_10d_calc', 'average_volume_30d_calc',
   ],
   filter: [
     { left: 'type', operation: 'equal', right: 'stock' },
     { left: 'exchange', operation: 'in_range', right: ['NASDAQ', 'NYSE', 'AMEX'] },
     { left: 'premarket_change', operation: 'egreater', right: 3 },
   ],
-  sort: { sortBy: 'relative_volume_10d_calc', sortOrder: 'desc', nullsFirst: false },
+  sort: { sortBy: 'premarket_volume', sortOrder: 'desc', nullsFirst: false },
   range: [0, 5000],
   ignore_unknown_fields: false,
 };
 
 function qualifies(record) {
-  const [, , industry, close, sma30, change, premarketVolume, rvol, averageVolume10d, averageVolume30d] = record.d;
+  const [, , industry, close, sma30, change, premarketVolume, averageVolume10d, averageVolume30d] = record.d;
   return !String(industry || '').toLowerCase().includes('biotech')
     && Number(close) > 0
     && Number(sma30) > 0
@@ -29,7 +28,6 @@ function qualifies(record) {
     && Number(averageVolume30d) > 0
     && Number(sma30) * Number(averageVolume30d) > 30000000
     && Number(change) >= 3
-    && Number.isFinite(Number(rvol))
     && Number(premarketVolume) >= 0;
 }
 
@@ -37,7 +35,7 @@ function ranked(records) {
   return records
     .filter(qualifies)
     .sort((a, b) => {
-      const rvolDifference = Number(b.d[7]) - Number(a.d[7]);
+      const rvolDifference = (Number(b.d[6]) / Number(b.d[8])) - (Number(a.d[6]) / Number(a.d[8]));
       if (rvolDifference) return rvolDifference;
       const volumeDifference = Number(b.d[6]) - Number(a.d[6]);
       return volumeDifference || String(a.s).localeCompare(String(b.s));

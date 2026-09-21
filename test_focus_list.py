@@ -49,11 +49,11 @@ class FocusListTests(unittest.TestCase):
 
     def test_premarket_rvol_uses_nel_liquidity_and_three_percent_gain(self):
         raw = pd.DataFrame([
-            {"ticker": "NASDAQ:HIGH", "name": "HIGH", "exchange": "NASDAQ", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 4, "premarket_volume": 2_000_000, "relative_volume_10d_calc": 8, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
-            {"ticker": "NYSE:SECOND", "name": "SECOND", "exchange": "NYSE", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 3, "premarket_volume": 1_000_000, "relative_volume_10d_calc": 4, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
-            {"ticker": "NASDAQ:LOWGAIN", "name": "LOWGAIN", "exchange": "NASDAQ", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 2.99, "premarket_volume": 3_000_000, "relative_volume_10d_calc": 10, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
-            {"ticker": "NYSE:ILLIQUID", "name": "ILLIQUID", "exchange": "NYSE", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 8, "premarket_volume": 4_000_000, "relative_volume_10d_calc": 12, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 200_000},
-            {"ticker": "NASDAQ:BIOTECH", "name": "BIOTECH", "exchange": "NASDAQ", "industry": "Biotechnology", "close": 100, "SMA30": 100, "premarket_change": 9, "premarket_volume": 4_000_000, "relative_volume_10d_calc": 12, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+            {"ticker": "NASDAQ:HIGH", "name": "HIGH", "exchange": "NASDAQ", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 4, "premarket_volume": 2_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+            {"ticker": "NYSE:SECOND", "name": "SECOND", "exchange": "NYSE", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 3, "premarket_volume": 1_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+            {"ticker": "NASDAQ:LOWGAIN", "name": "LOWGAIN", "exchange": "NASDAQ", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 2.99, "premarket_volume": 3_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+            {"ticker": "NYSE:ILLIQUID", "name": "ILLIQUID", "exchange": "NYSE", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 8, "premarket_volume": 4_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 200_000},
+            {"ticker": "NASDAQ:BIOTECH", "name": "BIOTECH", "exchange": "NASDAQ", "industry": "Biotechnology", "close": 100, "SMA30": 100, "premarket_change": 9, "premarket_volume": 4_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
         ])
         results = calculate_premarket_rvol(raw, Settings(), limit=20)
         self.assertEqual(list(results.ticker), ["NASDAQ:HIGH", "NYSE:SECOND"])

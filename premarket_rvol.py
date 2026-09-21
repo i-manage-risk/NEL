@@ -21,7 +21,6 @@ PREMARKET_COLUMNS = [
     "SMA30",
     "premarket_change",
     "premarket_volume",
-    "relative_volume_10d_calc",
     "average_volume_10d_calc",
     "average_volume_30d_calc",
 ]
@@ -54,7 +53,7 @@ def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int =
     """Apply the NEL liquidity filters, then rank eligible gainers by RVOL."""
     required = {
         "ticker", "name", "exchange", "industry", "close", "SMA30", "premarket_change",
-        "premarket_volume", "relative_volume_10d_calc", "average_volume_10d_calc",
+        "premarket_volume", "average_volume_10d_calc",
         "average_volume_30d_calc",
     }
     missing = sorted(required.difference(raw.columns))
@@ -64,11 +63,12 @@ def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int =
     df = raw.copy()
     numeric = [
         "close", "SMA30", "premarket_change", "premarket_volume",
-        "relative_volume_10d_calc", "average_volume_10d_calc", "average_volume_30d_calc",
+        "average_volume_10d_calc", "average_volume_30d_calc",
     ]
     for column in numeric:
         df[column] = pd.to_numeric(df[column], errors="coerce")
     df["average_dollar_volume_30d"] = df["SMA30"] * df["average_volume_30d_calc"]
+    df["premarket_rvol_30d"] = df["premarket_volume"] / df["average_volume_30d_calc"]
 
     valid_metrics = (df[["close", "SMA30", "average_volume_10d_calc", "average_volume_30d_calc"]] > 0).all(axis=1)
     eligible = df.loc[
@@ -77,11 +77,11 @@ def calculate_premarket_rvol(raw: pd.DataFrame, settings: Settings, limit: int =
         & (df["average_dollar_volume_30d"] > settings.min_dollar_volume)
         & (df["average_volume_10d_calc"] > settings.min_avg_volume_10d)
         & (df["premarket_change"] >= 3)
-        & df["relative_volume_10d_calc"].notna()
+        & df["premarket_rvol_30d"].notna()
     ].copy()
 
     return eligible.sort_values(
-        ["relative_volume_10d_calc", "premarket_volume", "ticker"],
+        ["premarket_rvol_30d", "premarket_volume", "ticker"],
         ascending=[False, False, True],
         kind="stable",
     ).head(limit)
@@ -125,12 +125,12 @@ def write_outputs(frame: pd.DataFrame, output_dir: Path, snapshot_date: date | N
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = (snapshot_date or datetime.now().date()).isoformat()
     columns = [
-        "ticker", "name", "exchange", "premarket_change", "relative_volume_10d_calc",
+        "ticker", "name", "exchange", "premarket_change", "premarket_rvol_30d",
         "premarket_volume", "average_dollar_volume_30d",
     ]
     output = output_dir / f"premarket_rvol_{stamp}.csv"
     frame.loc[:, columns].round({
-        "premarket_change": 2, "relative_volume_10d_calc": 2,
+        "premarket_change": 2, "premarket_rvol_30d": 2,
         "average_dollar_volume_30d": 0,
     }).to_csv(output, index=False)
     return [output, write_premarket_page(frame, Path("premarket_rvol.html"))]
