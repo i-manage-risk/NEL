@@ -9,7 +9,7 @@ const query = {
   columns: [
     'name', 'exchange', 'industry', 'close', 'SMA30', 'SMA50', 'ATRP',
     'premarket_close', 'premarket_change', 'premarket_volume',
-    'average_volume_10d_calc', 'average_volume_30d_calc',
+    'average_volume_10d_calc', 'average_volume_30d_calc', 'average_volume_60d_calc',
   ],
   filter: [
     { left: 'type', operation: 'equal', right: 'stock' },
@@ -42,7 +42,7 @@ function ranked(records) {
   return records
     .filter(qualifies)
     .sort((a, b) => {
-      const rvolDifference = (Number(b.d[9]) / Number(b.d[11])) - (Number(a.d[9]) / Number(a.d[11]));
+      const rvolDifference = (Number(b.d[9]) / Number(b.d[12])) - (Number(a.d[9]) / Number(a.d[12]));
       if (rvolDifference) return rvolDifference;
       const volumeDifference = Number(b.d[9]) - Number(a.d[9]);
       return volumeDifference || String(a.s).localeCompare(String(b.s));
@@ -51,7 +51,7 @@ function ranked(records) {
 }
 
 function premarketRvol(record) {
-  return Number(record.d[9]) / Number(record.d[11]);
+  return Number(record.d[9]) / Number(record.d[12]);
 }
 
 function atrExtension(record) {

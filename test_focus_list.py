@@ -59,6 +59,8 @@ class FocusListTests(unittest.TestCase):
         raw["SMA50"] = 100
         raw["ATRP"] = 5
         raw["premarket_close"] = 105
+        raw["average_volume_60d_calc"] = 400_000
+        raw.loc[raw["ticker"] == "NYSE:SECOND", "premarket_close"] = 120
         raw.loc[raw["ticker"] == "NASDAQ:EXTENDED", "premarket_close"] = 125
         results = calculate_premarket_rvol(raw, Settings(), limit=20)
         self.assertEqual(list(results.ticker), ["NASDAQ:HIGH", "NYSE:SECOND"])
