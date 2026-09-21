@@ -6,8 +6,9 @@ const query = {
   symbols: {},
   options: { lang: 'en' },
   columns: [
-    'name', 'exchange', 'industry', 'close', 'SMA30', 'premarket_change',
-    'premarket_volume', 'average_volume_10d_calc', 'average_volume_30d_calc',
+    'name', 'exchange', 'industry', 'close', 'SMA30', 'SMA50', 'ATRP',
+    'premarket_close', 'premarket_change', 'premarket_volume',
+    'average_volume_10d_calc', 'average_volume_30d_calc',
   ],
   filter: [
     { left: 'type', operation: 'equal', right: 'stock' },
@@ -20,24 +21,29 @@ const query = {
 };
 
 function qualifies(record) {
-  const [, , industry, close, sma30, change, premarketVolume, averageVolume10d, averageVolume30d] = record.d;
+  const [, , industry, close, sma30, sma50, atrp, premarketPrice, change, premarketVolume, averageVolume10d, averageVolume30d] = record.d;
+  const atrExtension = (Number(premarketPrice) - Number(sma50)) / (Number(sma50) * (Number(atrp) / 100));
   return !String(industry || '').toLowerCase().includes('biotech')
     && Number(close) > 0
     && Number(sma30) > 0
+    && Number(sma50) > 0
+    && Number(atrp) > 0
+    && Number(premarketPrice) > 0
     && Number(averageVolume10d) > 350000
     && Number(averageVolume30d) > 0
     && Number(sma30) * Number(averageVolume30d) > 30000000
     && Number(change) >= 3
-    && Number(premarketVolume) >= 0;
+    && Number(premarketVolume) >= 0
+    && atrExtension <= 4;
 }
 
 function ranked(records) {
   return records
     .filter(qualifies)
     .sort((a, b) => {
-      const rvolDifference = (Number(b.d[6]) / Number(b.d[8])) - (Number(a.d[6]) / Number(a.d[8]));
+      const rvolDifference = (Number(b.d[9]) / Number(b.d[11])) - (Number(a.d[9]) / Number(a.d[11]));
       if (rvolDifference) return rvolDifference;
-      const volumeDifference = Number(b.d[6]) - Number(a.d[6]);
+      const volumeDifference = Number(b.d[9]) - Number(a.d[9]);
       return volumeDifference || String(a.s).localeCompare(String(b.s));
     })
     .slice(0, 20)

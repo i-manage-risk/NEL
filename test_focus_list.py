@@ -54,6 +54,11 @@ class FocusListTests(unittest.TestCase):
             {"ticker": "NASDAQ:LOWGAIN", "name": "LOWGAIN", "exchange": "NASDAQ", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 2.99, "premarket_volume": 3_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
             {"ticker": "NYSE:ILLIQUID", "name": "ILLIQUID", "exchange": "NYSE", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 8, "premarket_volume": 4_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 200_000},
             {"ticker": "NASDAQ:BIOTECH", "name": "BIOTECH", "exchange": "NASDAQ", "industry": "Biotechnology", "close": 100, "SMA30": 100, "premarket_change": 9, "premarket_volume": 4_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
+            {"ticker": "NASDAQ:EXTENDED", "name": "EXTENDED", "exchange": "NASDAQ", "industry": "Software", "close": 100, "SMA30": 100, "premarket_change": 6, "premarket_volume": 3_000_000, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
         ])
+        raw["SMA50"] = 100
+        raw["ATRP"] = 5
+        raw["premarket_close"] = 105
+        raw.loc[raw["ticker"] == "NASDAQ:EXTENDED", "premarket_close"] = 125
         results = calculate_premarket_rvol(raw, Settings(), limit=20)
         self.assertEqual(list(results.ticker), ["NASDAQ:HIGH", "NYSE:SECOND"])
