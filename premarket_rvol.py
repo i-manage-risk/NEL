@@ -121,7 +121,7 @@ def write_premarket_page(frame: pd.DataFrame, destination: Path) -> Path:
     <button id=\"copy\" type=\"button\">Copy</button>
     <pre id=\"tickers\">{display}</pre>
   </main>
-  <script src="assets/premarket_live.js?v=atr-display-1"></script>
+  <script src="assets/premarket_live.js?v=pm-rvol-60d-1"></script>
 </body>
 </html>
 """
