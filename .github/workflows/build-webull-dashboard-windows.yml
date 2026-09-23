@@ -1,0 +1,53 @@
+name: Build Webull Dashboard for Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install build dependencies
+        run: >-
+          python -m pip install
+          pyinstaller==6.16.0
+          webull-openapi-python-sdk==2.0.13
+
+      - name: Build portable executable
+        run: >-
+          pyinstaller
+          --clean
+          --noconfirm
+          --onefile
+          --name WebullFocusDashboard
+          --collect-all webull
+          webull-dashboard-app/app.py
+
+      - name: Assemble portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item dist/WebullFocusDashboard.exe package/
+          Copy-Item webull-dashboard-app/.env.example package/
+          Copy-Item webull-dashboard-app/README.md package/
+          Compress-Archive -Path package/* -DestinationPath WebullFocusDashboard-Windows.zip
+
+      - name: Upload Windows download
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebullFocusDashboard-Windows
+          path: WebullFocusDashboard-Windows.zip
+          if-no-files-found: error
+          retention-days: 90
