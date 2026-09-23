@@ -1,10 +1,14 @@
 const scannerBase = 'https://scanner.tradingview.com';
 const pmOutput = document.querySelector('#pm-tickers');
 const pmCopyButton = document.querySelector('#pm-copy');
+const currentBody = document.querySelector('#current-body');
+const currentStatus = document.querySelector('#current-status');
+const currentCopyButton = document.querySelector('#current-copy');
 const openingBody = document.querySelector('#opening-body');
 const openingStatus = document.querySelector('#opening-status');
 const openingCopyButton = document.querySelector('#opening-copy');
 let pmTickers = [];
+let currentTickers = [];
 let openingTickers = [];
 
 const pmQuery = {
@@ -14,7 +18,7 @@ const pmQuery = {
   sort: { sortBy: 'premarket_volume', sortOrder: 'desc', nullsFirst: false }, range: [0, 5000], ignore_unknown_fields: false,
 };
 
-const openingColumns = ['name', 'exchange', 'close', 'low', 'volume', 'ATR', 'ADRP', 'average_volume_30d_calc', 'average_volume_60d_calc', 'relative_volume_10d_calc|5'];
+const openingColumns = ['name', 'exchange', 'close', 'low', 'volume', 'ATR', 'ADRP', 'average_volume_30d_calc', 'average_volume_60d_calc', 'relative_volume_10d_calc', 'relative_volume_10d_calc|5'];
 const openingQuery = {
   markets: ['america'], symbols: {}, options: { lang: 'en' }, columns: openingColumns,
   filter: [{ left: 'type', operation: 'equal', right: 'stock' }, { left: 'exchange', operation: 'in_range', right: ['NASDAQ', 'NYSE', 'AMEX'] }],
@@ -53,13 +57,23 @@ function renderPm(records) {
   })].join('\n');
 }
 
-function openingRelativeVolumeAtTime(record) { return Number(record.d[9]); }
-function openingQualifies(record) {
+function currentRelativeVolume(record) { return Number(record.d[9]); }
+function openingRelativeVolumeAtTime(record) { return Number(record.d[10]); }
+function baseOpeningQualifies(record) {
   const [, , close, low, , atr, adr, averageVolume30d, averageVolume60d] = record.d;
-  return Number(close) > 0 && Number(low) > 0 && Number(atr) > 0 && Number(adr) > 4 && openingRelativeVolumeAtTime(record) > 1 && Number(averageVolume30d) > 350000 && Number(averageVolume60d) > 0 && Number(close) * Number(averageVolume30d) > 50000000;
+  return Number(close) > 0 && Number(low) > 0 && Number(atr) > 0 && Number(adr) > 4 && Number(averageVolume30d) > 350000 && Number(averageVolume60d) > 0 && Number(close) * Number(averageVolume30d) > 50000000;
+}
+function openingQualifies(record) {
+  return baseOpeningQualifies(record) && openingRelativeVolumeAtTime(record) > 1;
+}
+function currentQualifies(record) {
+  return baseOpeningQualifies(record) && currentRelativeVolume(record) > 1;
 }
 function rankOpening(records) {
   return records.filter(openingQualifies).sort((a, b) => openingRelativeVolumeAtTime(b) - openingRelativeVolumeAtTime(a) || Number(b.d[4]) - Number(a.d[4]) || String(a.s).localeCompare(String(b.s))).slice(0, 20);
+}
+function rankCurrent(records) {
+  return records.filter(currentQualifies).sort((a, b) => currentRelativeVolume(b) - currentRelativeVolume(a) || Number(b.d[4]) - Number(a.d[4]) || String(a.s).localeCompare(String(b.s))).slice(0, 20);
 }
 function newYorkClock() {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).reduce((values, part) => ({ ...values, [part.type]: part.value }), {});
@@ -73,11 +87,11 @@ async function remoteLock(date) {
     return payload.market_date === date && Array.isArray(payload.tickers) ? payload.tickers : null;
   } catch { return null; }
 }
-function renderOpening(records) {
-  openingBody.replaceChildren(...records.map(record => {
+function renderRvolTable(body, records, relativeVolume) {
+  body.replaceChildren(...records.map(record => {
     const tr = document.createElement('tr');
     const distance = (Number(record.d[2]) - Number(record.d[3])) / Number(record.d[5]);
-    const values = [String(record.s), `${openingRelativeVolumeAtTime(record).toFixed(2)}×`, `${(Number(record.d[4]) / Number(record.d[8])).toFixed(2)}×`, `${(distance * 100).toFixed(0)}%`];
+    const values = [String(record.s), `${relativeVolume(record).toFixed(2)}×`, `${(Number(record.d[4]) / Number(record.d[8])).toFixed(2)}×`, `${(distance * 100).toFixed(0)}%`];
     values.forEach((value, index) => {
       const cell = document.createElement('td');
       cell.textContent = value;
@@ -116,12 +130,25 @@ async function refreshOpening() {
     const order = new Map(locked.map((ticker, index) => [ticker, index]));
     const liveLocked = (await scan(lockedOpeningQuery(locked), 'global')).filter(record => order.has(record.s)).sort((a, b) => order.get(a.s) - order.get(b.s));
     openingTickers = locked;
-    renderOpening(liveLocked);
+    renderRvolTable(openingBody, liveLocked, openingRelativeVolumeAtTime);
     openingStatus.textContent = 'Locked tickers · live data';
   } catch {
     openingTickers = [];
     openingBody.replaceChildren();
     openingStatus.textContent = 'Live data unavailable. Refresh to try again.';
+  }
+}
+async function refreshCurrent() {
+  currentStatus.textContent = 'Loading…';
+  try {
+    const records = rankCurrent(await scan(openingQuery));
+    currentTickers = records.map(record => record.s);
+    renderRvolTable(currentBody, records, currentRelativeVolume);
+    currentStatus.textContent = 'Live data';
+  } catch {
+    currentTickers = [];
+    currentBody.replaceChildren();
+    currentStatus.textContent = 'Live data unavailable. Refresh to try again.';
   }
 }
 function bindCopy(button, tickers) {
@@ -132,6 +159,7 @@ function bindCopy(button, tickers) {
   });
 }
 bindCopy(pmCopyButton, () => pmTickers);
+bindCopy(currentCopyButton, () => currentTickers);
 bindCopy(openingCopyButton, () => openingTickers);
-refreshPm(); refreshOpening();
-setInterval(() => { refreshPm(); refreshOpening(); }, 60000);
+refreshPm(); refreshCurrent(); refreshOpening();
+setInterval(() => { refreshPm(); refreshCurrent(); refreshOpening(); }, 60000);

@@ -37,7 +37,7 @@ The minimal copy-ready page at `/NEL/premarket_rvol.html` queries TradingView di
 
 ## Opening RVOL lock
 
-The same page includes an Opening RVOL section. Between 9:30 and 9:35 AM New York time it ranks the live eligible universe by TradingView's native **Rel Vol at Time** (the current 5-minute bar compared with the matching five-minute bar over the prior 10 sessions). The top 20 are locked after five minutes; their RVOL, current volume ÷ 60-day average volume, and price distance from the low of day as a share of ATR(14) stay live. The filter requires price × 30-day average volume above $50M, 30-day average volume above 350K shares, ADR% above 4%, and Rel Vol at Time above 1. The final LOD/ATR value is green when it is above 25% and below 75% of ATR, otherwise red.
+The same page includes two regular-session tables. **Current RVOL** is a live top-20 list ranked by TradingView's standard RVOL (current volume ÷ its 10-day average volume). **Opening RVOL** uses TradingView's native **Rel Vol at Time** (the current 5-minute bar compared with the matching five-minute bar over the prior 10 sessions) to lock the top 20 after the first five minutes. Both tables show live current volume ÷ 60-day average volume and price distance from the low of day as a share of ATR(14). Their filters require price × 30-day average volume above $50M, 30-day average volume above 350K shares, ADR% above 4%, and the relevant RVOL measure above 1. The final LOD/ATR value is green when it is above 25% and below 75% of ATR, otherwise red.
 
 The CSV files appear in `outputs/`:
 
