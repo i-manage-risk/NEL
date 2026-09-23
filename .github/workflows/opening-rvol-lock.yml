@@ -1,0 +1,30 @@
+name: Opening RVOL lock
+
+on:
+  schedule:
+    # One of these is 9:35 AM in New York; the script handles DST.
+    - cron: "35 13,14 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Lock opening RVOL tickers
+        run: python scripts/run_opening_rvol_lock.py
+      - name: Commit the opening lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/opening_rvol_lock_*.json outputs/.last_opening_rvol_lock.txt
+          git diff --cached --quiet || git commit -m "Lock opening RVOL for $(date -u +%F)"
+          git push

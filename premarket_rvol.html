@@ -4,22 +4,40 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Premarket RVOL | NEL</title>
+  <title>Live RVOL | NEL</title>
   <style>
     :root { color-scheme:dark; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#141414; color:#F5F2E8; font:16px/1.65 Inter,ui-sans-serif,system-ui,sans-serif; }
-    main { width:min(100% - 32px,460px); }
-    button { width:100%; margin:0 0 12px; padding:10px 14px; border:0; border-radius:7px; background:#F5F2E8; color:#141414; font:inherit; font-weight:700; cursor:pointer; }
+    body { margin:0; min-height:100vh; background:#141414; color:#F5F2E8; font:16px/1.65 Inter,ui-sans-serif,system-ui,sans-serif; }
+    main { width:min(100% - 32px,760px); margin:32px auto; }
+    section + section { margin-top:26px; }
+    .section-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 12px; }
+    h1 { margin:0; font-size:15px; font-weight:700; }
+    .status { margin-left:auto; color:#aaa; font-size:12px; }
+    button { min-width:90px; padding:10px 14px; border:0; border-radius:7px; background:#F5F2E8; color:#141414; font:inherit; font-weight:700; cursor:pointer; }
     button:active { transform:translateY(1px); }
     pre { margin:0; padding:18px 20px; overflow:auto; border:1px solid #3d3d3d; border-radius:8px; background:#2A2A2A; font:600 16px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre; }
+    .table-wrap { overflow:auto; border:1px solid #3d3d3d; border-radius:8px; background:#2A2A2A; }
+    table { width:100%; border-collapse:collapse; font:600 14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    th, td { padding:10px 14px; text-align:right; white-space:nowrap; border-bottom:1px solid #3d3d3d; }
+    th:first-child, td:first-child { text-align:left; }
+    tbody tr:last-child td { border-bottom:0; }
+    th { color:#aaa; font-size:12px; }
+    .in-range { color:#7DFF72; }
+    .out-of-range { color:#FF5D6C; }
   </style>
 </head>
 <body>
   <main>
-    <button id="copy" type="button">Copy</button>
-    <pre id="tickers">No matching premarket movers.</pre>
+    <section>
+      <div class="section-top"><h1>PM RVOL</h1><button id="pm-copy" type="button">Copy</button></div>
+      <pre id="pm-tickers">No matching premarket movers.</pre>
+    </section>
+    <section>
+      <div class="section-top"><h1>Opening RVOL</h1><span id="opening-status" class="status"></span><button id="opening-copy" type="button">Copy</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Rel @ time</th><th>Vol / 60d</th><th>Price / LOD ATR</th></tr></thead><tbody id="opening-body"></tbody></table></div>
+    </section>
   </main>
-  <script src="assets/premarket_live.js?v=pm-rvol-60d-1"></script>
+  <script src="assets/premarket_live.js?v=opening-rvol-1"></script>
 </body>
 </html>

@@ -141,7 +141,9 @@ def write_outputs(frame: pd.DataFrame, output_dir: Path, snapshot_date: date | N
         "premarket_change": 2, "premarket_rvol_60d": 2, "premarket_atr_extension_from_50d": 2,
         "average_dollar_volume_30d": 0,
     }).to_csv(output, index=False)
-    return [output, write_premarket_page(frame, Path("premarket_rvol.html"))]
+    # The page is a live browser scanner and must not be replaced with a stale
+    # CSV snapshot when this optional command-line exporter is run.
+    return [output]
 
 
 def parse_args() -> argparse.Namespace:

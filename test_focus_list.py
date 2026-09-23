@@ -3,6 +3,7 @@ import unittest
 import pandas as pd
 
 from focus_list import Settings, calculate_nel
+from opening_rvol import calculate_opening_rvol
 from premarket_rvol import calculate_premarket_rvol
 
 
@@ -64,3 +65,14 @@ class FocusListTests(unittest.TestCase):
         raw.loc[raw["ticker"] == "NASDAQ:EXTENDED", "premarket_close"] = 125
         results = calculate_premarket_rvol(raw, Settings(), limit=20)
         self.assertEqual(list(results.ticker), ["NASDAQ:HIGH", "NYSE:SECOND"])
+
+    def test_opening_rvol_filters_and_ranks_by_relative_volume(self):
+        raw = pd.DataFrame([
+            {"ticker": "NASDAQ:TOP", "close": 100, "low": 99, "volume": 2_000_000, "ATR": 4, "ADRP": 5, "relative_volume_10d_calc": 5, "average_volume_30d_calc": 600_000, "average_volume_60d_calc": 500_000},
+            {"ticker": "NYSE:SECOND", "close": 100, "low": 98, "volume": 1_000_000, "ATR": 4, "ADRP": 5, "relative_volume_10d_calc": 3, "average_volume_30d_calc": 600_000, "average_volume_60d_calc": 500_000},
+            {"ticker": "NASDAQ:LOW_RVOL", "close": 100, "low": 99, "volume": 4_000_000, "ATR": 4, "ADRP": 5, "relative_volume_10d_calc": 1, "average_volume_30d_calc": 600_000, "average_volume_60d_calc": 500_000},
+            {"ticker": "NYSE:ILLIQUID", "close": 100, "low": 99, "volume": 4_000_000, "ATR": 4, "ADRP": 5, "relative_volume_10d_calc": 8, "average_volume_30d_calc": 400_000, "average_volume_60d_calc": 500_000},
+        ])
+        results = calculate_opening_rvol(raw)
+        self.assertEqual(list(results.ticker), ["NASDAQ:TOP", "NYSE:SECOND"])
+        self.assertAlmostEqual(results.iloc[0].lod_distance_atr_14, 0.25)
