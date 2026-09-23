@@ -30,18 +30,18 @@
 <body>
   <main>
     <section>
-      <div class="section-top"><h1>PM RVOL</h1><button id="pm-copy" type="button">Copy</button></div>
-      <pre id="pm-tickers">No matching premarket movers.</pre>
+      <div class="section-top"><h1>PM RVOL</h1><span id="pm-status" class="status"></span><button id="pm-copy" type="button">Copy</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>RVOL</th><th>Change</th><th>Intraday</th><th>LoD dist</th><th>Range</th><th>Ext</th></tr></thead><tbody id="pm-body"></tbody></table></div>
     </section>
     <section>
       <div class="section-top"><h1>Current RVOL</h1><span id="current-status" class="status"></span><button id="current-copy" type="button">Copy</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>RVOL</th><th>Vol / 60d</th><th>Price / LOD ATR</th></tr></thead><tbody id="current-body"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>RVOL</th><th>Change</th><th>Intraday</th><th>LoD dist</th><th>Range</th><th>Ext</th></tr></thead><tbody id="current-body"></tbody></table></div>
     </section>
     <section>
       <div class="section-top"><h1>Opening RVOL</h1><span id="opening-status" class="status"></span><button id="opening-copy" type="button">Copy</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Rel @ time</th><th>Vol / 60d</th><th>Price / LOD ATR</th></tr></thead><tbody id="opening-body"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Symbol</th><th>RVOL @ time</th><th>Change</th><th>Intraday</th><th>LoD dist</th><th>Range</th><th>Ext</th></tr></thead><tbody id="opening-body"></tbody></table></div>
     </section>
   </main>
-  <script src="assets/premarket_live.js?v=current-opening-rvol-1"></script>
+  <script src="assets/premarket_live.js?v=rvol-metrics-1"></script>
 </body>
 </html>
