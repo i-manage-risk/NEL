@@ -38,7 +38,7 @@ def main() -> int:
         local_python = PROJECT_DIR / ".venv" / "bin" / "python"
         scanner_python = local_python if local_python.exists() else Path(sys.executable)
         result = subprocess.run(
-            [str(scanner_python), "opening_rvol.py", "--market-date", now.date().isoformat()],
+            [str(scanner_python), "opening_rvol.py", "--market-date", now.date().isoformat(), "--minutes-since-open", str((now.hour * 60 + now.minute) - (9 * 60 + 30))],
             cwd=PROJECT_DIR,
             check=False,
         )

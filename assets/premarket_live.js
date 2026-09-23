@@ -14,11 +14,11 @@ const pmQuery = {
   sort: { sortBy: 'premarket_volume', sortOrder: 'desc', nullsFirst: false }, range: [0, 5000], ignore_unknown_fields: false,
 };
 
-const openingColumns = ['name', 'exchange', 'close', 'low', 'volume', 'ATR', 'ADRP', 'relative_volume_10d_calc', 'average_volume_30d_calc', 'average_volume_60d_calc'];
+const openingColumns = ['name', 'exchange', 'close', 'low', 'volume', 'ATR', 'ADRP', 'average_volume_30d_calc', 'average_volume_60d_calc'];
 const openingQuery = {
   markets: ['america'], symbols: {}, options: { lang: 'en' }, columns: openingColumns,
   filter: [{ left: 'type', operation: 'equal', right: 'stock' }, { left: 'exchange', operation: 'in_range', right: ['NASDAQ', 'NYSE', 'AMEX'] }],
-  sort: { sortBy: 'relative_volume_10d_calc', sortOrder: 'desc', nullsFirst: false }, range: [0, 5000], ignore_unknown_fields: false,
+  sort: { sortBy: 'volume', sortOrder: 'desc', nullsFirst: false }, range: [0, 5000], ignore_unknown_fields: false,
 };
 function lockedOpeningQuery(tickers) {
   return {
@@ -53,12 +53,14 @@ function renderPm(records) {
   })].join('\n');
 }
 
-function openingQualifies(record) {
-  const [, , close, low, , atr, adr, rvol, averageVolume30d, averageVolume60d] = record.d;
-  return Number(close) > 0 && Number(low) > 0 && Number(atr) > 0 && Number(adr) > 4 && Number(rvol) > 1 && Number(averageVolume30d) > 350000 && Number(averageVolume60d) > 0 && Number(close) * Number(averageVolume30d) > 50000000;
+function minutesSinceOpen(clock) { return Math.max(1, Math.min(clock.minutes - 570, 390)); }
+function openingRelativeVolumeAtTime(record, clock) { return (Number(record.d[4]) / Number(record.d[8])) / (minutesSinceOpen(clock) / 390); }
+function openingQualifies(record, clock) {
+  const [, , close, low, , atr, adr, averageVolume30d, averageVolume60d] = record.d;
+  return Number(close) > 0 && Number(low) > 0 && Number(atr) > 0 && Number(adr) > 4 && openingRelativeVolumeAtTime(record, clock) > 1 && Number(averageVolume30d) > 350000 && Number(averageVolume60d) > 0 && Number(close) * Number(averageVolume30d) > 50000000;
 }
-function rankOpening(records) {
-  return records.filter(openingQualifies).sort((a, b) => Number(b.d[7]) - Number(a.d[7]) || Number(b.d[4]) - Number(a.d[4]) || String(a.s).localeCompare(String(b.s))).slice(0, 20);
+function rankOpening(records, clock) {
+  return records.filter(record => openingQualifies(record, clock)).sort((a, b) => openingRelativeVolumeAtTime(b, clock) - openingRelativeVolumeAtTime(a, clock) || Number(b.d[4]) - Number(a.d[4]) || String(a.s).localeCompare(String(b.s))).slice(0, 20);
 }
 function newYorkClock() {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).reduce((values, part) => ({ ...values, [part.type]: part.value }), {});
@@ -72,11 +74,11 @@ async function remoteLock(date) {
     return payload.market_date === date && Array.isArray(payload.tickers) ? payload.tickers : null;
   } catch { return null; }
 }
-function renderOpening(records) {
+function renderOpening(records, clock) {
   openingBody.replaceChildren(...records.map(record => {
     const tr = document.createElement('tr');
     const distance = (Number(record.d[2]) - Number(record.d[3])) / Number(record.d[5]);
-    const values = [String(record.s), `${Number(record.d[7]).toFixed(2)}×`, `${(Number(record.d[4]) / Number(record.d[9])).toFixed(2)}×`, `${(distance * 100).toFixed(0)}%`];
+    const values = [String(record.s), `${openingRelativeVolumeAtTime(record, clock).toFixed(2)}×`, `${(Number(record.d[4]) / Number(record.d[8])).toFixed(2)}×`, `${(distance * 100).toFixed(0)}%`];
     values.forEach((value, index) => {
       const cell = document.createElement('td');
       cell.textContent = value;
@@ -102,7 +104,7 @@ async function refreshOpening() {
     let locked = await remoteLock(clock.date);
     const inLockWindow = clock.minutes >= 570 && clock.minutes < 575;
     if (!locked && inLockWindow) {
-      locked = rankOpening(records).map(record => record.s);
+      locked = rankOpening(records, clock).map(record => record.s);
       localStorage.setItem(`opening-rvol-lock-${clock.date}`, JSON.stringify(locked));
     }
     if (!locked) locked = localLock(clock.date);
@@ -115,7 +117,7 @@ async function refreshOpening() {
     const order = new Map(locked.map((ticker, index) => [ticker, index]));
     const liveLocked = (await scan(lockedOpeningQuery(locked), 'global')).filter(record => order.has(record.s)).sort((a, b) => order.get(a.s) - order.get(b.s));
     openingTickers = locked;
-    renderOpening(liveLocked);
+    renderOpening(liveLocked, clock);
     openingStatus.textContent = 'Locked tickers · live data';
   } catch {
     openingTickers = [];
