@@ -1,0 +1,6 @@
+setting,value
+min_dollar_volume,30000000.0
+min_adr_pct,4.0
+min_avg_volume_10d,350000.0
+top_pct,0.05
+max_atr_extension,4.0
