@@ -23,6 +23,7 @@ jobs:
         run: >-
           python -m pip install
           pyinstaller==6.16.0
+          tzdata
           webull-openapi-python-sdk==2.0.13
 
       - name: Build portable executable
@@ -33,6 +34,7 @@ jobs:
           --onefile
           --name WebullFocusDashboard
           --collect-all webull
+          --collect-all tzdata
           webull-dashboard-app/app.py
 
       - name: Assemble portable ZIP
@@ -40,6 +42,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/WebullFocusDashboard.exe package/
+          Copy-Item webull-dashboard-app/start-dashboard.bat package/
           Copy-Item webull-dashboard-app/.env.example package/
           Copy-Item webull-dashboard-app/README.md package/
           Compress-Archive -Path package/* -DestinationPath WebullFocusDashboard-Windows.zip

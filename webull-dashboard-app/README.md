@@ -20,7 +20,8 @@ The dashboard opens at `http://127.0.0.1:8765`.
 1. Download and extract `WebullFocusDashboard-Windows.zip`.
 2. Rename `.env.example` to `.env` in the extracted folder.
 3. Put your own Webull App Key and App Secret in `.env`.
-4. Double-click `WebullFocusDashboard.exe`.
+4. Double-click `start-dashboard.bat`. It launches the executable and keeps any
+   startup error visible so it can be diagnosed.
 
 The executable runs only on the local computer. Never send your populated
 `.env` file to anyone; each user should supply their own Webull credentials.
