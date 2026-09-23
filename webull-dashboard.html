@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Webull Focus List</title>
+  <style>
+    :root {
+      --cream: #f4f2e8;
+      --black: #080808;
+      --dark: #141414;
+      --light: #2a2a2a;
+      --green: #00c853;
+      --red: #ff3b30;
+      --muted: #9b9b95;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--black);
+      color: var(--cream);
+      font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .shell { max-width: 1120px; margin: 48px auto; padding: 0 20px; }
+    .top { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 14px; }
+    .eyebrow { color: var(--muted); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+    h1 { margin: 3px 0 0; font-size: 25px; line-height: 1.1; }
+    .status { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .controls { display: flex; gap: 8px; margin: 12px 0; }
+    .controls input { flex: 1; min-width: 0; background: #171717; border: 1px solid #333; color: var(--cream); padding: 10px 12px; border-radius: 7px; }
+    button { border: 0; border-radius: 7px; padding: 10px 15px; background: var(--cream); color: #000; font-weight: 700; cursor: pointer; }
+    .notice { display: none; background: #471816; color: #ffaaa4; padding: 12px; margin-bottom: 10px; border-radius: 6px; line-height: 1.45; }
+    .notice code { color: var(--cream); }
+    .table-wrap { overflow: auto; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th { background: var(--cream); color: #000; text-align: center; padding: 10px 13px; font-weight: 800; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    td { text-align: center; padding: 9px 13px; white-space: nowrap; }
+    tbody tr:nth-child(odd) { background: var(--dark); }
+    tbody tr:nth-child(even) { background: var(--light); }
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+    .cream { color: var(--cream); }
+    .qualified { background: var(--green) !important; color: #000 !important; font-weight: 800; }
+    .symbol { font-weight: 750; }
+    .foot { margin-top: 10px; color: var(--muted); font-size: 12px; }
+    .empty { text-align: center !important; padding: 30px; }
+
+    @media (max-width: 640px) {
+      .shell { margin-top: 24px; padding: 0 12px; }
+      .top { align-items: start; }
+      .controls { flex-direction: column; }
+      .controls button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="top">
+      <div>
+        <div class="eyebrow">Webull OpenAPI</div>
+        <h1>Focus List</h1>
+      </div>
+      <div class="status">
+        <div id="env">LOCAL SERVICE</div>
+        <div id="updated">Connecting…</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <input id="symbols" spellcheck="false" aria-label="Watchlist symbols" placeholder="AAPL, MSFT, NVDA">
+      <button type="button" id="updateButton">Update</button>
+    </div>
+
+    <div id="notice" class="notice"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>RVOL</th>
+            <th>LoD</th>
+            <th>Range</th>
+            <th>PDH</th>
+            <th>OR</th>
+            <th>P &gt; ORH</th>
+            <th>Delay</th>
+          </tr>
+        </thead>
+        <tbody id="body">
+          <tr><td colspan="8" class="empty">Connecting to the local Webull service…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="foot">RTH only · RVOL 50D · ATR 14 · auto-refresh every 10 seconds · Webull credentials stay on your computer</div>
+  </main>
+
+  <script>
+    const API = "http://127.0.0.1:8765";
+    const byId = id => document.getElementById(id);
+    const valueClass = ok => ok ? "green" : "red";
+    const percent = value => Number.isFinite(value) ? `${value}%` : "—";
+
+    function showNotice(message) {
+      const notice = byId("notice");
+      notice.style.display = message ? "block" : "none";
+      notice.innerHTML = message || "";
+    }
+
+    async function load() {
+      try {
+        const response = await fetch(`${API}/api/data`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Local service returned HTTP ${response.status}`);
+        const data = await response.json();
+
+        byId("env").textContent = `${(data.environment || "local").toUpperCase()} · LOCAL SERVICE`;
+        byId("updated").textContent = data.updatedAt
+          ? `Updated ${new Date(data.updatedAt).toLocaleTimeString()}`
+          : "—";
+        showNotice(data.error || "");
+
+        const body = byId("body");
+        if (!data.rows?.length) {
+          body.innerHTML = '<tr><td colspan="8" class="empty">No valid rows yet</td></tr>';
+          return;
+        }
+
+        body.innerHTML = data.rows.map(row => `
+          <tr>
+            <td class="symbol ${row.qualifies ? "qualified" : ""}">${row.symbol}</td>
+            <td class="${valueClass(row.rvol > 30)}">${percent(row.rvol)}</td>
+            <td class="${valueClass(row.lod < 68)}">${percent(row.lod)}</td>
+            <td class="${valueClass(row.range < 68)}">${percent(row.range)}</td>
+            <td class="${valueClass(row.pdh)}">${row.pdh ? "YES" : "NO"}</td>
+            <td>${String(row.or).padStart(2, "0")}</td>
+            <td class="${row.aboveOrh === null ? "cream" : valueClass(row.aboveOrh)}">${row.aboveOrh === null ? "—" : row.aboveOrh ? "YES" : "NO"}</td>
+            <td class="${row.delay < 3 ? "green" : "cream"}">${row.delay}m</td>
+          </tr>`).join("");
+
+        if (document.activeElement !== byId("symbols")) {
+          byId("symbols").value = data.rows.map(row => row.symbol).join(", ");
+        }
+      } catch (error) {
+        byId("updated").textContent = "Local service offline";
+        showNotice(
+          "Start <code>app.py</code> on this computer, then allow this page to access the local network if your browser asks. " +
+          "Your Webull credentials never leave the local service."
+        );
+      }
+    }
+
+    async function saveWatchlist() {
+      const symbols = byId("symbols").value.split(/[\s,]+/).filter(Boolean);
+      try {
+        const response = await fetch(`${API}/api/watchlist`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols })
+        });
+        if (!response.ok) throw new Error(`Local service returned HTTP ${response.status}`);
+        await load();
+      } catch (error) {
+        showNotice("Could not update the watchlist because the local Webull service is unavailable.");
+      }
+    }
+
+    byId("updateButton").addEventListener("click", saveWatchlist);
+    byId("symbols").addEventListener("keydown", event => {
+      if (event.key === "Enter") saveWatchlist();
+    });
+
+    load();
+    setInterval(load, 10000);
+  </script>
+</body>
+</html>
