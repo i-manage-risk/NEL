@@ -22,6 +22,7 @@ OPENING_COLUMNS = [
     "ADRP",
     "average_volume_30d_calc",
     "average_volume_60d_calc",
+    "relative_volume_10d_calc|5",
 ]
 
 
@@ -49,11 +50,11 @@ def fetch_opening_universe() -> pd.DataFrame:
     return frame
 
 
-def calculate_opening_rvol(raw: pd.DataFrame, minutes_since_open: int, limit: int = 20) -> pd.DataFrame:
+def calculate_opening_rvol(raw: pd.DataFrame, minutes_since_open: int | None = None, limit: int = 20) -> pd.DataFrame:
     """Apply the opening scanner filters and rank the top names by RVOL at time."""
     required = {
         "ticker", "close", "low", "volume", "ATR", "ADRP",
-        "average_volume_30d_calc", "average_volume_60d_calc",
+        "average_volume_30d_calc", "average_volume_60d_calc", "relative_volume_10d_calc|5",
     }
     missing = sorted(required.difference(raw.columns))
     if missing:
@@ -61,14 +62,15 @@ def calculate_opening_rvol(raw: pd.DataFrame, minutes_since_open: int, limit: in
     df = raw.copy()
     numeric = [
         "close", "low", "volume", "ATR", "ADRP",
-        "average_volume_30d_calc", "average_volume_60d_calc",
+        "average_volume_30d_calc", "average_volume_60d_calc", "relative_volume_10d_calc|5",
     ]
     for column in numeric:
         df[column] = pd.to_numeric(df[column], errors="coerce")
     df["dollar_volume_30d"] = df["close"] * df["average_volume_30d_calc"]
     df["current_volume_vs_60d"] = df["volume"] / df["average_volume_60d_calc"]
-    session_fraction = max(1, min(minutes_since_open, 390)) / 390
-    df["relative_volume_at_time"] = df["current_volume_vs_60d"] / session_fraction
+    # TradingView's native 5-minute Rel Vol at Time: this bar's volume divided
+    # by the average volume of the matching 5-minute bar over the prior 10 days.
+    df["relative_volume_at_time"] = df["relative_volume_10d_calc|5"]
     df["lod_distance_atr_14"] = (df["close"] - df["low"]) / df["ATR"]
 
     valid = (df[["close", "low", "ATR", "average_volume_30d_calc", "average_volume_60d_calc"]] > 0).all(axis=1)
@@ -103,15 +105,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Lock the opening top-20 RVOL tickers.")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--market-date", type=date.fromisoformat, help="Market date for the lock file (YYYY-MM-DD).")
-    parser.add_argument("--minutes-since-open", type=int, help="Elapsed regular-session minutes used for time-adjusted RVOL.")
+    parser.add_argument("--minutes-since-open", type=int, help="Deprecated; retained for compatible scheduled calls.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     now = datetime.now(ZoneInfo("America/New_York"))
-    minutes_since_open = args.minutes_since_open if args.minutes_since_open is not None else max(1, (now.hour * 60 + now.minute) - (9 * 60 + 30))
-    results = calculate_opening_rvol(fetch_opening_universe(), minutes_since_open)
+    results = calculate_opening_rvol(fetch_opening_universe())
     paths = write_lock(results, args.output_dir, args.market_date)
     print(f"Locked {len(results)} opening RVOL tickers.\n" + "\n".join(map(str, paths)))
 
