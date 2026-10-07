@@ -61,6 +61,9 @@
     .scrollable-table { max-height:251px; overflow-y:auto; } .scrollable-table th { position:sticky; top:0; background:var(--panel); z-index:1; }
     th, td { padding:8px 5px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; } th:first-child, th:nth-child(2), td:first-child, td:nth-child(2) { text-align:left; } th:nth-child(1) { width:13%; } th:nth-child(2) { width:39%; } th:nth-child(3) { width:17%; } th:nth-child(4) { width:17%; } th:nth-child(5) { width:14%; } td:nth-child(2) { white-space:normal; overflow-wrap:anywhere; } th { color:var(--text); font-size:12px; font-weight:600; } td:first-child { font-weight:650; }
     .tight-table th:nth-child(1) { width:14%; } .tight-table th:nth-child(2) { width:35%; } .tight-table th:nth-child(3) { width:15%; } .tight-table th:nth-child(4) { width:14%; } .tight-table th:nth-child(5) { width:11%; } .tight-table th:nth-child(6) { width:11%; }
+    .super-page table:not(.tight-table) th:nth-child(1) { width:29%; } .super-page table:not(.tight-table) th:nth-child(2) { width:38%; } .super-page table:not(.tight-table) th:nth-child(3) { width:18%; } .super-page table:not(.tight-table) th:nth-child(4) { width:15%; }
+    .super-page .tight-table th:nth-child(1) { width:23%; } .super-page .tight-table th:nth-child(2) { width:30%; } .super-page .tight-table th:nth-child(3) { width:14%; } .super-page .tight-table th:nth-child(4) { width:12%; } .super-page .tight-table th:nth-child(5) { width:9%; } .super-page .tight-table th:nth-child(6) { width:12%; }
+    .super-page th,.super-page td { padding-left:3px; padding-right:3px; } .super-page td:first-child { font-size:13px; letter-spacing:-.01em; }
     .high-liquidity { color:#ccff00; }
     .empty { color:var(--text); padding:30px 0; }
     .snapshot-date { color:#F5F2E8; font-size:14px; font-weight:600; }
@@ -70,7 +73,7 @@
   </style>
   <link rel="stylesheet" href="assets/date-select.css?v=2">
 </head>
-<body>
+<body class="super-page">
 <main>
   <nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Liquid Leaders</a><a href="super-liquid.html" class="active">Super Liquid Leaders</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth</a></nav>
   <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 id="thematic-title" class="dashboard-title">Super Liquid Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>

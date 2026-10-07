@@ -138,6 +138,9 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
     .scrollable-table { max-height:251px; overflow-y:auto; } .scrollable-table th { position:sticky; top:0; background:var(--panel); z-index:1; }
     th, td { padding:8px 5px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; } th:first-child, th:nth-child(2), td:first-child, td:nth-child(2) { text-align:left; } th:nth-child(1) { width:13%; } th:nth-child(2) { width:39%; } th:nth-child(3) { width:17%; } th:nth-child(4) { width:17%; } th:nth-child(5) { width:14%; } td:nth-child(2) { white-space:normal; overflow-wrap:anywhere; } th { color:var(--text); font-size:12px; font-weight:600; } td:first-child { font-weight:650; }
     .tight-table th:nth-child(1) { width:14%; } .tight-table th:nth-child(2) { width:35%; } .tight-table th:nth-child(3) { width:15%; } .tight-table th:nth-child(4) { width:14%; } .tight-table th:nth-child(5) { width:11%; } .tight-table th:nth-child(6) { width:11%; }
+    .super-page table:not(.tight-table) th:nth-child(1) { width:29%; } .super-page table:not(.tight-table) th:nth-child(2) { width:38%; } .super-page table:not(.tight-table) th:nth-child(3) { width:18%; } .super-page table:not(.tight-table) th:nth-child(4) { width:15%; }
+    .super-page .tight-table th:nth-child(1) { width:23%; } .super-page .tight-table th:nth-child(2) { width:30%; } .super-page .tight-table th:nth-child(3) { width:14%; } .super-page .tight-table th:nth-child(4) { width:12%; } .super-page .tight-table th:nth-child(5) { width:9%; } .super-page .tight-table th:nth-child(6) { width:12%; }
+    .super-page th,.super-page td { padding-left:3px; padding-right:3px; } .super-page td:first-child { font-size:13px; letter-spacing:-.01em; }
     .high-liquidity { color:#ccff00; }
     .empty { color:var(--text); padding:30px 0; }
     .snapshot-date { color:#F5F2E8; font-size:14px; font-weight:600; }
@@ -321,6 +324,7 @@ if (!history.length) { document.querySelector('main').innerHTML = '<p class="emp
             rendered = rendered.replace(old, new)
         rendered = rendered.replace("<th>Avg $ Vol</th>", "")
         rendered = rendered.replace("<td class=\"liquidity-column ${className}\">${formatLiquidity(dollarVolume)}</td>", "")
+        rendered = rendered.replace("<body>", '<body class="super-page">', 1)
     dashboard.write_text(rendered, encoding="utf-8")
     if pages_entrypoint is not None:
         pages_entrypoint.write_text(rendered, encoding="utf-8")
