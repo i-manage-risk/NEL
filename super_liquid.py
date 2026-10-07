@@ -24,6 +24,7 @@ class SuperLiquidSettings(Settings):
     top_pct: float = 0.05
     max_atr_extension: float = 4.0
     min_etf_avg_volume_30d: int = 1_000_000
+    leaders_per_window: int = 10
 
 
 NUMERIC = [

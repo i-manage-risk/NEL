@@ -93,7 +93,11 @@ def rank_and_filter_leaders(
     universe = universe.copy()
     if universe.empty:
         return universe, universe.copy(), universe.copy()
-    cutoff = max(1, ceil(len(universe) * settings.top_pct))
+    fixed_cutoff = getattr(settings, "leaders_per_window", None)
+    cutoff = int(fixed_cutoff) if fixed_cutoff is not None else max(
+        int(getattr(settings, "min_leaders_per_window", 1)), ceil(len(universe) * settings.top_pct)
+    )
+    cutoff = min(cutoff, len(universe))
     for metric, rank, flag in [
         ("Perf.1M", "perf_1m_rank", "is_top_1m"),
         ("Perf.3M", "perf_3m_rank", "is_top_3m"),

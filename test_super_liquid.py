@@ -51,6 +51,16 @@ class SuperLiquidTests(unittest.TestCase):
         _, universe, _, _ = calculate_super_liquid(stocks, etfs, mapping, SuperLiquidSettings(top_pct=1))
         self.assertTrue(universe.empty)
 
+    def test_small_universe_keeps_ten_leaders_per_window(self):
+        stocks = pd.DataFrame([row(f"S{i:02d}", 5, 11_000_000, perf=i) for i in range(20)])
+        _, universe, leaders, _ = calculate_super_liquid(
+            stocks, pd.DataFrame(columns=stocks.columns),
+            pd.DataFrame(columns=["Underlying Ticker", "Ticker"]),
+            SuperLiquidSettings(top_pct=0.05),
+        )
+        self.assertEqual(len(universe), 20)
+        self.assertEqual(len(leaders), 10)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -38,7 +38,7 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
             )
             groups[label] = {str(industry): int(count) for industry, count in counts.items()}
         leader_columns = [column for column in [
-            "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+            "name", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
             "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
         ] if column in frame.columns]
         liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
@@ -47,7 +47,7 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
         if nel_path.exists():
             nel = pd.read_csv(nel_path)
             columns = [column for column in [
-                "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+                "name", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
                 "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
             ] if column in nel.columns]
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
@@ -56,7 +56,7 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
         if tight_path.exists():
             tight = pd.read_csv(tight_path)
             columns = [column for column in [
-                "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+                "name", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
                 "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y", "coil_setup", "rmv_15d",
                 "rmv_tight_days", "coil_range_5d_atr", "true_range_ratio_3d", "true_range_ratio_5d",
             ] if column in tight.columns]
@@ -162,6 +162,7 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 const history = __DATA__;
+const useShareVolume = __USE_SHARE_VOLUME__;
 const dateSelect = document.getElementById('date');
 const thematicTitle = document.getElementById('thematic-title');
 const liquidTitle = document.getElementById('liquid-title');
@@ -187,7 +188,10 @@ function escapeHTML(value) { return String(value ?? '—').replace(/[&<>'"]/g, c
 function formatPct(value) { return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : '—'; }
 function formatNumber(value) { return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '—'; }
 function formatDollarVolume(value) { const amount = Number(value); if (!Number.isFinite(amount) || amount <= 0) return '—'; if (amount >= 1_000_000_000) return `$${Math.ceil(amount / 1_000_000_000)}B`; return `$${Math.ceil(amount / 10_000_000) * 10}M`; }
+function formatShareVolume(value) { const amount = Number(value); if (!Number.isFinite(amount) || amount <= 0) return '—'; if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(amount >= 10_000_000 ? 0 : 1)}M`; if (amount >= 1_000) return `${Math.round(amount / 1_000)}K`; return Math.round(amount).toLocaleString(); }
 function averageDollarVolume(row) { return row.average_dollar_volume_30d ?? row.dollar_volume_30d; }
+function liquidityValue(row) { return useShareVolume ? row.average_volume_30d_calc : averageDollarVolume(row); }
+function formatLiquidity(value) { return useShareVolume ? formatShareVolume(value) : formatDollarVolume(value); }
 function updateDates() {
   dateSelect.innerHTML = history.map((d,i) => `<option value="${i}">${d.date}</option>`).join('');
   dateSelect.value = Math.max(0, history.length - 1);
@@ -222,7 +226,7 @@ function renderLiquid(snapshot) {
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = averageDollarVolume(row); const highLiquidity = Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
+    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = liquidityValue(row); const highLiquidity = !useShareVolume && Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatLiquidity(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
   });
 }
 function renderNEL(snapshot) {
@@ -233,7 +237,7 @@ function renderNEL(snapshot) {
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    nelTable.innerHTML = rows.length ? rows.map(row => { const dollarVolume = averageDollarVolume(row); const highLiquidity = Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatDollarVolume(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No NEL leaders.</td></tr>';
+    nelTable.innerHTML = rows.length ? rows.map(row => { const dollarVolume = liquidityValue(row); const highLiquidity = !useShareVolume && Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatLiquidity(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No NEL leaders.</td></tr>';
   });
 }
 function renderTight(snapshot) {
@@ -289,7 +293,9 @@ if (!history.length) { document.querySelector('main').innerHTML = '<p class="emp
 <script src="assets/date-select.js?v=2"></script>
 </body>
 </html>'''
-    rendered = template.replace("__DATA__", payload)
+    rendered = template.replace("__DATA__", payload).replace(
+        "__USE_SHARE_VOLUME__", "true" if is_super else "false"
+    )
     nav = '<nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Liquid Leaders</a><a href="super-liquid.html">Super Liquid Leaders</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth</a></nav>'
     active_label = "Super Liquid Leaders" if is_super else "Liquid Leaders"
     nav = nav.replace(f'>{active_label}</a>', f' class="active">{active_label}</a>')
@@ -312,6 +318,7 @@ if (!history.length) { document.querySelector('main').innerHTML = '<p class="emp
         }
         for old, new in replacements.items():
             rendered = rendered.replace(old, new)
+        rendered = rendered.replace("Avg $ Vol", "Avg Share Vol")
     dashboard.write_text(rendered, encoding="utf-8")
     if pages_entrypoint is not None:
         pages_entrypoint.write_text(rendered, encoding="utf-8")

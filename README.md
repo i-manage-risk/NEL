@@ -21,7 +21,7 @@ The separate Themes and Sectors studies use fixed ETF universes and are dated wi
 
 ## Super Liquid Leaders
 
-`super-liquid.html` applies the same 1-, 3-, 6-, and 12-month leader, extension, and tightness process to the market's most liquid stocks. An underlying first needs 30-day average dollar volume above $1 billion. If that stock also has ADR% above 4%, the stock enters the candidate universe. If it misses ADR%, the scanner checks the supplied 2× ETF map and substitutes one ETF: the qualifying fund with the highest current TradingView 30-day average share volume. The ETF must trade more than 1 million shares per day and have ADR% above 4%.
+`super-liquid.html` applies the same 1-, 3-, 6-, and 12-month leader, extension, and tightness process to the market's most liquid stocks. It takes the top 10 instruments in each performance window before combining and deduplicating them. An underlying first needs 30-day average dollar volume above $1 billion. If that stock also has ADR% above 4%, the stock enters the candidate universe whether or not it has a mapped ETF. If it misses ADR%, the scanner checks the supplied 2× ETF map and substitutes one ETF: the qualifying fund with the highest current 30-day average share volume. The ETF must trade more than 1 million shares per day and have ADR% above 4%.
 
 The ETF is measured using its own price performance, ADR%, ATR%, SMA50 extension, and tightness, but inherits its underlying stock's industry for thematic analysis. A qualifying stock and its ETF are never both added. The daily scan refreshes the Super Liquid dashboard and symbol exports for the next market session.
 
