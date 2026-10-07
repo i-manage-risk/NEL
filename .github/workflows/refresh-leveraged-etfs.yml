@@ -1,0 +1,32 @@
+name: Refresh leveraged ETF liquidity
+
+on:
+  schedule:
+    - cron: "30 22 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nel-repository-writes
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Refresh 30-session ETF liquidity
+        run: python scripts/refresh_leveraged_etf_map.py
+      - name: Commit refreshed map
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/us_leveraged_etf_map.csv
+          git diff --cached --quiet || git commit -m "Refresh leveraged ETF liquidity"
+          git push

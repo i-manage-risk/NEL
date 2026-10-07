@@ -1,99 +1,22 @@
-"""Generate a self-contained interactive industry-leadership dashboard."""
-
-from __future__ import annotations
-
-import json
-import re
-from pathlib import Path
-
-import pandas as pd
-
-
-TIMEFRAMES = {
-    "1m": "is_top_1m",
-    "3m": "is_top_3m",
-    "6m": "is_top_6m",
-    "1y": "is_top_1y",
-}
-
-def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
-    """Summarise every dated momentum-leader snapshot by industry and timeframe."""
-    snapshots = []
-    for path in sorted(output_dir.glob(f"{prefix}momentum_leaders_*.csv")):
-        match = re.search(r"(\d{4}-\d{2}-\d{2})\.csv$", path.name)
-        if not match:
-            continue
-        frame = pd.read_csv(path)
-        if "industry" not in frame.columns:
-            continue
-        groups = {}
-        for label, flag in TIMEFRAMES.items():
-            if flag not in frame.columns:
-                continue
-            counts = (
-                frame.loc[frame[flag].fillna(False).astype(bool), "industry"]
-                .fillna("Unclassified")
-                .value_counts()
-                .to_dict()
-            )
-            groups[label] = {str(industry): int(count) for industry, count in counts.items()}
-        leader_columns = [column for column in [
-            "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
-            "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
-        ] if column in frame.columns]
-        liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
-        nel_path = output_dir / f"{prefix}non_extended_leaders_{match.group(1)}.csv"
-        nel_records = []
-        if nel_path.exists():
-            nel = pd.read_csv(nel_path)
-            columns = [column for column in [
-                "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
-                "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
-            ] if column in nel.columns]
-            nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
-        tight_path = output_dir / f"{prefix}tight_non_extended_leaders_{match.group(1)}.csv"
-        tight_records = []
-        if tight_path.exists():
-            tight = pd.read_csv(tight_path)
-            columns = [column for column in [
-                "name", "industry", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
-                "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y", "coil_setup", "rmv_15d",
-                "rmv_tight_days", "coil_range_5d_atr", "true_range_ratio_3d", "true_range_ratio_5d",
-            ] if column in tight.columns]
-            tight_records = json.loads(tight.loc[:, columns].to_json(orient="records"))
-        # `groups` comes only from full momentum-leader files. The NEL subset
-        # below is a display table and cannot influence theme leadership.
-        snapshots.append({"date": match.group(1), "groups": groups, "liquid": liquid_records, "nel": nel_records, "tight": tight_records})
-    return snapshots
-
-
-def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
-    """Write an offline-friendly interactive dashboard with embedded history."""
-    is_super = profile == "super"
-    prefix = "super_liquid_" if is_super else ""
-    history = collect_industry_history(output_dir, prefix)
-    dashboard = Path("super-liquid.html") if is_super else Path("industry_flow_dashboard.html")
-    pages_entrypoint = None if is_super else Path("index.html")
-    payload = json.dumps(history, separators=(",", ":"))
-    template = r'''<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Liquid Leadership | NEL</title>
+  <title>Super Liquid Leadership | NEL</title>
   <meta name="description" content="Find non-extended leaders from the market’s most liquid momentum stocks.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://i-manage-risk.github.io/NEL/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Liquid Leadership">
-  <meta property="og:title" content="Liquid Leadership | NEL">
+  <meta property="og:title" content="Super Liquid Leadership | NEL">
   <meta property="og:description" content="Find non-extended leaders from the market’s most liquid momentum stocks.">
   <meta property="og:url" content="https://i-manage-risk.github.io/NEL/">
   <meta property="og:image" content="https://i-manage-risk.github.io/NEL/assets/nel-social-preview.png">
   <meta property="og:image:width" content="1731">
   <meta property="og:image:height" content="909">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Liquid Leadership | NEL">
+  <meta name="twitter:title" content="Super Liquid Leadership | NEL">
   <meta name="twitter:description" content="Find non-extended leaders from the market’s most liquid momentum stocks.">
   <meta name="twitter:image" content="https://i-manage-risk.github.io/NEL/assets/nel-social-preview.png">
   <link rel="icon" type="image/png" href="assets/nel-favicon.png">
@@ -149,19 +72,19 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
 </head>
 <body>
 <main>
-  <nav class="site-nav" aria-label="Dashboard pages"><a class="active" href="index.html">Stocks</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth</a></nav>
-  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 id="thematic-title" class="dashboard-title">Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>
+  <nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Liquid Leaders</a><a href="super-liquid.html" class="active">Super Liquid Leaders</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth</a></nav>
+  <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 id="thematic-title" class="dashboard-title">Super Liquid Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>
   <div id="leadership-sections" class="window-sections"></div>
-  <div class="section-heading"><h2 id="liquid-title">Liquid Leaders (LL)</h2><div class="section-actions"><button id="copy-ll" class="download-btn" type="button">Copy</button><button id="download-ll" class="download-btn" type="button">Export LL</button></div></div>
+  <div class="section-heading"><h2 id="liquid-title">Super Liquid Leaders (SLL)</h2><div class="section-actions"><button id="copy-ll" class="download-btn" type="button">Copy</button><button id="download-ll" class="download-btn" type="button">Export SLL</button></div></div>
   <div id="liquid-sections" class="window-sections"></div>
-  <div class="section-heading"><h2 id="nel-title">Non-Extended Leaders (NEL)</h2><div class="section-actions"><button id="copy-nel" class="download-btn" type="button">Copy</button><button id="download-nel" class="download-btn" type="button">Export NEL</button></div></div>
+  <div class="section-heading"><h2 id="nel-title">Super Liquid Non-Extended Leaders (S-NEL)</h2><div class="section-actions"><button id="copy-nel" class="download-btn" type="button">Copy</button><button id="download-nel" class="download-btn" type="button">Export S-NEL</button></div></div>
   <div id="nel-sections" class="window-sections"></div>
-  <div class="section-heading"><h2 id="tight-title">Tight Non-Extended Leaders (T-NEL)</h2><div class="section-actions"><button id="copy-tight" class="download-btn" type="button">Copy</button><button id="download-tight" class="download-btn" type="button">Export T-NEL</button></div></div>
+  <div class="section-heading"><h2 id="tight-title">Tight Super Liquid Leaders (T-SNEL)</h2><div class="section-actions"><button id="copy-tight" class="download-btn" type="button">Copy</button><button id="download-tight" class="download-btn" type="button">Export T-SNEL</button></div></div>
   <div id="tight-sections" class="window-sections"></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
-const history = __DATA__;
+const history = [{"date":"2026-10-07","groups":{"1m":{"Semiconductors":1,"Computer Processing Hardware":1},"3m":{"Packaged Software":1,"Financial Conglomerates":1},"6m":{"Semiconductors":2},"1y":{"Semiconductors":1,"Computer Peripherals":1}},"liquid":[{"name":"MUU","industry":"Semiconductors","average_dollar_volume_30d":805971402.0,"dollar_volume_30d":896868490.0,"Perf.1M":9.53,"Perf.3M":8.96,"Perf.6M":404.99,"Perf.Y":1461.85,"atr_extension_from_50d":2.34,"is_top_1m":false,"is_top_3m":false,"is_top_6m":true,"is_top_1y":true},{"name":"SNDK","industry":"Computer Peripherals","average_dollar_volume_30d":15881313592.0,"dollar_volume_30d":16426385879.0,"Perf.1M":8.78,"Perf.3M":-6.01,"Perf.6M":97.41,"Perf.Y":1278.0,"atr_extension_from_50d":1.82,"is_top_1m":false,"is_top_3m":false,"is_top_6m":false,"is_top_1y":true},{"name":"AMDL","industry":"Semiconductors","average_dollar_volume_30d":137153699.0,"dollar_volume_30d":181054120.0,"Perf.1M":74.87,"Perf.3M":35.54,"Perf.6M":503.33,"Perf.Y":414.49,"atr_extension_from_50d":6.77,"is_top_1m":true,"is_top_3m":false,"is_top_6m":true,"is_top_1y":false},{"name":"HPE","industry":"Computer Processing Hardware","average_dollar_volume_30d":1470329665.0,"dollar_volume_30d":1800466508.0,"Perf.1M":35.74,"Perf.3M":59.3,"Perf.6M":192.26,"Perf.Y":187.1,"atr_extension_from_50d":5.67,"is_top_1m":true,"is_top_3m":false,"is_top_6m":false,"is_top_1y":false},{"name":"PTIR","industry":"Packaged Software","average_dollar_volume_30d":56209462.0,"dollar_volume_30d":62783506.0,"Perf.1M":20.96,"Perf.3M":81.24,"Perf.6M":30.03,"Perf.Y":-26.49,"atr_extension_from_50d":3.36,"is_top_1m":false,"is_top_3m":true,"is_top_6m":false,"is_top_1y":false},{"name":"BMNR","industry":"Financial Conglomerates","average_dollar_volume_30d":1012805806.0,"dollar_volume_30d":969840204.0,"Perf.1M":-3.2,"Perf.3M":67.29,"Perf.6M":13.65,"Perf.Y":-62.27,"atr_extension_from_50d":0.98,"is_top_1m":false,"is_top_3m":true,"is_top_6m":false,"is_top_1y":false}],"nel":[{"name":"MUU","industry":"Semiconductors","average_dollar_volume_30d":805971402.0,"dollar_volume_30d":896868490.0,"Perf.1M":9.53,"Perf.3M":8.96,"Perf.6M":404.99,"Perf.Y":1461.85,"atr_extension_from_50d":2.34,"is_top_1m":false,"is_top_3m":false,"is_top_6m":true,"is_top_1y":true},{"name":"SNDK","industry":"Computer Peripherals","average_dollar_volume_30d":15881313592.0,"dollar_volume_30d":16426385879.0,"Perf.1M":8.78,"Perf.3M":-6.01,"Perf.6M":97.41,"Perf.Y":1278.0,"atr_extension_from_50d":1.82,"is_top_1m":false,"is_top_3m":false,"is_top_6m":false,"is_top_1y":true},{"name":"PTIR","industry":"Packaged Software","average_dollar_volume_30d":56209462.0,"dollar_volume_30d":62783506.0,"Perf.1M":20.96,"Perf.3M":81.24,"Perf.6M":30.03,"Perf.Y":-26.49,"atr_extension_from_50d":3.36,"is_top_1m":false,"is_top_3m":true,"is_top_6m":false,"is_top_1y":false},{"name":"BMNR","industry":"Financial Conglomerates","average_dollar_volume_30d":1012805806.0,"dollar_volume_30d":969840204.0,"Perf.1M":-3.2,"Perf.3M":67.29,"Perf.6M":13.65,"Perf.Y":-62.27,"atr_extension_from_50d":0.98,"is_top_1m":false,"is_top_3m":true,"is_top_6m":false,"is_top_1y":false}],"tight":[]}];
 const dateSelect = document.getElementById('date');
 const thematicTitle = document.getElementById('thematic-title');
 const liquidTitle = document.getElementById('liquid-title');
@@ -247,13 +170,13 @@ function renderTight(snapshot) {
 }
 function render() {
   const current = currentSnapshot(), index = Number(dateSelect.value), previous = history[index-1];
-  liquidTitle.textContent = `Liquid Leaders (LL) - ${(current.liquid || []).length} Tickers`;
-  nelTitle.textContent = `Non-Extended Leaders (NEL) - ${(current.nel || []).length} Tickers`;
-  tightTitle.textContent = `Tight Non-Extended Leaders (T-NEL) - ${(current.tight || []).length} Tickers`;
+  liquidTitle.textContent = `Super Liquid Leaders (SLL) - ${(current.liquid || []).length} Tickers`;
+  nelTitle.textContent = `Super Liquid Non-Extended Leaders (S-NEL) - ${(current.nel || []).length} Tickers`;
+  tightTitle.textContent = `Tight Super Liquid Leaders (T-SNEL) - ${(current.tight || []).length} Tickers`;
   leadershipSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="panel" data-frame="${frame}"><h2 style="color:${meta.color}">${meta.label} leadership</h2><div id="bars-${frame}" class="bars"></div><h2 style="margin-top:22px">Leadership over time</h2><svg id="trend-${frame}" role="img" aria-label="${meta.label} industry leader counts across available snapshots"></svg></section>`).join('');
-  liquidSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} LL</h3><div id="liquid-theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap scrollable-table"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="liquid-table-${frame}"></tbody></table></div></section>`).join('');
-  nelSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} NEL</h3><div id="theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="nel-table-${frame}"></tbody></table></div></section>`).join('');
-  tightSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} T-NEL</h3><div class="table-wrap"><table class="tight-table"><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Coil</th><th>RMV</th><th>Extension</th></tr></thead><tbody id="tight-table-${frame}"></tbody></table></div></section>`).join('');
+  liquidSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} SLL</h3><div id="liquid-theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap scrollable-table"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="liquid-table-${frame}"></tbody></table></div></section>`).join('');
+  nelSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} S-NEL</h3><div id="theme-${frame}" class="theme-card frame-${frame}"></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Avg $ Vol</th><th>Extension</th></tr></thead><tbody id="nel-table-${frame}"></tbody></table></div></section>`).join('');
+  tightSections.innerHTML = Object.entries(flowMeta).map(([frame, meta]) => `<section class="nel-window" data-frame="${frame}"><h3>${meta.label} T-SNEL</h3><div class="table-wrap"><table class="tight-table"><thead><tr><th>Symbol</th><th>Industry</th><th>Performance</th><th>Coil</th><th>RMV</th><th>Extension</th></tr></thead><tbody id="tight-table-${frame}"></tbody></table></div></section>`).join('');
   Object.keys(flowMeta).forEach(frame => { const rankedNames = renderBars(current, previous, frame, document.getElementById(`bars-${frame}`)); renderTrend(frame, document.getElementById(`trend-${frame}`), rankedNames); });
   renderLiquid(current);
   renderNEL(current);
@@ -281,38 +204,11 @@ async function downloadPageImage() {
   downloadButton.disabled = true; downloadButton.textContent = 'Creating image…';
   try {
     const canvas = await html2canvas(document.querySelector('main'), { backgroundColor:'#141414', scale:2, useCORS:true, windowWidth:document.documentElement.scrollWidth, windowHeight:document.documentElement.scrollHeight, onclone: clonedDocument => { const bar = clonedDocument.querySelector('.topbar'); bar.innerHTML = `<span class="snapshot-date">${currentSnapshot().date}</span><h1 class="dashboard-title">${thematicTitle.textContent}</h1><span></span>`; } });
-    const link = document.createElement('a'); link.download = `industry-leadership-${currentSnapshot().date}.png`; link.href = canvas.toDataURL('image/png'); link.click();
+    const link = document.createElement('a'); link.download = `super-liquid-leadership-${currentSnapshot().date}.png`; link.href = canvas.toDataURL('image/png'); link.click();
   } finally { downloadButton.disabled = false; downloadButton.textContent = 'Snapshot'; }
 }
-if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadLiquidButton.addEventListener('click', () => downloadSymbols('liquid', 'liquid_leaders')); downloadNelButton.addEventListener('click', () => downloadSymbols('nel', 'nel')); downloadTightButton.addEventListener('click', () => downloadSymbols('tight', 'tight_nel')); copyLiquidButton.addEventListener('click', () => copySymbols('liquid', copyLiquidButton)); copyNelButton.addEventListener('click', () => copySymbols('nel', copyNelButton)); copyTightButton.addEventListener('click', () => copySymbols('tight', copyTightButton)); window.addEventListener('resize', render); render(); }
+if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadLiquidButton.addEventListener('click', () => downloadSymbols('liquid', 'super_liquid_leaders')); downloadNelButton.addEventListener('click', () => downloadSymbols('nel', 'super_liquid_nel')); downloadTightButton.addEventListener('click', () => downloadSymbols('tight', 'super_liquid_tight_nel')); copyLiquidButton.addEventListener('click', () => copySymbols('liquid', copyLiquidButton)); copyNelButton.addEventListener('click', () => copySymbols('nel', copyNelButton)); copyTightButton.addEventListener('click', () => copySymbols('tight', copyTightButton)); window.addEventListener('resize', render); render(); }
 </script>
 <script src="assets/date-select.js?v=2"></script>
 </body>
-</html>'''
-    rendered = template.replace("__DATA__", payload)
-    nav = '<nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Liquid Leaders</a><a href="super-liquid.html">Super Liquid Leaders</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth</a></nav>'
-    active_label = "Super Liquid Leaders" if is_super else "Liquid Leaders"
-    nav = nav.replace(f'>{active_label}</a>', f' class="active">{active_label}</a>')
-    rendered = re.sub(r'<nav class="site-nav".*?</nav>', nav, rendered, count=1)
-    if is_super:
-        replacements = {
-            "Liquid Leadership | NEL": "Super Liquid Leadership | NEL",
-            "Thematic Leadership": "Super Liquid Thematic Leadership",
-            "Liquid Leaders (LL)": "Super Liquid Leaders (SLL)",
-            "Non-Extended Leaders (NEL)": "Super Liquid Non-Extended Leaders (S-NEL)",
-            "Tight Non-Extended Leaders (T-NEL)": "Tight Super Liquid Leaders (T-SNEL)",
-            "Export LL": "Export SLL", "Export NEL": "Export S-NEL", "Export T-NEL": "Export T-SNEL",
-            "industry-leadership-": "super-liquid-leadership-",
-            "'liquid_leaders'": "'super_liquid_leaders'",
-            "downloadSymbols('nel', 'nel')": "downloadSymbols('nel', 'super_liquid_nel')",
-            "'tight_nel'": "'super_liquid_tight_nel'",
-            "${meta.label} LL": "${meta.label} SLL",
-            "${meta.label} NEL": "${meta.label} S-NEL",
-            "${meta.label} T-NEL": "${meta.label} T-SNEL",
-        }
-        for old, new in replacements.items():
-            rendered = rendered.replace(old, new)
-    dashboard.write_text(rendered, encoding="utf-8")
-    if pages_entrypoint is not None:
-        pages_entrypoint.write_text(rendered, encoding="utf-8")
-    return dashboard
+</html>

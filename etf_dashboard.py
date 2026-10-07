@@ -130,7 +130,7 @@ def render_dashboard(payload: dict, active_key: str) -> str:
 </head>
 <body>
 <main>
-  <nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Stocks</a><a href="themes.html" data-page="themes">Themes</a><a href="sectors.html" data-page="sectors">Sectors</a><a href="breadth.html">Breadth</a></nav>
+  <nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Liquid Leaders</a><a href="super-liquid.html">Super Liquid Leaders</a><a href="themes.html" data-page="themes">Themes</a><a href="sectors.html" data-page="sectors">Sectors</a><a href="breadth.html">Breadth</a></nav>
   <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1>__TITLE__</h1><button id="snapshot" class="button">Snapshot</button></div>
   <div class="section-heading"><h2 id="leaders-title">__LEADER_LABEL__</h2><button id="export-leaders" class="button">Export Leaders</button></div>
   <div id="leader-windows" class="windows"></div>

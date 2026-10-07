@@ -86,6 +86,33 @@ def _assign_exact_top_flags(frame: pd.DataFrame, metric: str, rank_column: str, 
     frame[flag_column] = frame[rank_column] <= cutoff
 
 
+def rank_and_filter_leaders(
+    universe: pd.DataFrame, settings: Settings
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Rank an already-filtered universe and return universe, leaders, and NEL."""
+    universe = universe.copy()
+    if universe.empty:
+        return universe, universe.copy(), universe.copy()
+    cutoff = max(1, ceil(len(universe) * settings.top_pct))
+    for metric, rank, flag in [
+        ("Perf.1M", "perf_1m_rank", "is_top_1m"),
+        ("Perf.3M", "perf_3m_rank", "is_top_3m"),
+        ("Perf.6M", "perf_6m_rank", "is_top_6m"),
+        ("Perf.Y", "perf_1y_rank", "is_top_1y"),
+    ]:
+        _assign_exact_top_flags(universe, metric, rank, flag, cutoff)
+    universe["momentum_score"] = universe[["Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]].mean(axis=1)
+    leaders = pd.concat(
+        [universe.loc[universe[flag]] for flag in ("is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y")],
+        ignore_index=True,
+    ).drop_duplicates(subset="name", keep="first")
+    nel = leaders.loc[leaders["atr_extension_from_50d"] <= settings.max_atr_extension].copy()
+    sort_order = ["momentum_score", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
+    leaders.sort_values(sort_order, ascending=False, inplace=True)
+    nel.sort_values(sort_order, ascending=False, inplace=True)
+    return universe.sort_values("momentum_score", ascending=False), leaders, nel
+
+
 def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Return the eligible universe, leaders, and non-extended leaders (NEL)."""
     _require_columns(raw, ["name", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "average_volume_10d_calc", "average_volume_30d_calc"])
@@ -115,40 +142,13 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
         & (df["average_volume_10d_calc"] > settings.min_avg_volume_10d)
     ].copy()
 
-    if universe.empty:
-        return universe, universe.copy(), universe.copy()
-
-    cutoff = max(1, ceil(len(universe) * settings.top_pct))
-    _assign_exact_top_flags(universe, "Perf.1M", "perf_1m_rank", "is_top_1m", cutoff)
-    _assign_exact_top_flags(universe, "Perf.3M", "perf_3m_rank", "is_top_3m", cutoff)
-    _assign_exact_top_flags(universe, "Perf.6M", "perf_6m_rank", "is_top_6m", cutoff)
-    _assign_exact_top_flags(universe, "Perf.Y", "perf_1y_rank", "is_top_1y", cutoff)
-    universe["momentum_score"] = universe[["Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]].mean(axis=1)
-
-    # Combine the four leader groups. A symbol can lead in more than one
-    # timeframe but appears only once in the final leader list.
-    leaders = pd.concat(
-        [
-            universe.loc[universe["is_top_1m"]],
-            universe.loc[universe["is_top_3m"]],
-            universe.loc[universe["is_top_6m"]],
-            universe.loc[universe["is_top_1y"]],
-        ],
-        ignore_index=True,
-    ).drop_duplicates(subset="name", keep="first")
-    nel = leaders.loc[
-        leaders["atr_extension_from_50d"] <= settings.max_atr_extension
-    ].copy()
-    sort_order = ["momentum_score", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
-    leaders.sort_values(sort_order, ascending=False, inplace=True)
-    nel.sort_values(sort_order, ascending=False, inplace=True)
-    return universe.sort_values("momentum_score", ascending=False), leaders, nel
+    return rank_and_filter_leaders(universe, settings)
 
 
 def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     """Order and round the columns so the daily review sheet is scan-friendly."""
     preferred = [
-        "name", "description", "exchange", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP",
+        "name", "description", "exchange", "industry", "underlying", "instrument_type", "close", "SMA30", "SMA50", "ADRP", "ATRP",
         "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d", "average_dollar_volume_30d",
         "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank", "Perf.Y", "perf_1y_rank",
         "momentum_score", "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",

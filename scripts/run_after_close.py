@@ -119,6 +119,15 @@ def main() -> int:
             )
             if result.returncode == 0:
                 result = subprocess.run(
+                    [str(scanner_python), "super_liquid.py", "--snapshot-date", next_session_date(now).isoformat()],
+                    cwd=PROJECT_DIR,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=False,
+                )
+            if result.returncode == 0:
+                result = subprocess.run(
                     [str(scanner_python), "etf_strength.py", "--close-date", now.date().isoformat()],
                     cwd=PROJECT_DIR,
                     stdout=log,

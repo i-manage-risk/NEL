@@ -37,6 +37,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add outputs industry_flow_dashboard.html index.html themes.html sectors.html breadth.html data/etf_holdings_cache.json
+          git add outputs industry_flow_dashboard.html index.html super-liquid.html themes.html sectors.html breadth.html data/etf_holdings_cache.json
           git diff --cached --quiet || git commit -m "Update NEL scan for $(date -u +%F)"
           git push

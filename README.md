@@ -19,6 +19,14 @@ The daily run writes `tight_non_extended_leaders_YYYY-MM-DD.csv` and a symbol-on
 
 The separate Themes and Sectors studies use fixed ETF universes and are dated with the actual completed market session they measure. Unlike the stock NEL list, their dates are not advanced to the next trading session.
 
+## Super Liquid Leaders
+
+`super-liquid.html` applies the same 1-, 3-, 6-, and 12-month leader, extension, and tightness process to the market's most liquid stocks. An underlying first needs 30-day average dollar volume above $1 billion. If that stock also has ADR% above 4%, the stock enters the candidate universe. If it misses ADR%, the scanner checks the supplied 2× ETF map and substitutes one ETF: the qualifying fund with the highest current TradingView 30-day average share volume. The ETF must trade more than 1 million shares per day and have ADR% above 4%.
+
+The ETF is measured using its own price performance, ADR%, ATR%, SMA50 extension, and tightness, but inherits its underlying stock's industry for thematic analysis. A qualifying stock and its ETF are never both added. The daily scan refreshes the Super Liquid dashboard and symbol exports for the next market session.
+
+The mapping lives at `data/us_leveraged_etf_map.csv`. `.github/workflows/refresh-leveraged-etfs.yml` refreshes every mapped fund's trailing 30-session average share volume and average dollar volume each Friday after the close. The mapping inventory remains the supplied list; new ETF launches can be added to that CSV as needed.
+
 ## Theme and sector ETF studies
 
 The shared navigation bar links the stock dashboard to `themes.html` and `sectors.html`. Both ETF studies use adjusted close for 1-week, 1-, 3-, 6-, and 12-month performance, while intraday change, ADR%, ATR%, SMA50 extension, and liquidity use raw regular-session OHLC and volume. A compact centered performance chart toggles between premarket, overnight, after-hours, intraday, 1-day, 1-week, 1-month, 3-month, 6-month, and 1-year returns. Premarket is measured against the prior regular close; Overnight is the actual 8 PM–4 AM session; After hours is measured from the regular close to the final 4–8 PM price. Completed extended-session values are persisted after the live public fields clear. The Themes chart defaults to one median return per theme, with an ETF drill-down toggle. TradingView identifies its public feed as delayed by up to 15 minutes; older selected dates remain historical close snapshots.
@@ -41,6 +49,12 @@ pip install -r requirements.txt
 
 ```bash
 python focus_list.py
+```
+
+To run only the Super Liquid study:
+
+```bash
+python super_liquid.py
 ```
 
 ## Automatic daily run (macOS)
@@ -75,6 +89,6 @@ Every run also refreshes `industry_flow_dashboard.html`. Open it in a browser to
 
 ## GitHub Pages and cloud automation
 
-`index.html` is refreshed with the dashboard for GitHub Pages. The GitHub Actions workflow in `.github/workflows/daily-scan.yml` schedules the scanner after the US close, commits the refreshed CSVs and dashboard, and works without your Mac being awake. GitHub Pages must be enabled for the repository with the `main` branch and `/ (root)` folder selected as its source.
+`index.html` and `super-liquid.html` are refreshed for GitHub Pages. The GitHub Actions workflow in `.github/workflows/daily-scan.yml` schedules both stock scanners after the US close, commits the refreshed CSVs and dashboards, and works without your Mac being awake. GitHub Pages must be enabled for the repository with the `main` branch and `/ (root)` folder selected as its source.
 
 The Breadth page has a separate after-close watcher because Stockbee publishes its Market Monitor at variable times. GitHub checks hourly through late evening in New York, rebuilds the full historical Time Machine, and commits only when the published sheet actually changes.
