@@ -152,7 +152,7 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
 def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     """Order and round the columns so the daily review sheet is scan-friendly."""
     preferred = [
-        "name", "description", "exchange", "industry", "underlying", "instrument_type", "close", "SMA30", "SMA50", "ADRP", "ATRP",
+        "name", "description", "exchange", "industry", "underlying", "paired_etf", "instrument_type", "close", "SMA30", "SMA50", "ADRP", "ATRP",
         "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d", "average_dollar_volume_30d",
         "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank", "Perf.Y", "perf_1y_rank",
         "momentum_score", "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",

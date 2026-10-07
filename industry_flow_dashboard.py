@@ -38,7 +38,7 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
             )
             groups[label] = {str(industry): int(count) for industry, count in counts.items()}
         leader_columns = [column for column in [
-            "name", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+            "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
             "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
         ] if column in frame.columns]
         liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
@@ -47,7 +47,7 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
         if nel_path.exists():
             nel = pd.read_csv(nel_path)
             columns = [column for column in [
-                "name", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+                "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
                 "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
             ] if column in nel.columns]
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
@@ -56,7 +56,7 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
         if tight_path.exists():
             tight = pd.read_csv(tight_path)
             columns = [column for column in [
-                "name", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+                "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
                 "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y", "coil_setup", "rmv_15d",
                 "rmv_tight_days", "coil_range_5d_atr", "true_range_ratio_3d", "true_range_ratio_5d",
             ] if column in tight.columns]
@@ -192,6 +192,7 @@ function formatShareVolume(value) { const amount = Number(value); if (!Number.is
 function averageDollarVolume(row) { return row.average_dollar_volume_30d ?? row.dollar_volume_30d; }
 function liquidityValue(row) { return useShareVolume ? row.average_volume_30d_calc : averageDollarVolume(row); }
 function formatLiquidity(value) { return useShareVolume ? formatShareVolume(value) : formatDollarVolume(value); }
+function displaySymbol(row) { return useShareVolume && row.paired_etf ? `${row.name} / ${row.paired_etf}` : row.name; }
 function updateDates() {
   dateSelect.innerHTML = history.map((d,i) => `<option value="${i}">${d.date}</option>`).join('');
   dateSelect.value = Math.max(0, history.length - 1);
@@ -226,7 +227,7 @@ function renderLiquid(snapshot) {
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = liquidityValue(row); const highLiquidity = !useShareVolume && Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatLiquidity(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
+    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = liquidityValue(row); const highLiquidity = !useShareVolume && Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(displaySymbol(row))}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="liquidity-column ${className}">${formatLiquidity(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No liquid leaders.</td></tr>';
   });
 }
 function renderNEL(snapshot) {
@@ -237,7 +238,7 @@ function renderNEL(snapshot) {
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     themeCard.innerHTML = `<span class="theme-line"><strong>${top ? escapeHTML(top[0]) : '—'}</strong>${top ? ` (${top[1]} Liquid Leader${top[1] === 1 ? '' : 's'})` : ''}</span>`;
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(b[performance]) - Number(a[performance]));
-    nelTable.innerHTML = rows.length ? rows.map(row => { const dollarVolume = liquidityValue(row); const highLiquidity = !useShareVolume && Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="${className}">${formatLiquidity(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No NEL leaders.</td></tr>';
+    nelTable.innerHTML = rows.length ? rows.map(row => { const dollarVolume = liquidityValue(row); const highLiquidity = !useShareVolume && Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; return `<tr><td class="${className}">${escapeHTML(displaySymbol(row))}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td class="liquidity-column ${className}">${formatLiquidity(dollarVolume)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="5" class="empty">No NEL leaders.</td></tr>';
   });
 }
 function renderTight(snapshot) {
@@ -246,7 +247,7 @@ function renderTight(snapshot) {
     const table = document.getElementById(`tight-table-${frame}`);
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(a.rmv_15d) - Number(b.rmv_15d) || Number(b[performance]) - Number(a[performance]));
-    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = averageDollarVolume(row); const highLiquidity = Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; const rmvTitle = `${row.rmv_tight_days || 0} consecutive RMV-tight day${Number(row.rmv_tight_days) === 1 ? '' : 's'}`; return `<tr><td class="${className}">${escapeHTML(row.name)}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td>${escapeHTML(row.coil_setup)}</td><td title="${rmvTitle}">${formatNumber(row.rmv_15d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="6" class="empty">No tight NEL setups.</td></tr>';
+    table.innerHTML = rows.length ? rows.map(row => { const dollarVolume = averageDollarVolume(row); const highLiquidity = Number(dollarVolume) > 450_000_000; const className = highLiquidity ? 'high-liquidity' : ''; const isLeaderTheme = top && row.industry === top[0]; const industryStyle = isLeaderTheme ? ` style="color:${flowMeta[frame].color};font-weight:650"` : ''; const rmvTitle = `${row.rmv_tight_days || 0} consecutive RMV-tight day${Number(row.rmv_tight_days) === 1 ? '' : 's'}`; return `<tr><td class="${className}">${escapeHTML(displaySymbol(row))}</td><td${industryStyle}>${escapeHTML(row.industry)}</td><td>${formatPct(row[performance])}</td><td>${escapeHTML(row.coil_setup)}</td><td title="${rmvTitle}">${formatNumber(row.rmv_15d)}</td><td>${formatNumber(row.atr_extension_from_50d)}×</td></tr>`; }).join('') : '<tr><td colspan="6" class="empty">No tight NEL setups.</td></tr>';
   });
 }
 function render() {
@@ -318,7 +319,8 @@ if (!history.length) { document.querySelector('main').innerHTML = '<p class="emp
         }
         for old, new in replacements.items():
             rendered = rendered.replace(old, new)
-        rendered = rendered.replace("Avg $ Vol", "Avg Share Vol")
+        rendered = rendered.replace("<th>Avg $ Vol</th>", "")
+        rendered = rendered.replace("<td class=\"liquidity-column ${className}\">${formatLiquidity(dollarVolume)}</td>", "")
     dashboard.write_text(rendered, encoding="utf-8")
     if pages_entrypoint is not None:
         pages_entrypoint.write_text(rendered, encoding="utf-8")

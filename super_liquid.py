@@ -49,7 +49,7 @@ def fetch_tradingview(instrument_type: str = "stock") -> pd.DataFrame:
     return frame
 
 
-def mapped_symbols_for_adr_failures(
+def mapped_symbols_for_underlyings(
     raw_stocks: pd.DataFrame, mapping: pd.DataFrame, settings: SuperLiquidSettings
 ) -> list[str]:
     stocks = add_metrics(raw_stocks)
@@ -59,8 +59,7 @@ def mapped_symbols_for_adr_failures(
         & (stocks[["close", "SMA30", "SMA50", "ATRP"]] > 0).all(axis=1)
         & stocks[performance].notna().all(axis=1)
         & (stocks["average_dollar_volume_30d"] > settings.min_dollar_volume)
-        & (stocks["average_volume_10d_calc"] > settings.min_avg_volume_10d)
-        & (stocks["ADRP"] <= settings.min_adr_pct),
+        & (stocks["average_volume_10d_calc"] > settings.min_avg_volume_10d),
         "name",
     ]
     wanted = set(eligible.astype(str).str.upper())
@@ -75,7 +74,7 @@ def fetch_mapped_etfs(symbols: list[str]) -> pd.DataFrame:
     rows = []
     for symbol in symbols:
         history = histories.get(symbol)
-        if history is None or len(history) < 252:
+        if history is None or len(history) < 30:
             continue
         metrics = build_metric_history(history).iloc[-1]
         rows.append({
@@ -124,37 +123,29 @@ def calculate_super_liquid(
         & (stocks["average_volume_10d_calc"] > settings.min_avg_volume_10d)
     )
     underlyings = stocks.loc[valid_stock].copy()
-    direct = underlyings.loc[underlyings["ADRP"] > settings.min_adr_pct].copy()
-    direct["underlying"] = direct["name"]
-    direct["instrument_type"] = "Stock"
-
     map_frame = mapping.rename(columns={"Underlying Ticker": "underlying", "Ticker": "name"}).copy()
     map_frame["underlying"] = map_frame["underlying"].astype(str).str.upper().str.strip()
     map_frame["name"] = map_frame["name"].astype(str).str.upper().str.strip()
-    # The leveraged ETF is a volatility substitute only when the $1B stock
-    # itself misses ADR; do not double-count a qualifying stock and its ETF.
-    adr_failures = set(underlyings.loc[underlyings["ADRP"] <= settings.min_adr_pct, "name"])
-    mapped = map_frame.loc[map_frame["underlying"].isin(adr_failures)]
+    mapped = map_frame.loc[map_frame["underlying"].isin(set(underlyings["name"]))]
     eligible_etfs = etfs.loc[etfs["name"].isin(set(mapped["name"]))].merge(
         mapped[["underlying", "name"]], on="name", how="inner"
     )
     valid_etf = (
-        (eligible_etfs[["close", "SMA30", "SMA50", "ADRP", "ATRP"]] > 0).all(axis=1)
-        & eligible_etfs[performance].notna().all(axis=1)
+        (eligible_etfs[["close", "ADRP", "ATRP"]] > 0).all(axis=1)
         & (eligible_etfs["ADRP"] > settings.min_adr_pct)
         & (eligible_etfs["average_volume_30d_calc"] > settings.min_etf_avg_volume_30d)
     )
     eligible_etfs = eligible_etfs.loc[valid_etf].sort_values(
         ["underlying", "average_volume_30d_calc", "name"], ascending=[True, False, True]
     ).drop_duplicates("underlying", keep="first")
-    industry_map = underlyings.set_index("name")["industry"]
-    eligible_etfs["industry"] = eligible_etfs["underlying"].map(industry_map)
-    eligible_etfs["description"] = eligible_etfs["underlying"].map(
-        lambda symbol: f"2× {symbol} leveraged ETF"
-    )
-    eligible_etfs["instrument_type"] = "2x ETF"
-    candidates = pd.concat([direct, eligible_etfs], ignore_index=True, sort=False)
-    candidates = candidates.drop_duplicates("name", keep="first")
+    paired = eligible_etfs.set_index("underlying")["name"]
+    candidates = underlyings.loc[
+        (underlyings["ADRP"] > settings.min_adr_pct)
+        | underlyings["name"].isin(set(eligible_etfs["underlying"]))
+    ].copy()
+    candidates["underlying"] = candidates["name"]
+    candidates["paired_etf"] = candidates["name"].map(paired)
+    candidates["instrument_type"] = "Stock"
     ranked, leaders, nel = rank_and_filter_leaders(candidates, settings)
     return underlyings, ranked, leaders, nel
 
@@ -202,7 +193,7 @@ def main() -> None:
     settings = SuperLiquidSettings(top_pct=args.top_pct)
     mapping = pd.read_csv(args.map)
     stocks = fetch_tradingview("stock")
-    etf_symbols = mapped_symbols_for_adr_failures(stocks, mapping, settings)
+    etf_symbols = mapped_symbols_for_underlyings(stocks, mapping, settings)
     etfs = fetch_mapped_etfs(etf_symbols)
     underlyings, universe, leaders, nel = calculate_super_liquid(stocks, etfs, mapping, settings)
     tight, errors = find_tight_nel(nel)
@@ -210,7 +201,7 @@ def main() -> None:
     paths.append(write_dashboard(args.output_dir, profile="super"))
     print(
         f"$1B underlyings: {len(underlyings):,} | eligible instruments: {len(universe):,} "
-        f"({(universe.instrument_type == '2x ETF').sum():,} ETFs) | leaders: {len(leaders):,} "
+        f"({universe.paired_etf.notna().sum():,} with 2x ETFs) | leaders: {len(leaders):,} "
         f"| S-NEL: {len(nel):,} | Tight: {len(tight):,}"
     )
     if errors:
