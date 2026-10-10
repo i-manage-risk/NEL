@@ -9,19 +9,19 @@ It keeps US common stocks listed on NASDAQ, NYSE, and AMEX that meet all of thes
 - 10-day average volume above 350K shares
 - Industry does not contain “Biotech”
 
-It takes the top 5% of stocks by TradingView performance over each of 1 month, 3 months, 6 months, and 1 year. It combines those four groups, removes duplicate tickers, and removes names more than 4 ATR% multiples above the 50-day SMA. The result is NEL, not a discretionary focus list.
+It takes the top 5% of stocks by TradingView performance over each of 1 week, 1 month, 3 months, 6 months, and 1 year. It combines those five groups, removes duplicate tickers, and removes names more than 4 ATR% multiples above the 50-day SMA. The result is NEL, not a discretionary focus list.
 
 ## Tight Non-Extended Leaders (T-NEL)
 
 After NEL is built, the scanner downloads three months of daily OHLC history for those symbols with `yfinance`. A stock qualifies as Tight NEL when it is above its 9-day EMA, its five-day high-low range is no more than 2.5 ATR, its current daily range is below the prior day's ATR, and either its three-day or five-day closes and true ranges satisfy the fast-coil contraction rules. RMV(15) is retained as a secondary ranking value; it is not the pass/fail rule.
 
-The daily run writes `tight_non_extended_leaders_YYYY-MM-DD.csv` and a symbol-only `outputs/EXPORT/tight_nel_symbols_YYYY-MM-DD.csv`. The dashboard displays separate 1-, 3-, 6-, and 12-month Tight NEL tables and can export the selected Tight NEL symbol list.
+The daily run writes `tight_non_extended_leaders_YYYY-MM-DD.csv` and a symbol-only `outputs/EXPORT/tight_nel_symbols_YYYY-MM-DD.csv`. The dashboard displays separate 1-week, 1-, 3-, 6-, and 12-month Tight NEL tables and can export the selected Tight NEL symbol list.
 
 The separate Themes and Sectors studies use fixed ETF universes and are dated with the actual completed market session they measure. Unlike the stock NEL list, their dates are not advanced to the next trading session.
 
 ## Super Liquid Leaders
 
-`super-liquid.html` applies the same 1-, 3-, 6-, and 12-month leader, extension, and tightness process to the market's most liquid stocks. It takes the top 10 instruments in each performance window before combining and deduplicating them. An underlying first needs 30-day average dollar volume above $1 billion. If that stock also has ADR% above 4%, the stock enters the candidate universe whether or not it has a mapped ETF. If it misses ADR%, the scanner checks the supplied 2× ETF map and substitutes one ETF: the qualifying fund with the highest current 30-day average share volume. The ETF must trade more than 1 million shares per day and have ADR% above 4%.
+`super-liquid.html` applies the same 1-week, 1-, 3-, 6-, and 12-month leader, extension, and tightness process to the market's most liquid stocks. It takes the top 10 instruments in each performance window before combining and deduplicating them. An underlying first needs 30-day average dollar volume above $1 billion. If that stock also has ADR% above 4%, the stock enters the candidate universe whether or not it has a mapped ETF. If it misses ADR%, the scanner checks the supplied 2× ETF map and substitutes one ETF: the qualifying fund with the highest current 30-day average share volume. The ETF must trade more than 1 million shares per day and have ADR% above 4%.
 
 Every ranking and displayed statistic—performance, ADR%, ATR%, SMA50 extension, industry, and tightness—comes from the underlying stock. A qualifying 2× ETF is only attached as an alternate trading vehicle and displayed beside it, such as `SNDK / SNXX`; it never contributes leveraged performance to the ranking. The daily scan refreshes the Super Liquid dashboard and symbol exports for the next market session.
 

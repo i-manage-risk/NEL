@@ -35,6 +35,7 @@ SCAN_COLUMNS = [
     "SMA50",
     "ADRP",
     "ATRP",
+    "Perf.W",
     "Perf.1M",
     "Perf.3M",
     "Perf.6M",
@@ -99,19 +100,20 @@ def rank_and_filter_leaders(
     )
     cutoff = min(cutoff, len(universe))
     for metric, rank, flag in [
+        ("Perf.W", "perf_1w_rank", "is_top_1w"),
         ("Perf.1M", "perf_1m_rank", "is_top_1m"),
         ("Perf.3M", "perf_3m_rank", "is_top_3m"),
         ("Perf.6M", "perf_6m_rank", "is_top_6m"),
         ("Perf.Y", "perf_1y_rank", "is_top_1y"),
     ]:
         _assign_exact_top_flags(universe, metric, rank, flag, cutoff)
-    universe["momentum_score"] = universe[["Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]].mean(axis=1)
+    universe["momentum_score"] = universe[["Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]].mean(axis=1)
     leaders = pd.concat(
-        [universe.loc[universe[flag]] for flag in ("is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y")],
+        [universe.loc[universe[flag]] for flag in ("is_top_1w", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y")],
         ignore_index=True,
     ).drop_duplicates(subset="name", keep="first")
     nel = leaders.loc[leaders["atr_extension_from_50d"] <= settings.max_atr_extension].copy()
-    sort_order = ["momentum_score", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
+    sort_order = ["momentum_score", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
     leaders.sort_values(sort_order, ascending=False, inplace=True)
     nel.sort_values(sort_order, ascending=False, inplace=True)
     return universe.sort_values("momentum_score", ascending=False), leaders, nel
@@ -119,9 +121,9 @@ def rank_and_filter_leaders(
 
 def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Return the eligible universe, leaders, and non-extended leaders (NEL)."""
-    _require_columns(raw, ["name", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "average_volume_10d_calc", "average_volume_30d_calc"])
+    _require_columns(raw, ["name", "industry", "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "average_volume_10d_calc", "average_volume_30d_calc"])
     df = raw.copy()
-    numeric = ["close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "average_volume_10d_calc", "average_volume_30d_calc"]
+    numeric = ["close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "average_volume_10d_calc", "average_volume_30d_calc"]
     for column in numeric:
         df[column] = pd.to_numeric(df[column], errors="coerce")
 
@@ -136,7 +138,7 @@ def calculate_nel(raw: pd.DataFrame, settings: Settings) -> tuple[pd.DataFrame, 
 
     valid_industry = ~df["industry"].fillna("").str.contains("biotech", case=False, regex=False)
     valid_metrics = (df[["close", "SMA30", "SMA50", "ADRP", "ATRP"]] > 0).all(axis=1)
-    has_performance = df[["Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]].notna().all(axis=1)
+    has_performance = df[["Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]].notna().all(axis=1)
     universe = df.loc[
         valid_industry
         & valid_metrics
@@ -154,8 +156,8 @@ def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     preferred = [
         "name", "description", "exchange", "industry", "underlying", "paired_etf", "instrument_type", "close", "SMA30", "SMA50", "ADRP", "ATRP",
         "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d", "average_dollar_volume_30d",
-        "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank", "Perf.Y", "perf_1y_rank",
-        "momentum_score", "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
+        "Perf.W", "perf_1w_rank", "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank", "Perf.Y", "perf_1y_rank",
+        "momentum_score", "atr_extension_from_50d", "is_top_1w", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
         "is_tight_nel", "coil_setup", "close_above_ema9", "close_spread_3d_pct", "close_spread_5d_pct",
         "coil_range_5d_atr", "true_range_ratio_3d", "true_range_ratio_5d",
         "current_day_range_pct_prior_atr", "rmv_15d", "rmv_tight_days",
@@ -164,7 +166,7 @@ def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.loc[:, columns].copy()
     return result.round({
         "close": 2, "SMA30": 2, "SMA50": 2, "ADRP": 2, "ATRP": 2,
-        "dollar_volume_30d": 0, "average_dollar_volume_30d": 0, "Perf.1M": 2, "Perf.3M": 2, "Perf.6M": 2, "Perf.Y": 2,
+        "dollar_volume_30d": 0, "average_dollar_volume_30d": 0, "Perf.W": 2, "Perf.1M": 2, "Perf.3M": 2, "Perf.6M": 2, "Perf.Y": 2,
         "momentum_score": 2, "atr_extension_from_50d": 2,
         "close_spread_3d_pct": 2, "close_spread_5d_pct": 2, "coil_range_5d_atr": 2,
         "true_range_ratio_3d": 2, "true_range_ratio_5d": 2,
@@ -211,7 +213,7 @@ def write_outputs(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create a non-extended leader (NEL) list.")
     parser.add_argument("--min-adr-pct", type=float, default=4.0, help="Minimum TradingView ADR%% (default: 4).")
-    parser.add_argument("--top-pct", type=float, default=0.05, help="Top share from each 1-, 3-, 6-, and 12-month ranking before deduplication (default: 0.05).")
+    parser.add_argument("--top-pct", type=float, default=0.05, help="Top share from each 1-week, 1-, 3-, 6-, and 12-month ranking before deduplication (default: 0.05).")
     parser.add_argument("--max-extension", type=float, default=4.0, help="Maximum ATRs extended from SMA50 (default: 4).")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"), help="CSV output directory.")
     parser.add_argument("--snapshot-date", type=date.fromisoformat, help="Date to use in output filenames (YYYY-MM-DD).")

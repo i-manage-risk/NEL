@@ -15,6 +15,7 @@ class FocusListTests(unittest.TestCase):
             {"name": "LOW_ADR", "industry": "Technology Services", "close": 150, "SMA30": 150, "SMA50": 100, "ADRP": 3.9, "ATRP": 6, "Perf.1M": 20, "Perf.3M": 40, "Perf.6M": 60, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
             {"name": "BIOTECH", "industry": "Biotechnology", "close": 150, "SMA30": 150, "SMA50": 100, "ADRP": 6, "ATRP": 6, "Perf.1M": 20, "Perf.3M": 40, "Perf.6M": 60, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
         ])
+        raw["Perf.W"] = raw["Perf.1M"]
         raw["Perf.Y"] = raw["Perf.6M"]
         universe, leaders, focus = calculate_nel(raw, Settings(top_pct=1, max_atr_extension=4))
         self.assertEqual(set(universe.name), {"KEEP", "EXTENDED"})
@@ -29,6 +30,7 @@ class FocusListTests(unittest.TestCase):
             {"name": "MOM_3M", "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.1M": 10, "Perf.3M": 50, "Perf.6M": 5, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
             {"name": "MOM_6M", "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.1M": 10, "Perf.3M": 5, "Perf.6M": 50, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
         ])
+        raw["Perf.W"] = raw["Perf.1M"]
         raw["Perf.Y"] = raw["Perf.6M"]
         _, leaders, _ = calculate_nel(raw, Settings(top_pct=0.33, max_atr_extension=100))
         self.assertEqual(set(leaders.name), {"MOM_1M", "MOM_3M", "MOM_6M"})
@@ -39,6 +41,7 @@ class FocusListTests(unittest.TestCase):
             {"name": "PASS", "industry": "Technology Services", "close": 120, "SMA30": 100, "SMA50": 100, "ADRP": 5, "ATRP": 10, "Perf.1M": 50, "Perf.3M": 50, "Perf.6M": 50, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
             {"name": "FAIL", "industry": "Technology Services", "close": 120, "SMA30": 70, "SMA50": 100, "ADRP": 5, "ATRP": 10, "Perf.1M": 40, "Perf.3M": 40, "Perf.6M": 40, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 400_000},
         ])
+        raw["Perf.W"] = raw["Perf.1M"]
         raw["Perf.Y"] = raw["Perf.6M"]
         universe, _, _ = calculate_nel(raw, Settings(top_pct=1))
         self.assertEqual(list(universe.name), ["PASS"])
@@ -48,15 +51,26 @@ class FocusListTests(unittest.TestCase):
             {"name": "SHORT_TERM", "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.1M": 50, "Perf.3M": 10, "Perf.6M": 5, "Perf.Y": 20, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
             {"name": "ONE_YEAR", "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.1M": 10, "Perf.3M": 5, "Perf.6M": 2, "Perf.Y": 90, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
         ])
+        raw["Perf.W"] = raw["Perf.1M"]
         _, leaders, _ = calculate_nel(raw, Settings(top_pct=0.5, max_atr_extension=100))
         self.assertEqual(set(leaders.name), {"SHORT_TERM", "ONE_YEAR"})
         self.assertTrue(leaders.loc[leaders["name"] == "ONE_YEAR", "is_top_1y"].item())
+
+    def test_one_week_leaders_are_included(self):
+        raw = pd.DataFrame([
+            {"name": "ONE_WEEK", "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.W": 30, "Perf.1M": 1, "Perf.3M": 1, "Perf.6M": 1, "Perf.Y": 1, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
+            {"name": "LONG_TERM", "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.W": 1, "Perf.1M": 30, "Perf.3M": 30, "Perf.6M": 30, "Perf.Y": 30, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000},
+        ])
+        _, leaders, _ = calculate_nel(raw, Settings(top_pct=0.5, max_atr_extension=100))
+        self.assertEqual(set(leaders.name), {"ONE_WEEK", "LONG_TERM"})
+        self.assertTrue(leaders.loc[leaders["name"] == "ONE_WEEK", "is_top_1w"].item())
 
     def test_top_group_has_an_exact_size_when_performance_values_tie(self):
         raw = pd.DataFrame([
             {"name": name, "industry": "Technology Services", "close": 120, "SMA30": 120, "SMA50": 110, "ADRP": 5, "ATRP": 10, "Perf.1M": 50, "Perf.3M": 50, "Perf.6M": 50, "average_volume_10d_calc": 500_000, "average_volume_30d_calc": 500_000}
             for name in ["AAA", "BBB", "CCC", "DDD"]
         ])
+        raw["Perf.W"] = raw["Perf.1M"]
         raw["Perf.Y"] = raw["Perf.6M"]
         _, leaders, _ = calculate_nel(raw, Settings(top_pct=0.25, max_atr_extension=100))
         self.assertEqual(list(leaders.name), ["AAA"])

@@ -9,7 +9,7 @@ def row(name, adr, avg30, industry="Software", perf=20):
     return {
         "name": name, "description": name, "exchange": "NASDAQ", "industry": industry,
         "close": 100, "SMA30": 100, "SMA50": 95, "ADRP": adr, "ATRP": 3,
-        "Perf.1M": perf, "Perf.3M": perf, "Perf.6M": perf, "Perf.Y": perf,
+        "Perf.W": perf, "Perf.1M": perf, "Perf.3M": perf, "Perf.6M": perf, "Perf.Y": perf,
         "average_volume_10d_calc": avg30, "average_volume_30d_calc": avg30,
     }
 

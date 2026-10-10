@@ -28,7 +28,7 @@ class SuperLiquidSettings(Settings):
 
 
 NUMERIC = [
-    "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M",
+    "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.W", "Perf.1M", "Perf.3M",
     "Perf.6M", "Perf.Y", "average_volume_10d_calc", "average_volume_30d_calc",
 ]
 
@@ -53,7 +53,7 @@ def mapped_symbols_for_underlyings(
     raw_stocks: pd.DataFrame, mapping: pd.DataFrame, settings: SuperLiquidSettings
 ) -> list[str]:
     stocks = add_metrics(raw_stocks)
-    performance = ["Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
+    performance = ["Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
     eligible = stocks.loc[
         ~stocks["industry"].fillna("").str.contains("biotech", case=False, regex=False)
         & (stocks[["close", "SMA30", "SMA50", "ATRP"]] > 0).all(axis=1)
@@ -83,6 +83,7 @@ def fetch_mapped_etfs(symbols: list[str]) -> pd.DataFrame:
             "SMA30": history["close"].rolling(30).mean().iloc[-1],
             "SMA50": history["close"].rolling(50).mean().iloc[-1],
             "ADRP": metrics["adrp"], "ATRP": metrics["atrp"],
+            "Perf.W": metrics["perf_1w"],
             "Perf.1M": metrics["perf_1m"], "Perf.3M": metrics["perf_3m"],
             "Perf.6M": metrics["perf_6m"], "Perf.Y": metrics["perf_1y"],
             "average_volume_10d_calc": history["volume"].rolling(10).mean().iloc[-1],
@@ -114,7 +115,7 @@ def calculate_super_liquid(
     """Return eligible underlyings, candidate instruments, leaders and S-NEL."""
     stocks = add_metrics(raw_stocks)
     etfs = add_metrics(raw_etfs)
-    performance = ["Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
+    performance = ["Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y"]
     valid_stock = (
         ~stocks["industry"].fillna("").str.contains("biotech", case=False, regex=False)
         & (stocks[["close", "SMA30", "SMA50", "ATRP"]] > 0).all(axis=1)

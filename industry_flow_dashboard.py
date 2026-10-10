@@ -10,6 +10,7 @@ import pandas as pd
 
 
 TIMEFRAMES = {
+    "1w": "is_top_1w",
     "1m": "is_top_1m",
     "3m": "is_top_3m",
     "6m": "is_top_6m",
@@ -38,8 +39,8 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
             )
             groups[label] = {str(industry): int(count) for industry, count in counts.items()}
         leader_columns = [column for column in [
-            "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
-            "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
+            "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+            "atr_extension_from_50d", "is_top_1w", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
         ] if column in frame.columns]
         liquid_records = json.loads(frame.loc[:, leader_columns].to_json(orient="records"))
         nel_path = output_dir / f"{prefix}non_extended_leaders_{match.group(1)}.csv"
@@ -47,8 +48,8 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
         if nel_path.exists():
             nel = pd.read_csv(nel_path)
             columns = [column for column in [
-                "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
-                "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
+                "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+                "atr_extension_from_50d", "is_top_1w", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
             ] if column in nel.columns]
             nel_records = json.loads(nel.loc[:, columns].to_json(orient="records"))
         tight_path = output_dir / f"{prefix}tight_non_extended_leaders_{match.group(1)}.csv"
@@ -56,8 +57,8 @@ def collect_industry_history(output_dir: Path, prefix: str = "") -> list[dict]:
         if tight_path.exists():
             tight = pd.read_csv(tight_path)
             columns = [column for column in [
-                "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
-                "atr_extension_from_50d", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y", "coil_setup", "rmv_15d",
+                "name", "paired_etf", "industry", "average_volume_30d_calc", "average_dollar_volume_30d", "dollar_volume_30d", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y",
+                "atr_extension_from_50d", "is_top_1w", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y", "coil_setup", "rmv_15d",
                 "rmv_tight_days", "coil_range_5d_atr", "true_range_ratio_3d", "true_range_ratio_5d",
             ] if column in tight.columns]
             tight_records = json.loads(tight.loc[:, columns].to_json(orient="records"))
@@ -99,7 +100,7 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
   <link rel="icon" type="image/png" href="assets/nel-favicon.png">
   <link rel="apple-touch-icon" href="assets/nel-favicon.png">
   <style>
-    :root { color-scheme: dark; --bg:#141414; --panel:#2A2A2A; --line:#454545; --text:#F5F2E8; --muted:#F5F2E8; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --green:#86d65d; --previous:#727272; }
+    :root { color-scheme: dark; --bg:#141414; --panel:#2A2A2A; --line:#454545; --text:#F5F2E8; --muted:#F5F2E8; --purple:#9b7cff; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --green:#86d65d; --previous:#727272; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     main { width:100%; max-width:2200px; margin:0 auto; padding:24px 40px 40px; }
@@ -115,7 +116,7 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
     .download-btn:disabled { cursor:wait; opacity:.7; }
     .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
     .panel { padding:18px; margin:0; }
-    .panel[data-frame="1m"] { border-top:3px solid var(--orange); } .panel[data-frame="3m"] { border-top:3px solid var(--cyan); } .panel[data-frame="6m"] { border-top:3px solid var(--pink); } .panel[data-frame="1y"] { border-top:3px solid var(--green); }
+    .panel[data-frame="1w"] { border-top:3px solid var(--purple); } .panel[data-frame="1m"] { border-top:3px solid var(--orange); } .panel[data-frame="3m"] { border-top:3px solid var(--cyan); } .panel[data-frame="6m"] { border-top:3px solid var(--pink); } .panel[data-frame="1y"] { border-top:3px solid var(--green); }
     .bars { display:grid; gap:11px; }
     .bar-row { display:grid; grid-template-columns:minmax(150px,220px) 1fr 42px; gap:10px; align-items:center; }
     .industry { overflow:visible; text-overflow:clip; white-space:normal; font-size:12px; line-height:1.25; }
@@ -124,16 +125,16 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
     .bar.current { top:3px; background:var(--blue); } .bar.previous { bottom:3px; background:var(--previous); }
     .value { color:var(--text); text-align:right; font-variant-numeric:tabular-nums; }
     svg { width:100%; height:300px; display:block; overflow:visible; }
-    .window-sections { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; align-items:start; }
+    .window-sections { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:18px; align-items:start; }
     .section-heading { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin:28px 0 14px; }
     .section-heading h2 { grid-column:2; margin:0; color:var(--text); font-size:19px; letter-spacing:-.01em; text-align:center; }
     .section-actions { grid-column:3; justify-self:end; display:flex; gap:8px; }
     .theme-card { padding:10px 12px; background:#141414; border-radius:4px; border-left:3px solid var(--orange); margin-bottom:12px; }
-    .theme-card.frame-3m { border-color:var(--cyan); } .theme-card.frame-6m { border-color:var(--pink); } .theme-card.frame-1y { border-color:var(--green); }
+    .theme-card.frame-1w { border-color:var(--purple); } .theme-card.frame-3m { border-color:var(--cyan); } .theme-card.frame-6m { border-color:var(--pink); } .theme-card.frame-1y { border-color:var(--green); }
     .theme-line { display:block; color:var(--text); font-size:13px; }
     .theme-line strong { font-size:16px; }
-    .nel-window { background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--orange); border-radius:10px; padding:18px; } .nel-window[data-frame="3m"] { border-top-color:var(--cyan); } .nel-window[data-frame="6m"] { border-top-color:var(--pink); } .nel-window[data-frame="1y"] { border-top-color:var(--green); }
-    .nel-window h3 { margin:8px 0; font-size:14px; color:var(--orange); } .nel-window[data-frame="3m"] h3 { color:var(--cyan); } .nel-window[data-frame="6m"] h3 { color:var(--pink); } .nel-window[data-frame="1y"] h3 { color:var(--green); }
+    .nel-window { background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--orange); border-radius:10px; padding:18px; } .nel-window[data-frame="1w"] { border-top-color:var(--purple); } .nel-window[data-frame="3m"] { border-top-color:var(--cyan); } .nel-window[data-frame="6m"] { border-top-color:var(--pink); } .nel-window[data-frame="1y"] { border-top-color:var(--green); }
+    .nel-window h3 { margin:8px 0; font-size:14px; color:var(--orange); } .nel-window[data-frame="1w"] h3 { color:var(--purple); } .nel-window[data-frame="3m"] h3 { color:var(--cyan); } .nel-window[data-frame="6m"] h3 { color:var(--pink); } .nel-window[data-frame="1y"] h3 { color:var(--green); }
     .table-wrap { overflow:visible; } table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
     .scrollable-table { max-height:251px; overflow-y:auto; } .scrollable-table th { position:sticky; top:0; background:var(--panel); z-index:1; }
     th, td { padding:8px 5px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; } th:first-child, th:nth-child(2), td:first-child, td:nth-child(2) { text-align:left; } th:nth-child(1) { width:13%; } th:nth-child(2) { width:39%; } th:nth-child(3) { width:17%; } th:nth-child(4) { width:17%; } th:nth-child(5) { width:14%; } td:nth-child(2) { white-space:normal; overflow-wrap:anywhere; } th { color:var(--text); font-size:12px; font-weight:600; } td:first-child { font-weight:650; }
@@ -182,7 +183,7 @@ const downloadTightButton = document.getElementById('download-tight');
 const copyLiquidButton = document.getElementById('copy-ll');
 const copyNelButton = document.getElementById('copy-nel');
 const copyTightButton = document.getElementById('copy-tight');
-const flowMeta = { '1m': { label:'1 month', color:'#ff9900' }, '3m': { label:'3 months', color:'#00ffff' }, '6m': { label:'6 months', color:'#ff3366' }, '1y': { label:'1 year', color:'#86d65d' } };
+const flowMeta = { '1w': { label:'1 week', color:'#9b7cff' }, '1m': { label:'1 month', color:'#ff9900' }, '3m': { label:'3 months', color:'#00ffff' }, '6m': { label:'6 months', color:'#ff3366' }, '1y': { label:'1 year', color:'#86d65d' } };
 const rankColors = ['#5C7CFA', '#E9C46A', '#E76F51', '#70C1B3', '#C77DFF'];
 
 function counts(snapshot, frame) { return snapshot?.groups?.[frame] || {}; }
@@ -224,7 +225,7 @@ function renderTrend(frame, svg, names) {
 }
 function renderLiquid(snapshot) {
   const records = snapshot?.liquid || [];
-  [['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m'], ['1y', 'Perf.Y', 'is_top_1y']].forEach(([frame, performance, flag]) => {
+  [['1w', 'Perf.W', 'is_top_1w'], ['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m'], ['1y', 'Perf.Y', 'is_top_1y']].forEach(([frame, performance, flag]) => {
     const table = document.getElementById(`liquid-table-${frame}`);
     const themeCard = document.getElementById(`liquid-theme-${frame}`);
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
@@ -235,7 +236,7 @@ function renderLiquid(snapshot) {
 }
 function renderNEL(snapshot) {
   const records = snapshot?.nel || [];
-  [['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m'], ['1y', 'Perf.Y', 'is_top_1y']].forEach(([frame, performance, flag]) => {
+  [['1w', 'Perf.W', 'is_top_1w'], ['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m'], ['1y', 'Perf.Y', 'is_top_1y']].forEach(([frame, performance, flag]) => {
     const nelTable = document.getElementById(`nel-table-${frame}`);
     const themeCard = document.getElementById(`theme-${frame}`);
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
@@ -246,7 +247,7 @@ function renderNEL(snapshot) {
 }
 function renderTight(snapshot) {
   const records = snapshot?.tight || [];
-  [['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m'], ['1y', 'Perf.Y', 'is_top_1y']].forEach(([frame, performance, flag]) => {
+  [['1w', 'Perf.W', 'is_top_1w'], ['1m', 'Perf.1M', 'is_top_1m'], ['3m', 'Perf.3M', 'is_top_3m'], ['6m', 'Perf.6M', 'is_top_6m'], ['1y', 'Perf.Y', 'is_top_1y']].forEach(([frame, performance, flag]) => {
     const table = document.getElementById(`tight-table-${frame}`);
     const top = Object.entries(counts(snapshot, frame)).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))[0];
     const rows = records.filter(row => row[flag] === true || String(row[flag]).toLowerCase() === 'true').sort((a, b) => Number(a.rmv_15d) - Number(b.rmv_15d) || Number(b[performance]) - Number(a[performance]));
