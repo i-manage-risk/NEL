@@ -1,7 +1,11 @@
 # Market workspace
 
 The home page organizes research into Briefing, Environment, Leadership,
-Positioning, Screener and Review. Existing detailed pages and historical CSVs
+Positioning, Screener and Debrief. Debrief automatically compares the latest
+completed session with the information available at the prior close: breadth,
+true close-to-close theme and sector returns, and NEL rotation. “Bought” and
+“sold” describe price response, not reported fund flows. Existing detailed
+pages and historical CSVs
 remain available. Stock details default to one window and one section; use
 All windows / All sections for the expanded view.
 
