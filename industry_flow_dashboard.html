@@ -72,10 +72,10 @@
     @media (max-width:640px) { .site-nav { justify-content:flex-start; overflow-x:auto; } .topbar { grid-template-columns:1fr; justify-items:start; gap:12px; } .dashboard-title { justify-self:center; } .topbar .download-btn { justify-self:start; } .section-heading { grid-template-columns:1fr auto; } .section-heading h2 { grid-column:1; text-align:left; } .section-actions { grid-column:2; } }
   </style>
   <link rel="stylesheet" href="assets/date-select.css?v=2">
-</head>
+<link rel="stylesheet" href="assets/workspace.css"><link rel="stylesheet" href="assets/detail-shell.css"></head>
 <body>
 <main>
-  <nav class="site-nav" aria-label="Dashboard pages"><a href="index.html" class="active">Liquid Leaders</a><a href="super-liquid.html">Super Liquid Leaders</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth</a></nav>
+
   <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1 id="thematic-title" class="dashboard-title">Thematic Leadership</h1><button id="download-image" class="download-btn" type="button">Snapshot</button></div>
   <div id="leadership-sections" class="window-sections"></div>
   <div class="section-heading"><h2 id="liquid-title">Liquid Leaders (LL)</h2><div class="section-actions"><button id="copy-ll" class="download-btn" type="button">Copy</button><button id="download-ll" class="download-btn" type="button">Export LL</button></div></div>
@@ -218,5 +218,5 @@ async function downloadPageImage() {
 if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadLiquidButton.addEventListener('click', () => downloadSymbols('liquid', 'liquid_leaders')); downloadNelButton.addEventListener('click', () => downloadSymbols('nel', 'nel')); downloadTightButton.addEventListener('click', () => downloadSymbols('tight', 'tight_nel')); copyLiquidButton.addEventListener('click', () => copySymbols('liquid', copyLiquidButton)); copyNelButton.addEventListener('click', () => copySymbols('nel', copyNelButton)); copyTightButton.addEventListener('click', () => copySymbols('tight', copyTightButton)); window.addEventListener('resize', render); render(); }
 </script>
 <script src="assets/date-select.js?v=2"></script>
-</body>
+<script src="assets/detail-shell.js" data-page="liquid"></script></body>
 </html>

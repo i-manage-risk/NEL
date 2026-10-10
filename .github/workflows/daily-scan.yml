@@ -33,7 +33,14 @@ jobs:
       - name: Refresh daily breadth monitor
         run: python breadth_dashboard.py
 
-      - name: Commit the refreshed dashboard and daily outputs
+      - name: Refresh benchmark context
+        continue-on-error: true
+        run: python market_context.py
+
+      - name: Build workspace from preserved scans
+        run: python workspace_data.py
+
+      - name: Commit workspace and detailed dashboards
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

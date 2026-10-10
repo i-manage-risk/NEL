@@ -78,10 +78,10 @@
     @media (max-width:640px) { .topbar { grid-template-columns:1fr; gap:10px; } #snapshot { justify-self:start; } .section-heading { grid-template-columns:1fr auto; } .section-heading h2 { grid-column:1; text-align:left; } .section-heading .button { grid-column:2; } .change-toggle button { min-width:0; width:104px; padding:0 7px; } .change-axis,.change-row { grid-template-columns:96px minmax(0,1fr) 55px; column-gap:7px; } .change-label span { display:none; } .site-nav { justify-content:flex-start; overflow-x:auto; } }
   </style>
   <link rel="stylesheet" href="assets/date-select.css?v=2">
-</head>
+<link rel="stylesheet" href="assets/workspace.css"><link rel="stylesheet" href="assets/detail-shell.css"></head>
 <body>
 <main>
-  <nav class="site-nav" aria-label="Dashboard pages"><a href="index.html">Liquid Leaders</a><a href="super-liquid.html">Super Liquid Leaders</a><a href="themes.html" data-page="themes">Themes</a><a href="sectors.html" data-page="sectors">Sectors</a><a href="breadth.html">Breadth</a></nav>
+
   <div class="topbar"><select id="date" aria-label="Snapshot date"></select><h1>Theme Leadership</h1><button id="snapshot" class="button">Snapshot</button></div>
   <div class="section-heading"><h2 id="leaders-title">Theme Leaders</h2><button id="export-leaders" class="button">Export Leaders</button></div>
   <div id="leader-windows" class="windows"></div>
@@ -232,5 +232,5 @@ document.getElementById('export-nel')?.addEventListener('click',()=>exportSymbol
 document.getElementById('snapshot').addEventListener('click',snapshot); render(); refreshLivePerformance(); setInterval(refreshLivePerformance,60000);
 </script>
 <script src="assets/date-select.js?v=2"></script>
-</body>
+<script src="assets/detail-shell.js" data-page="themes"></script></body>
 </html>

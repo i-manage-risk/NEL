@@ -290,7 +290,8 @@ def write_etf_dashboards() -> list[Path]:
         if not payload_path.exists():
             continue
         payload = json.loads(payload_path.read_text(encoding="utf-8"))
-        config.page.write_text(render_dashboard(payload, config.key), encoding="utf-8")
+        from site_chrome import apply_chrome
+        config.page.write_text(apply_chrome(render_dashboard(payload, config.key), config.key), encoding="utf-8")
         paths.append(config.page)
     return paths
 

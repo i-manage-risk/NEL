@@ -74,7 +74,7 @@ def write_dashboard(output_dir: Path, profile: str = "liquid") -> Path:
     prefix = "super_liquid_" if is_super else ""
     history = collect_industry_history(output_dir, prefix)
     dashboard = Path("super-liquid.html") if is_super else Path("industry_flow_dashboard.html")
-    pages_entrypoint = None if is_super else Path("index.html")
+    pages_entrypoint = None  # The workspace owns index.html; preserve the detailed page.
     payload = json.dumps(history, separators=(",", ":"))
     template = r'''<!doctype html>
 <html lang="en">
@@ -326,6 +326,8 @@ if (!history.length) { document.querySelector('main').innerHTML = '<p class="emp
         rendered = rendered.replace("<th>Avg $ Vol</th>", "")
         rendered = rendered.replace("<td class=\"liquidity-column ${className}\">${formatLiquidity(dollarVolume)}</td>", "")
         rendered = rendered.replace("<body>", '<body class="super-page">', 1)
+    from site_chrome import apply_chrome
+    rendered = apply_chrome(rendered, "super" if is_super else "liquid")
     dashboard.write_text(rendered, encoding="utf-8")
     if pages_entrypoint is not None:
         pages_entrypoint.write_text(rendered, encoding="utf-8")

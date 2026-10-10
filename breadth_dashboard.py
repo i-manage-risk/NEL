@@ -190,7 +190,8 @@ const rows=__DATA__,latest=rows[0],fmt=v=>Number(v).toLocaleString(undefined,{ma
 
 
 def build_page(rows: list[dict]) -> str:
-    return TEMPLATE.replace("__DATA__", json.dumps(rows, separators=(",", ":")))
+    from site_chrome import apply_chrome
+    return apply_chrome(TEMPLATE.replace("__DATA__", json.dumps(rows, separators=(",", ":"))), "breadth")
 
 
 def main() -> None:

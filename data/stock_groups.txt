@@ -1,0 +1,441 @@
+STOCK GROUPS REFERENCE
+
+Purpose: Define the exact stock_group labels used in ticker_profiles.json.
+Canonical group name: The value after 'Group:' is the exact label, including emoji, that appears in ticker_profiles.json.
+How to read entries: Each block between --- dividers is one independent group definition.
+Meaning field: Describes what it generally means for a ticker/company to belong to that group.
+Important: A company can fit a group because of its main business, revenue exposure, assets, technology, or investment theme. Not every company will match every phrase in the definition.
+Important: Only records after RECORDS BEGIN are actual group definitions.
+
+RECORDS BEGIN
+---
+Group: AD/MARKETING SOFTWARE 📣
+Meaning: Companies that provide software for digital advertising, marketing automation, customer engagement, campaign measurement, sales funnels, and data-driven audience targeting.
+
+---
+Group: AEROSPACE DEFENSE ✈️
+Meaning: Companies that build aircraft, defense systems, avionics, propulsion, mission-critical components, military platforms, public-safety technology, or services tied to aviation and national security.
+
+---
+Group: AGRICULTURE & INGREDIENTS 🌾
+Meaning: Companies connected to crop inputs, grain processing, food ingredients, agricultural commodities, animal feed, and the industrial supply chain that turns farm output into food or materials.
+
+---
+Group: AI SOFTWARE 🧠
+Meaning: Companies whose main investment theme is artificial intelligence software, automation, data labeling, machine learning platforms, voice AI, analytics, or AI-enabled enterprise decision systems.
+
+---
+Group: AIRCRAFT LEASING ✈️
+Meaning: Companies that own commercial aircraft fleets and lease them to airlines, earning revenue from long-term aircraft financing, leasing, fleet management, and aviation asset cycles.
+
+---
+Group: AIRLINES 🛫
+Meaning: Passenger airline operators and related air travel companies whose results depend on ticket demand, route networks, fuel costs, labor costs, fleet utilization, and travel volumes.
+
+---
+Group: ALCOHOL 🍺
+Meaning: Brewers, distillers, vintners, and beverage companies whose products include beer, spirits, wine, hard seltzers, or other alcoholic drinks sold through retail, restaurants, and distributors.
+
+---
+Group: ALUMINUM 🔩
+Meaning: Companies that mine, refine, smelt, recycle, or fabricate aluminum and related products used in transportation, packaging, construction, aerospace, and industrial applications.
+
+---
+Group: ANIMAL HEALTH 🐾
+Meaning: Companies that provide veterinary medicines, diagnostics, vaccines, pet therapeutics, livestock health products, or animal testing tools.
+
+---
+Group: ASSET MANAGERS 💼
+Meaning: Firms that manage, advise, or administer investment capital, including traditional asset managers, alternative managers, wealth platforms, private equity firms, and investment advisory businesses.
+
+---
+Group: AUTOMOTIVE 🏎️
+Meaning: Companies tied to vehicles and mobility hardware, including automakers, electric vehicle firms, auto parts suppliers, dealers, repair chains, recreational vehicles, motorcycles, and vehicle technology suppliers.
+
+---
+Group: BANKS 🏦
+Meaning: Financial institutions that provide banking, lending, deposits, custody, investment banking, wealth management, capital markets services, or other balance-sheet-driven financial services.
+
+---
+Group: BEVERAGES 🥤
+Meaning: Non-alcoholic beverage companies that produce, bottle, distribute, or sell soft drinks, coffee, energy drinks, water, juices, sports drinks, and related drink brands.
+
+---
+Group: BIOTECH 🧫
+Meaning: Drug discovery and development companies, often focused on novel therapies, clinical trials, biologics, genetic medicines, specialty treatments, or platform technologies with higher research and regulatory risk.
+
+---
+Group: BROKERAGES 📲
+Meaning: Trading and investing platforms that enable customers to buy, sell, custody, finance, or analyze securities, options, futures, crypto, or other financial assets.
+
+---
+Group: CHEMICALS 🧪
+Meaning: Companies that produce fertilizers, coatings, specialty chemicals, industrial gases, additives, polymers, materials, and chemical inputs used across agriculture, manufacturing, construction, and consumer products.
+
+---
+Group: CLOUD SOFTWARE ☁️
+Meaning: Software companies that deliver cloud-based infrastructure, databases, observability, developer tools, communications APIs, collaboration systems, backup, storage, and other subscription software platforms.
+
+---
+Group: COAL 🪨
+Meaning: Companies that mine, process, sell, or export thermal or metallurgical coal used for electricity generation, steelmaking, and industrial energy needs.
+
+---
+Group: CONGLOMERATES 🧱
+Meaning: Diversified holding companies or multi-industry operators with major businesses spread across unrelated sectors, subsidiaries, investments, insurance, manufacturing, services, or consumer brands.
+
+---
+Group: CONSUMER FINANCE 🏦
+Meaning: Companies that provide financial products directly to consumers, including digital banking, personal loans, credit products, savings accounts, cash advances, and app-based money management.
+
+---
+Group: CONSUMER INTERNET 🌐
+Meaning: Internet-first companies serving consumers through search, social platforms, online communities, education apps, creator tools, marketplaces, or web-based services.
+
+---
+Group: CONSUMER PRODUCTS 🧴
+Meaning: Companies that make branded everyday goods such as household products, personal care, beauty, appliances, toys, outdoor products, electronics accessories, and durable consumer items.
+
+---
+Group: COPPER 🥉
+Meaning: Companies that mine, smelt, process, or sell copper and related base metals used in electrification, construction, power infrastructure, industrial equipment, and transportation.
+
+---
+Group: CREDIT DATA 🧮
+Meaning: Companies that provide credit scoring, consumer credit analytics, risk models, underwriting data, fraud signals, or software used by lenders and financial institutions.
+
+---
+Group: CRYPTO MINERS ☁️
+Meaning: Companies that operate high-power computing facilities to mine cryptocurrency, usually Bitcoin, and whose results depend on hash rate, energy costs, coin prices, mining rewards, fleet efficiency, and data center operations.
+
+---
+Group: CRYPTO 🪙
+Meaning: Companies or assets tied to the broader digital asset ecosystem, including crypto exchanges, stablecoin issuers, treasury holders, blockchain finance platforms, digital asset infrastructure, and token-linked businesses.
+
+---
+Group: CYBERSECURITY 🛡️
+Meaning: Companies that protect networks, endpoints, identities, cloud systems, applications, data, and digital infrastructure from attacks, fraud, unauthorized access, and operational security threats.
+
+---
+Group: DATA CENTER COOLING 💧
+Meaning: Companies that provide cooling, HVAC, power management, electrical gear, thermal systems, equipment, or infrastructure services needed to keep data centers reliable and energy efficient.
+
+---
+Group: DATA CENTERS ☁️
+Meaning: Companies that own, operate, develop, lease, or provide infrastructure for data centers, AI compute campuses, cloud hosting facilities, colocation sites, and high-density digital infrastructure.
+
+---
+Group: DESIGN SOFTWARE 📐
+Meaning: Companies that provide software for creative work, engineering design, simulation, product lifecycle management, computer-aided design, electronic design automation, architecture, mapping, and digital content creation.
+
+---
+Group: DIGITAL HEALTH 🩹
+Meaning: Companies that use software, telehealth, data, or consumer-facing platforms to deliver healthcare access, care navigation, prescriptions, provider tools, benefits administration, or patient engagement.
+
+---
+Group: DIGITAL LENDING & BNPL 🛒
+Meaning: Companies that provide online lending, buy-now-pay-later financing, consumer credit, student loans, auto finance, mortgage platforms, or technology-driven underwriting.
+
+---
+Group: DISTRIBUTORS 🧺
+Meaning: Companies that distribute industrial, building, technology, electrical, pool, foodservice, HVAC, or specialty products between manufacturers and business customers.
+
+---
+Group: DRONES 🚁
+Meaning: Companies focused on unmanned aircraft, defense drones, autonomous aerial systems, drone components, surveillance payloads, or software used in drone operations.
+
+---
+Group: ECOMMERCE 🛒
+Meaning: Companies whose core business is online retail, digital marketplaces, merchant enablement, resale platforms, direct-to-consumer commerce, or commerce infrastructure.
+
+---
+Group: ENTERPRISE HARDWARE 🖥️
+Meaning: Companies that make or integrate servers, networking gear, storage systems, telecom equipment, electronics manufacturing, computing devices, and business technology hardware.
+
+---
+Group: ENTERPRISE SAAS 🧩
+Meaning: Companies that sell subscription software to businesses for workflows such as CRM, service management, collaboration, documents, HR, communications, automation, and operational productivity.
+
+---
+Group: ENTERTAINMENT 🎬
+Meaning: Companies in streaming, gaming, music, film, sports, live events, media networks, publishing, toys, theme parks, theaters, and consumer entertainment platforms.
+
+---
+Group: FINANCIAL INFRASTRUCTURE 🧱
+Meaning: Companies that provide core software, processing, payments infrastructure, billing systems, fund administration, and technology rails used by banks, insurers, merchants, and financial institutions.
+
+---
+Group: FOOD DISTRIBUTION 🚚
+Meaning: Companies that deliver food, ingredients, supplies, and related services to restaurants, institutions, convenience stores, hospitality operators, and other foodservice customers.
+
+---
+Group: GAMBLING 🎰
+Meaning: Companies tied to casinos, sportsbooks, online betting, gaming resorts, lotteries, horse racing, and wagering platforms.
+
+---
+Group: GAS & LNG 🔥
+Meaning: Companies focused on natural gas exploration, production, liquefaction, export, transport, or marketing, including firms exposed to LNG demand and gas commodity cycles.
+
+---
+Group: GENOMICS 🧬
+Meaning: Companies that provide genetic testing, sequencing, gene editing, synthetic biology, molecular diagnostics, precision medicine tools, or therapies built around genetic technologies.
+
+---
+Group: GOLD 🥇
+Meaning: Companies and funds tied to gold mining, royalties, streaming, exploration, physical gold exposure, and precious-metals production.
+
+---
+Group: GROCERY RETAIL 🛒
+Meaning: Retailers that sell groceries, fresh food, household staples, warehouse-club items, convenience products, or supermarket goods to consumers.
+
+---
+Group: HEALTH INSURANCE 🧾
+Meaning: Managed care and health benefits companies that insure medical costs, administer health plans, manage government programs, or coordinate care networks.
+
+---
+Group: HEALTHCARE REITS 🏥
+Meaning: Real estate investment trusts that own healthcare properties such as senior housing, medical office buildings, skilled nursing facilities, hospitals, and life science properties.
+
+---
+Group: HEALTHCARE SERVICES 🏥
+Meaning: Companies that provide healthcare delivery, hospitals, pharmacies, drug distribution, dialysis, home health, behavioral health, medical staffing, or outsourced healthcare operations.
+
+---
+Group: HOME FURNISHING 🛏️
+Meaning: Companies that sell furniture, home decor, flooring, fixtures, mattresses, housewares, and other products used to furnish or improve living spaces.
+
+---
+Group: HOMEBUILDERS 🏠
+Meaning: Companies that build, sell, finance, or supply new homes, manufactured housing, residential communities, insulation, and other construction products tied to housing demand.
+
+---
+Group: INDUSTRIAL REITS 🏭
+Meaning: Real estate investment trusts that own warehouses, logistics facilities, industrial parks, distribution centers, and other properties used by manufacturers and supply chains.
+
+---
+Group: INDUSTRIALS 🏭
+Meaning: Broad industrial companies that make equipment, components, packaging, machinery, building materials, automation systems, transportation assets, environmental services, and other physical economy products.
+
+---
+Group: INSURANCE 🧾
+Meaning: Companies that underwrite, broker, reinsure, or administer property, casualty, life, health, title, specialty, and annuity insurance products.
+
+---
+Group: INTEGRATED ENERGY 🛢️
+Meaning: Large energy companies with operations across multiple parts of the oil and gas value chain, often including exploration, production, refining, chemicals, marketing, and trading.
+
+---
+Group: INTERNET INFRASTRUCTURE 🌐
+Meaning: Companies that provide domain registration, DNS, content delivery, web performance, edge networks, hosting, or other services that help websites and internet applications run.
+
+---
+Group: IT SERVICES & CONSULTING 🧑‍💻
+Meaning: Companies that provide technology consulting, outsourcing, managed services, system integration, software implementation, and digital transformation work for enterprise customers.
+
+---
+Group: LIFE SCIENCE TOOLS 🔬
+Meaning: Companies that provide instruments, reagents, diagnostics, lab services, clinical research, testing, manufacturing tools, and analytical systems used by pharma, biotech, hospitals, and researchers.
+
+---
+Group: LITHIUM 🔋
+Meaning: Companies that mine, refine, process, or produce lithium compounds used primarily in batteries, electric vehicles, grid storage, and specialty industrial applications.
+
+---
+Group: MAG 7 👑
+Meaning: The mega-cap technology and platform companies commonly treated as a market leadership group: Alphabet, Amazon, Apple, Meta, Microsoft, Nvidia, and Tesla.
+
+---
+Group: MARKET INFRASTRUCTURE 📈
+Meaning: Companies that operate exchanges, index businesses, rating agencies, market data platforms, trading venues, clearing systems, analytics, and other capital markets infrastructure.
+
+---
+Group: MEDICAL DEVICES 🩺
+Meaning: Companies that design, manufacture, or sell medical equipment, implants, diagnostics hardware, surgical tools, monitoring systems, dental products, and other regulated healthcare devices.
+
+---
+Group: MEMORY & STORAGE 💾
+Meaning: Companies that make or supply memory chips, flash storage, hard drives, solid-state drives, controllers, storage arrays, and enterprise data storage products.
+
+---
+Group: MERCHANT PAYMENTS 🧾
+Meaning: Companies that help merchants accept, process, route, finance, reconcile, or manage card, digital wallet, point-of-sale, restaurant, fleet, and business-to-business payments.
+
+---
+Group: MIDSTREAM PIPELINES 🧰
+Meaning: Energy infrastructure companies that gather, process, transport, store, and export oil, natural gas, natural gas liquids, and refined products through pipelines and terminals.
+
+---
+Group: MOBILITY & DELIVERY 🚕
+Meaning: Companies that operate ride-hailing, delivery, logistics marketplaces, local commerce fulfillment, and app-based transportation networks.
+
+---
+Group: MONEY MOVEMENT 💸
+Meaning: Companies that move money across borders, payment networks, bank accounts, wallets, remittance channels, or consumer and business transfer systems.
+
+---
+Group: MORTGAGE REITS 🏦
+Meaning: Real estate investment trusts that invest in mortgages, mortgage-backed securities, real estate credit, and related financing assets instead of primarily owning physical properties.
+
+---
+Group: NUCLEAR ☢️
+Meaning: Companies involved in nuclear power technology, small modular reactors, nuclear fuel, uranium enrichment, reactor components, or engineering services for nuclear energy and defense.
+
+---
+Group: OFFICE REITS 🏢
+Meaning: Real estate investment trusts that own office buildings, campuses, labs, or mixed office properties leased to corporate, government, technology, and life science tenants.
+
+---
+Group: OFFSHORE ENERGY 🚢
+Meaning: Companies tied to offshore oil and gas drilling, marine energy services, tankers, offshore vessels, rigs, and seaborne transportation of energy products.
+
+---
+Group: OIL & GAS PRODUCERS 🛢️
+Meaning: Exploration and production companies that find, drill, extract, and sell crude oil, natural gas, and natural gas liquids.
+
+---
+Group: OILFIELD SERVICES 🛠️
+Meaning: Companies that provide drilling equipment, pressure pumping, completion services, subsea systems, reservoir tools, maintenance, and technology used by oil and gas producers.
+
+---
+Group: ON-SITE ENERGY 🔋
+Meaning: Companies that provide distributed energy systems, fuel cells, batteries, generators, charging equipment, backup power, microgrids, and other power solutions located near the customer.
+
+---
+Group: PACKAGED FOOD 🥫
+Meaning: Companies that make branded food products such as snacks, frozen meals, sauces, condiments, meat, pet food, candy, pantry staples, and prepared grocery items.
+
+---
+Group: PAYMENT NETWORKS 💳
+Meaning: Global card networks that connect consumers, merchants, banks, and processors, earning fees from authorization, clearing, settlement, and payment volume.
+
+---
+Group: PAYROLL SOFTWARE 👥
+Meaning: Companies that provide payroll, HR, benefits, workforce management, time tracking, tax filing, and human capital management software for employers.
+
+---
+Group: PHARMA 💊
+Meaning: Pharmaceutical companies with approved medicines, late-stage drug pipelines, branded therapies, generic drugs, vaccines, or consumer health products, generally with more commercial scale than early biotech.
+
+---
+Group: PHOTONICS 🌐
+Meaning: Companies that provide optical networking, fiber, lasers, photonic chips, communications hardware, test equipment, and light-based components used in telecom, data centers, sensing, and manufacturing.
+
+---
+Group: PROFESSIONAL SERVICES 🧑‍💼
+Meaning: Companies that sell specialized business services such as consulting, outsourcing, education, staffing, engineering, facilities, security, pest control, research, legal data, or operational support.
+
+---
+Group: QUANTUM ⚛️
+Meaning: Companies developing quantum computing hardware, software, networking, encryption, sensing, or related technologies that use quantum mechanics for computation or communication.
+
+---
+Group: RAILROADS 🚆
+Meaning: Freight railroad operators that transport goods across rail networks, with exposure to industrial production, agriculture, intermodal shipping, energy, and pricing power.
+
+---
+Group: RARE EARTHS ⛰️
+Meaning: Companies that mine, process, refine, or develop rare earth elements and critical minerals used in magnets, defense systems, electric vehicles, electronics, and clean energy technologies.
+
+---
+Group: REAL ESTATE SERVICES 🏘️
+Meaning: Companies that provide property listings, brokerage, real estate data, property management, commercial real estate services, home search platforms, and transaction support.
+
+---
+Group: REFINING & MARKETING ⛽
+Meaning: Companies that refine crude oil into fuels and products, operate fuel logistics or retail networks, and market gasoline, diesel, jet fuel, asphalt, and related products.
+
+---
+Group: RESIDENTIAL REITS 🏘️
+Meaning: Real estate investment trusts that own rental housing such as apartments, single-family rentals, manufactured housing communities, student housing, or residential communities.
+
+---
+Group: RESTAURANTS 🍽️
+Meaning: Companies that operate or franchise quick-service, fast-casual, casual dining, coffee, bakery, and restaurant chains.
+
+---
+Group: RETAIL REITS 🏬
+Meaning: Real estate investment trusts that own shopping centers, malls, freestanding retail properties, net-lease assets, and other retail-oriented real estate.
+
+---
+Group: RETAIL 🛍️
+Meaning: Consumer-facing retailers and brands that sell apparel, footwear, sporting goods, home improvement, auto retail, luxury goods, electronics, discount merchandise, specialty products, or general merchandise.
+
+---
+Group: ROBOTICS 🤖
+Meaning: Companies connected to automation, machine vision, sensing, robotic surgery, autonomous systems, power electronics, warehouse automation, and hardware or chips that enable robotic applications.
+
+---
+Group: SATELLITES 🛰️
+Meaning: Companies that build, operate, launch, or provide services using satellites, satellite communications, Earth observation, space-based broadband, or orbital connectivity networks.
+
+---
+Group: SELF-STORAGE REITS 📦
+Meaning: Real estate investment trusts that own and operate self-storage facilities leased to consumers and businesses for personal or commercial storage.
+
+---
+Group: SEMI SUPPLIERS 📦
+Meaning: Companies that supply semiconductor manufacturing equipment, foundry services, packaging, test systems, materials, wafers, gases, inspection tools, and other chipmaking inputs.
+
+---
+Group: SEMICONDUCTORS 🤖
+Meaning: Companies that design, manufacture, or sell chips, analog components, processors, connectivity semiconductors, power devices, sensors, and related chip technologies.
+
+---
+Group: SILVER 🥈
+Meaning: Companies and funds tied to silver mining, precious metals production, physical silver exposure, and metals used in jewelry, investment, solar, electronics, and industrial applications.
+
+---
+Group: SOLAR ☀️
+Meaning: Companies that manufacture, develop, finance, install, or supply solar panels, inverters, trackers, residential solar systems, utility-scale projects, and solar power infrastructure.
+
+---
+Group: SPACE COMPONENTS 📦
+Meaning: Companies that provide engineered materials, connectors, sensors, instruments, propulsion inputs, composites, electronics, and components used in spacecraft, aerospace systems, and advanced vehicles.
+
+---
+Group: SPACE 🚀
+Meaning: Companies focused on rockets, launch services, spacecraft, lunar missions, space infrastructure, defense space systems, and commercial space exploration.
+
+---
+Group: SPECIALTY REITS 🧱
+Meaning: Real estate investment trusts with nontraditional property types such as timberland, casinos, billboards, prisons, records storage, gaming real estate, or other specialized assets.
+
+---
+Group: STEEL & IRON ORE 🏗️
+Meaning: Companies that mine iron ore, produce steel, recycle scrap, make specialty metals, or supply metal products used in construction, energy, transportation, and manufacturing.
+
+---
+Group: TELECOM ☎️
+Meaning: Companies that provide wireless, broadband, cable, fiber, towers, telecom infrastructure, connectivity services, and communications networks for consumers and businesses.
+
+---
+Group: TOBACCO 🚬
+Meaning: Companies that manufacture, market, or sell cigarettes, smokeless tobacco, nicotine pouches, heated tobacco, vaping products, and other nicotine-related products.
+
+---
+Group: TRAVEL 🏝️
+Meaning: Companies exposed to hotels, resorts, cruise lines, online travel booking, timeshares, vacation ownership, amusement and leisure venues, fitness clubs, and tourism demand.
+
+---
+Group: TRUCKING 🚚
+Meaning: Companies that provide trucking, freight brokerage, less-than-truckload shipping, logistics, intermodal, parcel freight, expedited shipping, and transportation services.
+
+---
+Group: URANIUM ☢️
+Meaning: Companies that mine, develop, process, or hold uranium assets used as nuclear fuel, with exposure to reactor demand, enrichment, and uranium commodity pricing.
+
+---
+Group: UTILITIES ⚡
+Meaning: Regulated or contracted power, gas, water, and waste utility companies that generate, transmit, distribute, or sell essential services to homes, businesses, and grids.
+
+---
+Group: UTILITY INFRASTRUCTURE 🛠️
+Meaning: Companies that build, service, electrify, or supply equipment for power grids, transmission lines, substations, renewable interconnections, utility projects, and energy infrastructure.
+
+---
+Group: VERTICAL SOFTWARE 🏛️
+Meaning: Software companies built for specific industries or regulated workflows, such as insurance, government, construction, legal, healthcare, tax, property, logistics, and professional markets.
+
+---
+Group: WORKSPACES & STORAGE 📦
+Meaning: Companies tied to rental equipment, modular space, cold storage, self-storage, portable storage, and flexible physical infrastructure used by businesses and consumers.
