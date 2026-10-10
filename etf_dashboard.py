@@ -137,7 +137,7 @@ def render_dashboard(payload: dict, active_key: str) -> str:
 __FILTERED_SECTIONS__
   <div class="section-heading"><h2>ETF Performance</h2></div>
   <div id="change-scope" class="change-toggle change-scope" role="group" aria-label="Performance chart view"></div>
-  <div id="change-modes" class="change-toggle" role="group" aria-label="ETF performance window"><button type="button" data-change-mode="premarket">Premarket</button><button type="button" data-change-mode="overnight">Overnight</button><button type="button" data-change-mode="postmarket">After hours</button><button type="button" data-change-mode="intraday">Intraday</button><button type="button" class="active" data-change-mode="one_day">1 Day</button><button type="button" data-change-mode="one_week">1 Week</button><button type="button" data-change-mode="one_month">1 Month</button><button type="button" data-change-mode="three_months">3 Months</button><button type="button" data-change-mode="six_months">6 Months</button><button type="button" data-change-mode="one_year">1 Year</button></div>
+  <div id="change-modes" class="change-toggle" role="group" aria-label="ETF performance window"><button type="button" data-change-mode="extended">Extended Hours</button><button type="button" data-change-mode="intraday">Intraday</button><button type="button" class="active" data-change-mode="one_day">1 Day</button><button type="button" data-change-mode="one_week">1 Week</button><button type="button" data-change-mode="one_month">1 Month</button><button type="button" data-change-mode="three_months">3 Months</button><button type="button" data-change-mode="six_months">6 Months</button><button type="button" data-change-mode="one_year">1 Year</button></div>
   <div id="live-status" class="live-status">Loading current performance…</div>
   <section class="change-card"><div id="change-chart"></div></section>
 </main>
@@ -171,7 +171,24 @@ function isNEL(row) { return Number.isFinite(Number(row.extension)) && Number(ro
 let changeMode = 'one_day';
 let changeView = data.kind === 'themes' ? 'groups' : 'etfs';
 let liveChanges = null;
+let extendedSelected = false;
 const completedAfterHours = data.extended_hours || {};
+
+function extendedSession() {
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(part=>part.type!=='literal').map(part=>[part.type,part.value]));
+  const minutes=Number(parts.hour)*60+Number(parts.minute), weekday=parts.weekday;
+  if((weekday==='Sun'&&minutes>=1200)||(weekday==='Sat'&&minutes<240)||(weekday!=='Sat'&&weekday!=='Sun'&&(minutes<240||minutes>=1200)))return {key:'overnight',label:'Overnight',active:true};
+  if(weekday!=='Sat'&&weekday!=='Sun'&&minutes>=240&&minutes<570)return {key:'premarket',label:'Premarket',active:true};
+  if(weekday!=='Sat'&&weekday!=='Sun'&&minutes>=960&&minutes<1200)return {key:'postmarket',label:'After-hours',active:true};
+  if(weekday!=='Sat'&&weekday!=='Sun'&&minutes>=570&&minutes<960)return {key:'premarket',label:'Premarket',active:false};
+  return {key:'overnight',label:'Overnight',active:false};
+}
+function performanceStatus(delayed=false) {
+  if(Number(dateSelect.value)!==data.snapshots.length-1)return extendedSelected?'Historical snapshots do not retain a complete extended-hours tape.':`Historical close · ${current()?.date||''}`;
+  if(extendedSelected){const session=extendedSession();return `Extended Hours · ${session.label} · ${session.active?'active session':'latest completed session'}${delayed?' · public feed delayed up to 15 min':''} · refreshed ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;}
+  const afterHoursNote=completedAfterHours.date?` · completed after-hours: ${completedAfterHours.date}`:'';
+  return `TradingView regular-session performance${afterHoursNote}${delayed?' · public feed delayed up to 15 min':''} · refreshed ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+}
 
 function renderLeaders(frame) {
   const rows=windowGroups(frame);
@@ -208,7 +225,8 @@ function renderLeadershipTrend(frame) {
   svg.setAttribute('viewBox',`0 0 ${width} ${height}`); svg.innerHTML=markup;
 }
 function renderChangeChart() {
-  const hasValue=row=>row[changeMode]!==null&&row[changeMode]!==''&&Number.isFinite(Number(row[changeMode]));
+  const activeExtended=extendedSelected?extendedSession():null;
+  const hasValue=row=>(!activeExtended?.active||row[`_live_${changeMode}`]===true)&&row[changeMode]!==null&&row[changeMode]!==''&&Number.isFinite(Number(row[changeMode]));
   const isLatest=Number(dateSelect.value)===data.snapshots.length-1;
   const source=[...((isLatest&&liveChanges)||current()?.daily_changes||[])];
   const rows=changeView==='groups' ? groupPerformanceRows(source,hasValue) : source;
@@ -223,7 +241,8 @@ function groupPerformanceRows(source,hasValue) {
   return [...groups].map(([group,values])=>{const ordered=[...values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2),median=ordered.length?(ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2):null;return {symbol:group,group:'', [changeMode]:median};});
 }
 async function refreshLivePerformance() {
-  if(Number(dateSelect.value)!==data.snapshots.length-1){liveStatus.textContent=`Historical close · ${current()?.date||''}`;return;}
+  if(Number(dateSelect.value)!==data.snapshots.length-1){liveStatus.textContent=performanceStatus();return;}
+  if(extendedSelected)changeMode=extendedSession().key;
   liveStatus.textContent='Loading current TradingView performance…';
   const fallback=current()?.daily_changes||[], groups=new Map(fallback.map(row=>[row.symbol,row.group])), tickers=fallback.map(row=>row.symbol);
   const query={markets:['america'],symbols:{},options:{lang:'en'},columns:['name','exchange','close','open','change','Perf.W','Perf.1M','Perf.3M','Perf.6M','Perf.Y','premarket_change','postmarket_change','overnight_change','update_mode'],filter:[{left:'name',operation:'in_range',right:tickers}],range:[0,500],ignore_unknown_fields:false};
@@ -232,11 +251,10 @@ async function refreshLivePerformance() {
     if(!response.ok)throw new Error(`TradingView returned ${response.status}`);
     const records=(await response.json()).data||[], bySymbol=new Map(fallback.map(row=>[row.symbol,{...row,postmarket:Number.isFinite(Number(completedAfterHours.values?.[row.symbol]))?Number(completedAfterHours.values[row.symbol]):null}]));
     records.forEach(record=>{const [symbol,,regularClose,regularOpen,regularChange,oneWeek,oneMonth,threeMonths,sixMonths,oneYear,premarket,postmarket,overnight,updateMode]=record.d;const row=bySymbol.get(symbol)||{symbol,group:groups.get(symbol)||''},savedAfterHours=completedAfterHours.values?.[symbol],savedOvernight=completedAfterHours.overnight?.values?.[symbol],present=value=>value!==null&&value!==''&&value!==undefined&&Number.isFinite(Number(value));
-      row.premarket=present(premarket)?Number(premarket):null;row.overnight=present(overnight)?Number(overnight):(present(savedOvernight)?Number(savedOvernight):null);row.postmarket=present(postmarket)?Number(postmarket):(present(savedAfterHours)?Number(savedAfterHours):null);row.intraday=Number(regularOpen)>0?100*(Number(regularClose)/Number(regularOpen)-1):null;row.one_day=Number.isFinite(Number(regularChange))?Number(regularChange):null;row.one_week=Number.isFinite(Number(oneWeek))?Number(oneWeek):null;row.one_month=Number.isFinite(Number(oneMonth))?Number(oneMonth):null;row.three_months=Number.isFinite(Number(threeMonths))?Number(threeMonths):null;row.six_months=Number.isFinite(Number(sixMonths))?Number(sixMonths):null;row.one_year=Number.isFinite(Number(oneYear))?Number(oneYear):null;row.update_mode=updateMode;bySymbol.set(symbol,row);});
+      row._live_premarket=present(premarket);row._live_overnight=present(overnight);row._live_postmarket=present(postmarket);row.premarket=row._live_premarket?Number(premarket):null;row.overnight=row._live_overnight?Number(overnight):(present(savedOvernight)?Number(savedOvernight):null);row.postmarket=row._live_postmarket?Number(postmarket):(present(savedAfterHours)?Number(savedAfterHours):null);row.intraday=Number(regularOpen)>0?100*(Number(regularClose)/Number(regularOpen)-1):null;row.one_day=Number.isFinite(Number(regularChange))?Number(regularChange):null;row.one_week=Number.isFinite(Number(oneWeek))?Number(oneWeek):null;row.one_month=Number.isFinite(Number(oneMonth))?Number(oneMonth):null;row.three_months=Number.isFinite(Number(threeMonths))?Number(threeMonths):null;row.six_months=Number.isFinite(Number(sixMonths))?Number(sixMonths):null;row.one_year=Number.isFinite(Number(oneYear))?Number(oneYear):null;row.update_mode=updateMode;bySymbol.set(symbol,row);});
     liveChanges=[...bySymbol.values()];
-    const delayed=records.some(record=>String(record.d[11]||'').includes('900'));
-    const afterHoursNote=completedAfterHours.date?` · completed after-hours: ${completedAfterHours.date}`:'';
-    liveStatus.textContent=`TradingView regular session, premarket, and after-hours fields${afterHoursNote}${delayed?' · public feed delayed up to 15 min':''} · refreshed ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+    const delayed=records.some(record=>String(record.d[13]||'').includes('900'));
+    liveStatus.textContent=performanceStatus(delayed);
     renderChangeChart();
   } catch(error) {
     liveChanges=null; liveStatus.textContent=`Current quote unavailable · showing ${current()?.date||''} close`; renderChangeChart();
@@ -272,7 +290,7 @@ async function snapshot(){ const button=document.getElementById('snapshot'); if(
 changeScope.innerHTML=data.kind==='themes'?'<button type="button" class="active" data-change-view="groups">Themes</button><button type="button" data-change-view="etfs">ETFs</button>':'';
 dateSelect.innerHTML=data.snapshots.map((snapshot,index)=>`<option value="${index}">${snapshot.date}</option>`).join(''); dateSelect.value=Math.max(0,data.snapshots.length-1); dateSelect.addEventListener('change',()=>{render();refreshLivePerformance();});
 changeScope.addEventListener('click',event=>{const button=event.target.closest('[data-change-view]');if(!button)return;changeView=button.dataset.changeView;changeScope.querySelectorAll('[data-change-view]').forEach(item=>item.classList.toggle('active',item===button));renderChangeChart();});
-changeModes.addEventListener('click',event=>{ const button=event.target.closest('[data-change-mode]'); if(!button)return; changeMode=button.dataset.changeMode; changeModes.querySelectorAll('[data-change-mode]').forEach(item=>item.classList.toggle('active',item===button)); renderChangeChart(); });
+changeModes.addEventListener('click',event=>{ const button=event.target.closest('[data-change-mode]'); if(!button)return; extendedSelected=button.dataset.changeMode==='extended'; changeMode=extendedSelected?extendedSession().key:button.dataset.changeMode; changeModes.querySelectorAll('[data-change-mode]').forEach(item=>item.classList.toggle('active',item===button)); liveStatus.textContent=performanceStatus(); renderChangeChart(); });
 document.getElementById('drawer-close').addEventListener('click',()=>dialog.close()); dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
 document.getElementById('export-leaders').addEventListener('click',()=>exportSymbols(()=>true,`${data.kind}_leaders`));
 document.getElementById('export-nel')?.addEventListener('click',()=>exportSymbols(isNEL,`${data.kind}_nel`));

@@ -6,6 +6,8 @@ on:
     # run saves the latest completed session, so the non-matching run is a
     # harmless retry.
     - cron: "30 0,1 * * 2-6"
+    # Retry after the overnight session completes at 4 AM New York.
+    - cron: "30 9,10 * * 2-6"
   workflow_dispatch:
 
 permissions:
@@ -25,8 +27,14 @@ jobs:
           python-version: "3.11"
       - name: Install dashboard dependencies
         run: pip install -r requirements.txt
-      - name: Capture completed after-hours performance
-        run: python scripts/capture_after_hours.py
+      - name: Capture the completed extended-hours segment
+        run: |
+          NY_HOUR=$(TZ=America/New_York date +%H)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$NY_HOUR" -ge 4 ] && [ "$NY_HOUR" -lt 8 ]; then
+            python scripts/capture_after_hours.py --overnight-only
+          else
+            python scripts/capture_after_hours.py
+          fi
       - name: Regenerate ETF dashboards
         run: python etf_dashboard.py
       - name: Publish the captured session
