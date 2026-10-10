@@ -7,6 +7,7 @@ import pandas as pd
 from etf_strength import (
     _is_stock_holding,
     DATA_DIR,
+    UNIVERSES,
     build_metric_history,
     build_snapshots,
     load_universe,
@@ -96,6 +97,7 @@ class EtfStrengthTests(unittest.TestCase):
         ])
         snapshots = build_snapshots({"AIQ": metric_frame(session, 20)}, universe, [session], 10)
         self.assertEqual(snapshots[0]["date"], "2026-09-25")
+        self.assertEqual(snapshots[0]["windows"]["1w"][0]["group"], "AI")
         self.assertEqual(snapshots[0]["daily_changes"][0]["intraday"], 1.25)
         self.assertEqual(snapshots[0]["daily_changes"][0]["one_day"], -0.75)
         self.assertEqual(snapshots[0]["daily_changes"][0]["one_week"], 2.5)
@@ -144,6 +146,10 @@ class EtfStrengthTests(unittest.TestCase):
     def test_dead_vice_ticker_is_not_in_theme_universe(self):
         universe = load_universe(DATA_DIR / "theme_etfs.tsv")
         self.assertNotIn("VICE", set(universe["Ticker"]))
+
+    def test_theme_and_sector_leader_counts(self):
+        counts = {config.key: config.top_n for config in UNIVERSES}
+        self.assertEqual(counts, {"themes": 5, "sectors": 3})
 
     def test_non_stock_holdings_are_removed(self):
         funds = {"HACK", "BUG"}

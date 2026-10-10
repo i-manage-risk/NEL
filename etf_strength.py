@@ -22,7 +22,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_DIR / "data"
 OUTPUT_DIR = PROJECT_DIR / "outputs" / "etf"
 HOLDINGS_CACHE = DATA_DIR / "etf_holdings_cache.json"
-WINDOWS = {"1m": 1, "3m": 3, "6m": 6, "1y": 12}
+WINDOWS = {"1w": 0, "1m": 1, "3m": 3, "6m": 6, "1y": 12}
 GROUP_ALIASES = {"Oil & Gas": "Oil & gas"}
 NON_STOCK_TERMS = {
     "CASH", "CURRENCY", "TREASURY", "BOND", "NOTE", "BILL", "SWAP", "FUTURE",
@@ -42,7 +42,7 @@ class UniverseConfig:
 
 
 UNIVERSES = (
-    UniverseConfig(DATA_DIR / "theme_etfs.tsv", "themes", "Theme Leadership", 10, PROJECT_DIR / "themes.html"),
+    UniverseConfig(DATA_DIR / "theme_etfs.tsv", "themes", "Theme Leadership", 5, PROJECT_DIR / "themes.html"),
     UniverseConfig(DATA_DIR / "sector_etfs.tsv", "sectors", "Sector Leadership", 3, PROJECT_DIR / "sectors.html"),
 )
 

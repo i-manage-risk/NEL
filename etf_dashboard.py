@@ -56,7 +56,7 @@ def render_dashboard(payload: dict, active_key: str) -> str:
   <meta name="description" content="Track leading market groups, non-extended ETFs, live performance, and underlying stock holdings.">
   <link rel="icon" type="image/png" href="assets/nel-favicon.png">
   <style>
-    :root { color-scheme:dark; --bg:#141414; --panel:#2A2A2A; --track:#1b1b1b; --line:#454545; --text:#F5F2E8; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --green:#86d65d; }
+    :root { color-scheme:dark; --bg:#141414; --panel:#2A2A2A; --track:#1b1b1b; --line:#454545; --text:#F5F2E8; --purple:#9b7cff; --orange:#ff9900; --cyan:#00ffff; --pink:#ff3366; --green:#86d65d; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     main { width:100%; max-width:2200px; margin:auto; padding:22px 34px 44px; }
@@ -72,10 +72,10 @@ def render_dashboard(payload: dict, active_key: str) -> str:
     .section-heading { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin:27px 0 13px; }
     .section-heading h2 { grid-column:2; text-align:center; }
     .section-heading .button { grid-column:3; justify-self:end; }
-    .windows { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; align-items:start; }
+    .windows { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:18px; align-items:start; }
     .card { min-width:0; background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--orange); border-radius:10px; padding:16px; }
-    .card[data-frame="3m"] { border-top-color:var(--cyan); } .card[data-frame="6m"] { border-top-color:var(--pink); } .card[data-frame="1y"] { border-top-color:var(--green); }
-    .card h3 { color:var(--orange); margin:0 0 12px; font-size:14px; } .card[data-frame="3m"] h3 { color:var(--cyan); } .card[data-frame="6m"] h3 { color:var(--pink); } .card[data-frame="1y"] h3 { color:var(--green); }
+    .card[data-frame="1w"] { border-top-color:var(--purple); } .card[data-frame="3m"] { border-top-color:var(--cyan); } .card[data-frame="6m"] { border-top-color:var(--pink); } .card[data-frame="1y"] { border-top-color:var(--green); }
+    .card h3 { color:var(--orange); margin:0 0 12px; font-size:14px; } .card[data-frame="1w"] h3 { color:var(--purple); } .card[data-frame="3m"] h3 { color:var(--cyan); } .card[data-frame="6m"] h3 { color:var(--pink); } .card[data-frame="1y"] h3 { color:var(--green); }
     .card .trend-title { margin:19px 0 5px; color:var(--text); font-size:14px; }
     .trend-chart { display:block; width:100%; height:260px; overflow:visible; }
     .table-wrap { width:100%; overflow:visible; }
@@ -145,7 +145,7 @@ __FILTERED_SECTIONS__
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 const data = __DATA__;
-const frames = { '1m':'1 month', '3m':'3 months', '6m':'6 months', '1y':'1 year' };
+const frames = { '1w':'1 week', '1m':'1 month', '3m':'3 months', '6m':'6 months', '1y':'1 year' };
 const sectorColors = __SECTOR_COLORS__;
 const dateSelect = document.getElementById('date');
 const leaderWindows = document.getElementById('leader-windows');
