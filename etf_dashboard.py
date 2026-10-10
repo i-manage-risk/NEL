@@ -185,7 +185,7 @@ function extendedSession() {
 }
 function performanceStatus(delayed=false) {
   if(Number(dateSelect.value)!==data.snapshots.length-1)return extendedSelected?'Historical snapshots do not retain a complete extended-hours tape.':`Historical close · ${current()?.date||''}`;
-  if(extendedSelected){const session=extendedSession();return `Extended Hours · ${session.label} · ${session.active?'active session':'latest completed session'}${delayed?' · public feed delayed up to 15 min':''} · refreshed ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;}
+  if(extendedSelected){const session=extendedSession(),source=liveChanges||current()?.daily_changes||[],available=source.filter(row=>(!session.active||row[`_live_${session.key}`]===true)&&row[session.key]!==null&&row[session.key]!==''&&Number.isFinite(Number(row[session.key]))).length;return `Extended Hours · ${session.label} · ${session.active?'active session':'latest completed session'} · ${available}/${source.length} ETFs reporting; non-participants omitted${delayed?' · public feed delayed up to 15 min':''} · refreshed ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;}
   const afterHoursNote=completedAfterHours.date?` · completed after-hours: ${completedAfterHours.date}`:'';
   return `TradingView regular-session performance${afterHoursNote}${delayed?' · public feed delayed up to 15 min':''} · refreshed ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
 }
@@ -226,10 +226,10 @@ function renderLeadershipTrend(frame) {
 }
 function renderChangeChart() {
   const activeExtended=extendedSelected?extendedSession():null;
-  const hasValue=row=>(!activeExtended?.active||row[`_live_${changeMode}`]===true)&&row[changeMode]!==null&&row[changeMode]!==''&&Number.isFinite(Number(row[changeMode]));
+  const hasValue=row=>(!activeExtended?.active||row._aggregate===true||row[`_live_${changeMode}`]===true)&&row[changeMode]!==null&&row[changeMode]!==''&&Number.isFinite(Number(row[changeMode]));
   const isLatest=Number(dateSelect.value)===data.snapshots.length-1;
   const source=[...((isLatest&&liveChanges)||current()?.daily_changes||[])];
-  const rows=changeView==='groups' ? groupPerformanceRows(source,hasValue) : source;
+  const rows=(changeView==='groups' ? groupPerformanceRows(source,hasValue) : source).filter(row=>!extendedSelected||hasValue(row));
   rows.sort((a,b)=>Number(hasValue(b))-Number(hasValue(a))||(hasValue(a)&&hasValue(b)?Number(b[changeMode])-Number(a[changeMode]):a.symbol.localeCompare(b.symbol)));
   const positiveAxis=Math.max(.1,...rows.filter(row=>hasValue(row)&&Number(row[changeMode])>=0).map(row=>Number(row[changeMode]))), negativeAxis=Math.max(.1,...rows.filter(row=>hasValue(row)&&Number(row[changeMode])<0).map(row=>Math.abs(Number(row[changeMode]))));
   const body=rows.map(row=>{ const available=hasValue(row),value=available?Number(row[changeMode]):0,axis=value>=0?positiveAxis:negativeAxis,width=available?Math.min(50,Math.abs(value)/axis*50):0,isGroup=changeView==='groups',target=isGroup?`data-change-group="${esc(row.symbol)}"`:`data-change-symbol="${esc(row.symbol)}"`; return `<div class="change-row clickable" ${target}><div class="change-label" title="Open ${isGroup?'theme':'ETF'} details: ${esc(row.symbol)}${row.group?` · ${esc(row.group)}`:''}"><strong>${esc(row.symbol)}</strong>${row.group?`<span>${esc(row.group)}</span>`:''}</div><div class="change-track">${available?`<span class="change-bar ${value>=0?'positive':'negative'}" style="width:${width}%"></span>`:''}</div><div class="change-value">${available?`${value>=0?'+':''}${value.toFixed(2)}%`:'—'}</div></div>`; }).join('');
@@ -237,8 +237,8 @@ function renderChangeChart() {
 }
 function groupPerformanceRows(source,hasValue) {
   const groups=new Map();
-  source.forEach(row=>{if(!row.group)return;const values=groups.get(row.group)||[];if(hasValue(row))values.push(Number(row[changeMode]));groups.set(row.group,values);});
-  return [...groups].map(([group,values])=>{const ordered=[...values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2),median=ordered.length?(ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2):null;return {symbol:group,group:'', [changeMode]:median};});
+  source.forEach(row=>{if(!row.group)return;const item=groups.get(row.group)||{values:[],total:0};item.total+=1;if(hasValue(row))item.values.push(Number(row[changeMode]));groups.set(row.group,item);});
+  return [...groups].map(([group,item])=>{const ordered=[...item.values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2),median=ordered.length?(ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2):null;return {symbol:group,group:extendedSelected?`${ordered.length}/${item.total} ETFs reporting`:'',_aggregate:true,[changeMode]:median};});
 }
 async function refreshLivePerformance() {
   if(Number(dateSelect.value)!==data.snapshots.length-1){liveStatus.textContent=performanceStatus();return;}

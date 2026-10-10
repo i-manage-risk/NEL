@@ -137,6 +137,8 @@ class EtfStrengthTests(unittest.TestCase):
         self.assertNotIn('data-change-mode="overnight"', html)
         self.assertNotIn('data-change-mode="postmarket"', html)
         self.assertIn("Extended Hours · ${session.label}", html)
+        self.assertIn("ETFs reporting; non-participants omitted", html)
+        self.assertIn("`${ordered.length}/${item.total} ETFs reporting`", html)
         self.assertNotIn("Live TradingView data", html)
         self.assertIn("public feed delayed up to 15 min", html)
         sectors = load_universe(DATA_DIR / "sector_etfs.tsv")
