@@ -7,7 +7,7 @@
 
   const chartStyles = document.createElement('link');
   chartStyles.rel = 'stylesheet';
-  chartStyles.href = 'assets/breadth-chart.css?v=4';
+  chartStyles.href = 'assets/breadth-chart.css?v=5';
   document.head.append(chartStyles);
 
   const breadthCard = chart.closest('.chart');
@@ -57,7 +57,7 @@
   measureLabel.textContent = 'Measure';
   const rangeLabel = document.createElement('span');
   rangeLabel.className = 'chart-control-label';
-  rangeLabel.textContent = 'Range';
+  rangeLabel.textContent = 'Chart range';
   chartHead.after(toolbar);
   measureBlock.append(measureLabel, metricControls);
   rangeBlock.append(rangeLabel, rangeControls);
