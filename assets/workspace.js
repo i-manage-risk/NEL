@@ -14,6 +14,7 @@ const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel
 let db={}, themes={}, sectors={}, breadth=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let filters={search:'',group:'',adr:5,extension:4};
 let overrides=store.get('themes',{}), selected=null;
+let kkSort={key:'strength',direction:'desc'};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
 const breadthRows = () => breadth.filter(r=>r.date<=asof()).sort((a,b)=>b.date.localeCompare(a.date));
@@ -89,17 +90,35 @@ function cotSpark(m){
   return '<svg class="sparkline" viewBox="0 0 500 130" role="img" aria-label="Large speculator COT index, up to 52 reports"><path d="M10 15H490 M10 105H490" stroke="#565144" stroke-dasharray="4 4"/><polyline points="'+points+'" fill="none" stroke="#86d65d" stroke-width="2"/><text x="10" y="128" fill="#aaa89f" font-size="10">'+(history[0]?.date||'')+'</text><text x="420" y="128" fill="#aaa89f" font-size="10">'+(history.at(-1)?.date||'')+'</text></svg>';
 }
 function filteredKKStocks(){
-  return stocks('kk').filter(r=>
+  const rows=stocks('kk').filter(r=>
     (!filters.search || (r.symbol+' '+r.description+' '+tag(r)).toLowerCase().includes(filters.search.toLowerCase())) &&
     (!filters.group||tag(r)===filters.group) &&
     finite(r.adr) && r.adr>=Number(filters.adr) &&
     (filters.extension==='' || (finite(r.extension)&&r.extension<Number(filters.extension)))
-  ).sort((a,b)=>Math.max(b.performance['1m']??-Infinity,b.performance['3m']??-Infinity,b.performance['6m']??-Infinity)-Math.max(a.performance['1m']??-Infinity,a.performance['3m']??-Infinity,a.performance['6m']??-Infinity)||a.symbol.localeCompare(b.symbol));
+  );
+  const value=(row,key)=>{
+    if(key==='stock') return row.symbol;
+    if(key==='theme') return tag(row);
+    if(key==='strength') return Math.max(row.performance['1m']??-Infinity,row.performance['3m']??-Infinity,row.performance['6m']??-Infinity);
+    if(['1m','3m','6m'].includes(key)) return row.performance[key]??-Infinity;
+    if(key==='extension') return row.extension??Infinity;
+    if(key==='dollarVolume') return row.dollarVolume??-Infinity;
+    return row.adr??-Infinity;
+  };
+  return rows.sort((a,b)=>{
+    const left=value(a,kkSort.key), right=value(b,kkSort.key);
+    const compared=typeof left==='string' ? left.localeCompare(right) : left-right;
+    return (kkSort.direction==='asc'?1:-1)*compared || a.symbol.localeCompare(b.symbol);
+  });
 }
 function selectFilter(key,label,options){return '<label>'+label+'<select data-filter="'+key+'">'+options.map(([v,t])=>'<option value="'+escapeHTML(v)+'" '+(filters[key]===v?'selected':'')+'>'+escapeHTML(t)+'</option>').join('')+'</select></label>';}
+function kkSortHeader(label,key,align=''){
+  const active=kkSort.key===key, arrow=active?(kkSort.direction==='asc'?' ↑':' ↓'):'';
+  return '<th class="'+align+'"><button class="sort-header" data-kk-sort="'+key+'" aria-label="Sort by '+label+'">'+label+arrow+'</button></th>';
+}
 function screener(){
   const rows=filteredKKStocks(), groups=[...new Set(stocks('kk').map(tag))].sort();
-  const table=rows.length ? '<div class="table-box kk-table"><table><thead><tr><th>Stock / theme</th><th class="num">1M%</th><th class="num">3M%</th><th class="num">6M%</th><th class="num">Extension</th><th class="num">Avg $ Vol</th><th class="num">ADR%</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="kk">'+escapeHTML(r.symbol)+'</button><small>'+escapeHTML(tag(r))+(isMapped(r)?' · custom':' · vendor')+'</small></td><td class="num">'+pct(r.performance['1m'])+'</td><td class="num">'+pct(r.performance['3m'])+'</td><td class="num">'+pct(r.performance['6m'])+'</td><td class="num">'+fmt(r.extension,2)+'×</td><td class="num">'+money(r.dollarVolume)+'</td><td class="num">'+pct(r.adr)+'</td></tr>').join('')+'</tbody></table></div>' : '<p class="empty">No KK leaders match these speed and extension settings.</p>';
+  const table=rows.length ? '<div class="table-box kk-table"><table><thead><tr>'+kkSortHeader('Stock / theme','stock')+kkSortHeader('1M%','1m','num')+kkSortHeader('3M%','3m','num')+kkSortHeader('6M%','6m','num')+kkSortHeader('Extension','extension','num')+kkSortHeader('Avg $ Vol','dollarVolume','num')+kkSortHeader('ADR%','adr','num')+'</tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="kk">'+escapeHTML(r.symbol)+'</button><small>'+escapeHTML(tag(r))+(isMapped(r)?' · custom':' · vendor')+'</small></td><td class="num">'+pct(r.performance['1m'])+'</td><td class="num">'+pct(r.performance['3m'])+'</td><td class="num">'+pct(r.performance['6m'])+'</td><td class="num">'+fmt(r.extension,2)+'×</td><td class="num">'+money(r.dollarVolume)+'</td><td class="num">'+pct(r.adr)+'</td></tr>').join('')+'</tbody></table></div>' : '<p class="empty">No KK leaders match these speed and extension settings.</p>';
   return '<section class="hero"><span class="eyebrow">KK SCAN · LIQUID LEADERS</span><h2>Strength first. Speed and extension second.</h2><p>The universe is built from stocks with at least $30M average 30-day dollar volume and 350K average 10-day shares. KK then takes the exact top 2% in each of 1M, 3M and 6M performance, combines them, and removes duplicates.</p></section><div class="toolbar"><span class="note"><b>'+rows.length+'</b> of '+stocks('kk').length+' KK Liquid Leaders shown</span><span class="push"></span>'+button('Export current symbols','export-kk','primary')+'</div><div class="filters"><label>Search<input data-filter="search" placeholder="Ticker or theme" value="'+escapeHTML(filters.search)+'"></label>'+selectFilter('group','Theme / industry',[['','All themes / industries'],...groups.map(g=>[g,g])])+'<label>Minimum ADR %<input data-filter="adr" type="number" min="0" step=".1" value="'+filters.adr+'"></label><label>Maximum extension ×<input data-filter="extension" type="number" step=".1" value="'+filters.extension+'" placeholder="No limit"></label></div>'+table+'<p class="note">ADR and extension only filter this already-selected leader list. They do not determine who qualifies as a KK Liquid Leader. Click a stock for its evidence and chart.</p>';
 }
 function median(values){const clean=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!clean.length)return null;const mid=Math.floor(clean.length/2);return clean.length%2?clean[mid]:(clean[mid-1]+clean[mid])/2;}
@@ -153,6 +172,7 @@ function showStock(symbol,kind){
 document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group]');if(!node)return;
  if(node.dataset.frame){frame=node.dataset.frame;render();}
+ if(node.dataset.kkSort){const key=node.dataset.kkSort;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
