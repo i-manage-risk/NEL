@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 from focus_list import SCAN_COLUMNS, _assign_exact_top_flags, _require_columns, prepare_for_export
+from tight_nel import find_tight_nel
 
 
 @dataclass(frozen=True)
@@ -132,8 +133,13 @@ def main() -> None:
         raise SystemExit("--top-pct must be greater than 0 and no more than 1.")
     settings = KKSettings(top_pct=args.top_pct)
     universe, leaders = calculate_kk(fetch_kk_universe(), settings)
+    tight, tightness_errors = find_tight_nel(leaders)
+    leaders["is_tight"] = leaders["name"].isin(set(tight["name"])).astype(bool)
     paths = write_outputs(universe, leaders, settings, args.output_dir, args.snapshot_date)
     print(f"KK liquidity universe: {len(universe):,} | top {settings.top_pct:.0%} union: {len(leaders):,}")
+    print(f"KK tight leaders: {int(leaders['is_tight'].sum()):,}")
+    if tightness_errors:
+        print(f"Warning: tightness history unavailable for {len(tightness_errors):,} KK leader(s).")
     print("Saved:\n" + "\n".join(map(str, paths)))
 
 

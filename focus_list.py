@@ -157,6 +157,7 @@ def prepare_for_export(frame: pd.DataFrame) -> pd.DataFrame:
         "name", "description", "exchange", "industry", "underlying", "paired_etf", "instrument_type", "close", "SMA30", "SMA50", "ADRP", "ATRP",
         "average_volume_10d_calc", "average_volume_30d_calc", "dollar_volume_30d", "average_dollar_volume_30d",
         "EMA9", "EMA9|1W", "EMA9|1M", "above_ema9d", "above_ema9w", "above_ema9m",
+        "is_tight",
         "Perf.W", "perf_1w_rank", "Perf.1M", "perf_1m_rank", "Perf.3M", "perf_3m_rank", "Perf.6M", "perf_6m_rank", "Perf.Y", "perf_1y_rank",
         "momentum_score", "atr_extension_from_50d", "is_top_1w", "is_top_1m", "is_top_3m", "is_top_6m", "is_top_1y",
         "is_tight_nel", "coil_setup", "close_above_ema9", "close_spread_3d_pct", "close_spread_5d_pct",
