@@ -54,6 +54,9 @@ def build():
                 'price': number(row.get('close')), 'adr': number(row.get('ADRP')),
                 'extension': number(row.get('atr_extension_from_50d')),
                 'dollarVolume': number(row.get('average_dollar_volume_30d')),
+                'above9d': row.get('above_ema9d', '').lower() == 'true',
+                'above9w': row.get('above_ema9w', '').lower() == 'true',
+                'above9m': row.get('above_ema9m', '').lower() == 'true',
                 'performance': {frame: number(row.get(column)) for frame, column in PERF.items()},
                 'leaders': [frame for frame in ('1m', '3m', '6m') if row.get(f'is_top_{frame}', '').lower() == 'true'],
             })

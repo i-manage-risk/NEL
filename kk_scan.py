@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from focus_list import SCAN_COLUMNS, _assign_exact_top_flags, _require_columns, fetch_universe, prepare_for_export
+from focus_list import SCAN_COLUMNS, _assign_exact_top_flags, _require_columns, prepare_for_export
 
 
 @dataclass(frozen=True)
@@ -28,10 +28,29 @@ class KKSettings:
 
 
 METRICS = ("Perf.1M", "Perf.3M", "Perf.6M")
+EMA_COLUMNS = ("EMA9", "EMA9|1W", "EMA9|1M")
+KK_SCAN_COLUMNS = [*SCAN_COLUMNS, *EMA_COLUMNS]
 NUMERIC = (
     "close", "SMA30", "SMA50", "ADRP", "ATRP", "Perf.1M", "Perf.3M",
     "Perf.6M", "average_volume_10d_calc", "average_volume_30d_calc",
 )
+
+
+def fetch_kk_universe() -> pd.DataFrame:
+    """Fetch the broad stock universe plus the three trend references."""
+    try:
+        from tradingview_screener import Query, col
+    except ImportError as error:
+        raise SystemExit("Missing dependency. Run: pip install -r requirements.txt") from error
+    query = (
+        Query().set_markets("america").select(*KK_SCAN_COLUMNS).where(
+            col("type") == "stock",
+            col("exchange").isin(["NASDAQ", "NYSE", "AMEX"]),
+            col("average_volume_10d_calc") > 0,
+        ).limit(5_000)
+    )
+    _, frame = query.get_scanner_data()
+    return frame
 
 
 def calculate_kk(raw: pd.DataFrame, settings: KKSettings) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -40,11 +59,18 @@ def calculate_kk(raw: pd.DataFrame, settings: KKSettings) -> tuple[pd.DataFrame,
     frame = raw.copy()
     for column in NUMERIC:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    for column in EMA_COLUMNS:
+        if column not in frame:
+            frame[column] = pd.NA
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame["dollar_volume_30d"] = frame["close"] * frame["average_volume_30d_calc"]
     frame["average_dollar_volume_30d"] = frame["SMA30"] * frame["average_volume_30d_calc"]
     frame["atr_extension_from_50d"] = (frame["close"] - frame["SMA50"]) / (
         frame["SMA50"] * (frame["ATRP"] / 100)
     )
+    frame["above_ema9d"] = frame["close"] > frame["EMA9"]
+    frame["above_ema9w"] = frame["close"] > frame["EMA9|1W"]
+    frame["above_ema9m"] = frame["close"] > frame["EMA9|1M"]
 
     valid_metrics = (frame[["close", "SMA30", "SMA50", "ATRP"]] > 0).all(axis=1)
     has_performance = frame[list(METRICS)].notna().all(axis=1)
@@ -105,7 +131,7 @@ def main() -> None:
     if not 0 < args.top_pct <= 1:
         raise SystemExit("--top-pct must be greater than 0 and no more than 1.")
     settings = KKSettings(top_pct=args.top_pct)
-    universe, leaders = calculate_kk(fetch_universe(), settings)
+    universe, leaders = calculate_kk(fetch_kk_universe(), settings)
     paths = write_outputs(universe, leaders, settings, args.output_dir, args.snapshot_date)
     print(f"KK liquidity universe: {len(universe):,} | top {settings.top_pct:.0%} union: {len(leaders):,}")
     print("Saved:\n" + "\n".join(map(str, paths)))

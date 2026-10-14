@@ -33,3 +33,13 @@ class KKScanTests(unittest.TestCase):
         self.assertEqual(list(leaders.name), ['EXTENDED'])
         self.assertGreater(leaders.iloc[0].atr_extension_from_50d, 4)
 
+    def test_ema_trend_states_are_retained_for_post_selection_filters(self):
+        raw = pd.DataFrame([row('TREND', 99, 99, 99)])
+        raw['EMA9'] = 90
+        raw['EMA9|1W'] = 110
+        raw['EMA9|1M'] = 95
+        _, leaders = calculate_kk(raw, KKSettings(top_pct=1))
+        result = leaders.iloc[0]
+        self.assertTrue(result.above_ema9d)
+        self.assertFalse(result.above_ema9w)
+        self.assertTrue(result.above_ema9m)
