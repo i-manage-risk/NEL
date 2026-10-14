@@ -12,8 +12,8 @@ const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y'
 const titles = {briefing:'Now',environment:'Market pulse',leadership:'Capital flow',positioning:'Crowding',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
-let filters={kind:'liquid',set:'nel',search:'',group:'',adr:0,volume:0,extension:4,pinned:false};
-let overrides=store.get('themes',{}), pins=store.get('pins',[]), selected=null;
+let filters={search:'',group:'',adr:5,extension:4};
+let overrides=store.get('themes',{}), selected=null;
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
 const breadthRows = () => breadth.filter(r=>r.date<=asof()).sort((a,b)=>b.date.localeCompare(a.date));
@@ -26,7 +26,7 @@ const isMapped = row => {
   const p=overrides[row.symbol] || db.profiles?.[row.symbol];
   return p && (!p.effective || p.effective<=session().date);
 };
-const stocks = (kind='liquid') => (session()?.stocks||[]).filter(r=>r.kind===kind);
+const stocks = (kind='liquid') => kind==='kk' ? (session()?.kk||[]) : (session()?.stocks||[]).filter(r=>r.kind===kind);
 const leaders = (kind='liquid') => stocks(kind).filter(r=>r.leaders.includes(frame));
 const isNEL = r => finite(r.extension) && r.extension<=4;
 const button = (label,action,cls='') => '<button class="'+cls+'" data-action="'+action+'">'+label+'</button>';
@@ -47,7 +47,7 @@ function marketRead(row){
 }
 function stockTable(rows,compact=false){
   if(!rows.length)return '<p class="empty">No candidates match this window and filter combination.</p>';
-  return '<div class="table-box"><table><thead><tr><th>Stock / theme</th><th class="num">'+frames[frame]+'</th><th class="num">Extension</th>'+(!compact?'<th class="num">ADR</th><th class="num">Avg $ vol</th><th>Structure</th>':'')+'<th>Watch</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="'+r.kind+'">'+escapeHTML(r.symbol)+(r.pair?' / '+escapeHTML(r.pair):'')+'</button><small>'+escapeHTML(tag(r))+(isMapped(r)?' · custom':' · vendor')+'</small></td><td class="num">'+pct(r.performance[frame])+'</td><td class="num">'+fmt(r.extension,2)+'×</td>'+(!compact?'<td class="num">'+pct(r.adr)+'</td><td class="num">'+money(r.dollarVolume)+'</td><td>'+(r.tight?'<span class="positive">Tight</span>':'Review chart')+'</td>':'')+'<td><button data-pin="'+escapeHTML(r.symbol)+'" aria-label="Toggle watch '+escapeHTML(r.symbol)+'">'+(pins.includes(r.symbol)?'★':'☆')+'</button></td></tr>').join('')+'</tbody></table></div>';
+  return '<div class="table-box"><table><thead><tr><th>Stock / theme</th><th class="num">'+frames[frame]+'</th><th class="num">Extension</th>'+(!compact?'<th class="num">ADR</th><th class="num">Avg $ vol</th><th>Structure</th>':'')+'</tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="'+r.kind+'">'+escapeHTML(r.symbol)+(r.pair?' / '+escapeHTML(r.pair):'')+'</button><small>'+escapeHTML(tag(r))+(isMapped(r)?' · custom':' · vendor')+'</small></td><td class="num">'+pct(r.performance[frame])+'</td><td class="num">'+fmt(r.extension,2)+'×</td>'+(!compact?'<td class="num">'+pct(r.adr)+'</td><td class="num">'+money(r.dollarVolume)+'</td><td>'+(r.tight?'<span class="positive">Tight</span>':'Review chart')+'</td>':'')+'</tr>').join('')+'</tbody></table></div>';
 }
 function orderedCandidates(){return leaders().filter(isNEL).sort((a,b)=>Number(b.tight)-Number(a.tight)||(b.performance[frame]??-Infinity)-(a.performance[frame]??-Infinity));}
 function changeSummary(){
@@ -88,16 +88,19 @@ function cotSpark(m){
   const points=history.map((r,i)=>(10+i*480/Math.max(1,history.length-1))+','+(110-r.participants.large.index)).join(' ');
   return '<svg class="sparkline" viewBox="0 0 500 130" role="img" aria-label="Large speculator COT index, up to 52 reports"><path d="M10 15H490 M10 105H490" stroke="#565144" stroke-dasharray="4 4"/><polyline points="'+points+'" fill="none" stroke="#86d65d" stroke-width="2"/><text x="10" y="128" fill="#aaa89f" font-size="10">'+(history[0]?.date||'')+'</text><text x="420" y="128" fill="#aaa89f" font-size="10">'+(history.at(-1)?.date||'')+'</text></svg>';
 }
-function filteredStocks(){
-  return stocks(filters.kind).filter(r=>{
-    const setMatch=filters.set==='all'||(r.leaders.includes(frame)&&(filters.set==='leaders'||(isNEL(r)&&(filters.set!=='tight'||r.tight))));
-    return setMatch && (!filters.search || (r.symbol+' '+r.description+' '+tag(r)).toLowerCase().includes(filters.search.toLowerCase())) && (!filters.group||tag(r)===filters.group) && finite(r.adr)&&r.adr>=Number(filters.adr)&&finite(r.dollarVolume)&&r.dollarVolume>=Number(filters.volume)*1e6 && (filters.extension==='' || (finite(r.extension)&&r.extension<=Number(filters.extension)))&&(!filters.pinned||pins.includes(r.symbol));
-  }).sort((a,b)=>(b.performance[frame]??-Infinity)-(a.performance[frame]??-Infinity)||a.symbol.localeCompare(b.symbol));
+function filteredKKStocks(){
+  return stocks('kk').filter(r=>
+    (!filters.search || (r.symbol+' '+r.description+' '+tag(r)).toLowerCase().includes(filters.search.toLowerCase())) &&
+    (!filters.group||tag(r)===filters.group) &&
+    finite(r.adr) && r.adr>=Number(filters.adr) &&
+    (filters.extension==='' || (finite(r.extension)&&r.extension<Number(filters.extension)))
+  ).sort((a,b)=>Math.max(b.performance['1m']??-Infinity,b.performance['3m']??-Infinity,b.performance['6m']??-Infinity)-Math.max(a.performance['1m']??-Infinity,a.performance['3m']??-Infinity,a.performance['6m']??-Infinity)||a.symbol.localeCompare(b.symbol));
 }
 function selectFilter(key,label,options){return '<label>'+label+'<select data-filter="'+key+'">'+options.map(([v,t])=>'<option value="'+escapeHTML(v)+'" '+(filters[key]===v?'selected':'')+'>'+escapeHTML(t)+'</option>').join('')+'</select></label>';}
 function screener(){
-  const rows=filteredStocks(), groups=[...new Set(stocks(filters.kind).map(tag))].sort();
-  return '<div class="toolbar">'+frameControls()+'<span class="push"></span>'+button('Save screen','save-screen')+button('Load screen','load-screen')+button('Copy symbols','copy')+button('Export symbols','export','primary')+'</div><div class="filters">'+selectFilter('kind','Universe',[['liquid','Liquid stocks'],['super','Super Liquid']])+selectFilter('set','Candidate set',[['nel','Non-extended leaders'],['tight','Tight NEL'],['leaders','All leaders'],['all','All scanned eligible stocks']])+'<label>Search<input data-filter="search" placeholder="Ticker or theme" value="'+escapeHTML(filters.search)+'"></label>'+selectFilter('group','Theme / industry',[['','All groups'],...groups.map(g=>[g,g])])+'<label>Minimum ADR %<input data-filter="adr" type="number" min="0" step=".1" value="'+filters.adr+'"></label><label>Minimum avg $ vol · M<input data-filter="volume" type="number" min="0" value="'+filters.volume+'"></label><label>Maximum extension ×<input data-filter="extension" type="number" step=".1" value="'+filters.extension+'" placeholder="No limit"></label><label class="check"><input data-filter="pinned" type="checkbox" '+(filters.pinned?'checked':'')+'>My watchlist only</label></div><div class="card-head"><h2>'+rows.length+' candidates</h2><span class="note">Click a stock for evidence, chart link and theme editing</span></div>'+stockTable(rows)+'<p class="note">Filters apply within the stored eligible scan universe. They cannot recover stocks excluded by the original liquidity / ADR scan. “All leaders” defaults to no extension limit. Super Liquid metrics refer to the underlying; the paired 2× ETF is a separate instrument.</p>';
+  const rows=filteredKKStocks(), groups=[...new Set(stocks('kk').map(tag))].sort();
+  const table=rows.length ? '<div class="table-box kk-table"><table><thead><tr><th>Stock / theme</th><th class="num">1M%</th><th class="num">3M%</th><th class="num">6M%</th><th class="num">Extension</th><th class="num">Avg $ Vol</th><th class="num">ADR%</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="kk">'+escapeHTML(r.symbol)+'</button><small>'+escapeHTML(tag(r))+(isMapped(r)?' · custom':' · vendor')+'</small></td><td class="num">'+pct(r.performance['1m'])+'</td><td class="num">'+pct(r.performance['3m'])+'</td><td class="num">'+pct(r.performance['6m'])+'</td><td class="num">'+fmt(r.extension,2)+'×</td><td class="num">'+money(r.dollarVolume)+'</td><td class="num">'+pct(r.adr)+'</td></tr>').join('')+'</tbody></table></div>' : '<p class="empty">No KK leaders match these speed and extension settings.</p>';
+  return '<section class="hero"><span class="eyebrow">KK SCAN · LIQUID LEADERS</span><h2>Strength first. Speed and extension second.</h2><p>The universe is built from stocks with at least $30M average 30-day dollar volume and 350K average 10-day shares. KK then takes the exact top 2% in each of 1M, 3M and 6M performance, combines them, and removes duplicates.</p></section><div class="toolbar"><span class="note"><b>'+rows.length+'</b> of '+stocks('kk').length+' KK Liquid Leaders shown</span><span class="push"></span>'+button('Export current symbols','export-kk','primary')+'</div><div class="filters"><label>Search<input data-filter="search" placeholder="Ticker or theme" value="'+escapeHTML(filters.search)+'"></label>'+selectFilter('group','Theme / industry',[['','All themes / industries'],...groups.map(g=>[g,g])])+'<label>Minimum ADR %<input data-filter="adr" type="number" min="0" step=".1" value="'+filters.adr+'"></label><label>Maximum extension ×<input data-filter="extension" type="number" step=".1" value="'+filters.extension+'" placeholder="No limit"></label></div>'+table+'<p class="note">ADR and extension only filter this already-selected leader list. They do not determine who qualifies as a KK Liquid Leader. Click a stock for its evidence and chart.</p>';
 }
 function median(values){const clean=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!clean.length)return null;const mid=Math.floor(clean.length/2);return clean.length%2?clean[mid]:(clean[mid-1]+clean[mid])/2;}
 function etfPair(payload){const available=(payload.snapshots||[]).filter(s=>s.date<=asof());return {current:available.at(-1),previous:available.at(-2)};}
@@ -151,19 +154,15 @@ document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group]');if(!node)return;
  if(node.dataset.frame){frame=node.dataset.frame;render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
- if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;filters.set='leaders';filters.extension='';location.hash='screener';}
+ if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
- if(node.dataset.pin){pins=pins.includes(node.dataset.pin)?pins.filter(x=>x!==node.dataset.pin):[...pins,node.dataset.pin];store.set('pins',pins);render();}
  const action=node.dataset.action;
- if(action==='save-screen'){if(store.set('screen',{filters,frame}))node.textContent='Saved';}
- if(action==='load-screen'){const saved=store.get('screen',null);if(saved){filters={...filters,...saved.filters};frame=saved.frame;render();}else node.textContent='No saved screen';}
- if(action==='export')download('nel-screen-'+session().date+'.csv','symbol\n'+[...new Set(filteredStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
- if(action==='copy'){try{await navigator.clipboard.writeText([...new Set(filteredStocks().map(r=>r.symbol))].join(', '));node.textContent='Copied';}catch{node.textContent='Use Export';}}
+ if(action==='export-kk')download('kk-liquid-leaders-'+session().date+'.csv','symbol\n'+[...new Set(filteredKKStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
  if(action==='save-theme'&&selected){overrides[selected.symbol]={theme:$('#theme-edit').value,effective:session().date,source:'Local owner review'};if(store.set('themes',overrides)){$('#stock-dialog').close();render();}}
  if(node.classList.contains('dialog-close'))$('#stock-dialog').close();
 });
 document.addEventListener('change',event=>{
- const key=event.target.dataset.filter;if(key){filters[key]=key==='pinned'?event.target.checked:event.target.value;if(key==='set')filters.extension=['all','leaders'].includes(filters.set)?'':4;render();}
+ const key=event.target.dataset.filter;if(key){filters[key]=event.target.value;render();}
 });
 window.addEventListener('hashchange',()=>{if(session())render();});
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}

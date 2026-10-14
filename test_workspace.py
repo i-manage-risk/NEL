@@ -14,6 +14,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_all_scans_preserved_in_workspace(self):
         payload=json.loads(Path('outputs/workspace.json').read_text())
         expected={p.stem.replace('filtered_universe_', '') for p in Path('outputs').glob('filtered_universe_*.csv')}
+        expected|={p.stem.replace('kk_liquid_leaders_', '') for p in Path('outputs').glob('kk_liquid_leaders_*.csv')}
         self.assertEqual({s['date'] for s in payload['snapshots']},expected)
         self.assertTrue(all(s['closeDate'] < s['date'] for s in payload['snapshots']))
 
