@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-10-12",
+  "as_of": "2026-10-19",
   "funds": {
     "AIQ": [
       {
@@ -2293,52 +2293,52 @@
       {
         "name": "Shopify Inc Registered Shs -A- Subord Vtg",
         "symbol": "SHOP",
-        "weight": 0.1058933
-      },
-      {
-        "name": "Charles Schwab Corp",
-        "symbol": "SCHW",
-        "weight": 0.0869835
-      },
-      {
-        "name": "Uber Technologies Inc",
-        "symbol": "UBER",
-        "weight": 0.0860902
+        "weight": 0.0969989
       },
       {
         "name": "NetEase Inc ADR",
         "symbol": "NTES",
-        "weight": 0.073288396
+        "weight": 0.08720741
       },
       {
-        "name": "DoorDash Inc Ordinary Shares - Class A",
-        "symbol": "DASH",
-        "weight": 0.0660857
+        "name": "Uber Technologies Inc",
+        "symbol": "UBER",
+        "weight": 0.080949806
       },
       {
         "name": "Take-Two Interactive Software Inc",
         "symbol": "TTWO",
-        "weight": 0.0648546
-      },
-      {
-        "name": "Airbnb Inc Ordinary Shares - Class A",
-        "symbol": "ABNB",
-        "weight": 0.0618468
-      },
-      {
-        "name": "CME Group Inc Class A",
-        "symbol": "CME",
-        "weight": 0.0456653
-      },
-      {
-        "name": "Robinhood Markets Inc Class A",
-        "symbol": "HOOD",
-        "weight": 0.0409073
+        "weight": 0.0800325
       },
       {
         "name": "Roblox Corp Ordinary Shares - Class A",
         "symbol": "RBLX",
-        "weight": 0.039135
+        "weight": 0.0770798
+      },
+      {
+        "name": "Charles Schwab Corp",
+        "symbol": "SCHW",
+        "weight": 0.076268
+      },
+      {
+        "name": "DoorDash Inc Ordinary Shares - Class A",
+        "symbol": "DASH",
+        "weight": 0.0442652
+      },
+      {
+        "name": "CME Group Inc Class A",
+        "symbol": "CME",
+        "weight": 0.0437367
+      },
+      {
+        "name": "Airbnb Inc Ordinary Shares - Class A",
+        "symbol": "ABNB",
+        "weight": 0.0431797
+      },
+      {
+        "name": "Robinhood Markets Inc Class A",
+        "symbol": "HOOD",
+        "weight": 0.041940298
       }
     ],
     "GLD": [],
@@ -4097,52 +4097,52 @@
       {
         "name": "United Bankshares Inc",
         "symbol": "UBSI",
-        "weight": 0.011463701
+        "weight": 0.011446
       },
       {
         "name": "First Interstate BancSystem Inc",
         "symbol": "FIBK",
-        "weight": 0.011360001
+        "weight": 0.011342401
       },
       {
         "name": "Old National Bancorp",
         "symbol": "ONB",
-        "weight": 0.0113492
+        "weight": 0.0113317
       },
       {
         "name": "Hancock Whitney Corp",
         "symbol": "HWC",
-        "weight": 0.0113273
+        "weight": 0.0113098
       },
       {
         "name": "East West Bancorp Inc",
         "symbol": "EWBC",
-        "weight": 0.0113052
+        "weight": 0.0112877
       },
       {
         "name": "Eastern Bankshares Inc Ordinary Shares",
         "symbol": "EBC",
-        "weight": 0.011282999
+        "weight": 0.0112656
       },
       {
         "name": "Fulton Financial Corp",
         "symbol": "FULT",
-        "weight": 0.0112784
+        "weight": 0.011260999
       },
       {
         "name": "First Hawaiian Inc",
         "symbol": "FHB",
-        "weight": 0.0112509
+        "weight": 0.0112335
       },
       {
         "name": "Atlantic Union Bankshares Corp",
         "symbol": "AUB",
-        "weight": 0.011232801
+        "weight": 0.0112154
       },
       {
         "name": "Columbia Banking System Inc",
         "symbol": "COLB",
-        "weight": 0.011217199
+        "weight": 0.011199799
       }
     ],
     "KURE": [
@@ -5251,7 +5251,7 @@
       {
         "name": "Starbucks Corp",
         "symbol": "SBUX",
-        "weight": 0.0477751
+        "weight": 0.047775
       },
       {
         "name": "Monster Beverage Corp",
@@ -6939,52 +6939,52 @@
       {
         "name": "Rocket Lab Corp",
         "symbol": "RKLB",
-        "weight": 0.0333062
+        "weight": 0.033314098
       },
       {
         "name": "Moog Inc Class A",
         "symbol": "MOG-A",
-        "weight": 0.0312919
+        "weight": 0.0312993
       },
       {
         "name": "Honeywell Aerospace Inc",
         "symbol": "HONA",
-        "weight": 0.030820899
+        "weight": 0.0308282
       },
       {
         "name": "AeroVironment Inc",
         "symbol": "AVAV",
-        "weight": 0.0299189
+        "weight": 0.029926
       },
       {
         "name": "Woodward Inc",
         "symbol": "WWD",
-        "weight": 0.029337
+        "weight": 0.029343901
       },
       {
         "name": "Howmet Aerospace Inc",
         "symbol": "HWM",
-        "weight": 0.0293122
+        "weight": 0.0293191
       },
       {
         "name": "Lockheed Martin Corp",
         "symbol": "LMT",
-        "weight": 0.0292723
+        "weight": 0.0292792
       },
       {
         "name": "Heico Corp",
         "symbol": "HEI",
-        "weight": 0.029264601
+        "weight": 0.0292715
       },
       {
         "name": "Curtiss-Wright Corp",
         "symbol": "CW",
-        "weight": 0.0289991
+        "weight": 0.029005999
       },
       {
         "name": "TransDigm Group Inc",
         "symbol": "TDG",
-        "weight": 0.0289933
+        "weight": 0.029000102
       }
     ],
     "XBI": [
@@ -7870,52 +7870,52 @@
       {
         "name": "PBF Energy Inc Class A",
         "symbol": "PBF",
-        "weight": 0.0288295
+        "weight": 0.0288797
       },
       {
         "name": "Valero Energy Corp",
         "symbol": "VLO",
-        "weight": 0.0285595
+        "weight": 0.0286092
       },
       {
         "name": "HF Sinclair Corp",
         "symbol": "DINO",
-        "weight": 0.0284411
+        "weight": 0.028490601
       },
       {
         "name": "ExxonMobil Holdings Corp",
         "symbol": "XOM",
-        "weight": 0.028401202
+        "weight": 0.0284506
       },
       {
         "name": "Marathon Petroleum Corp",
         "symbol": "MPC",
-        "weight": 0.028369999
+        "weight": 0.0284194
       },
       {
         "name": "Par Pacific Holdings Inc",
         "symbol": "PARR",
-        "weight": 0.0281386
+        "weight": 0.028187599
       },
       {
         "name": "Phillips 66",
         "symbol": "PSX",
-        "weight": 0.0280596
+        "weight": 0.0281084
       },
       {
         "name": "Murphy Oil Corp",
         "symbol": "MUR",
-        "weight": 0.027587099
+        "weight": 0.0276351
       },
       {
         "name": "Chevron Corp",
         "symbol": "CVX",
-        "weight": 0.0273735
+        "weight": 0.0274212
       },
       {
         "name": "Delek US Holdings Inc Registered Shs Stock Settlement",
         "symbol": "DK",
-        "weight": 0.027171299
+        "weight": 0.027218599
       }
     ],
     "XPH": [
@@ -8131,52 +8131,52 @@
       {
         "name": "Bandwidth Inc Class A",
         "symbol": "BAND",
-        "weight": 0.0377983
+        "weight": 0.037802
       },
       {
         "name": "Digi International Inc",
         "symbol": "DGII",
-        "weight": 0.0336312
+        "weight": 0.0336346
       },
       {
         "name": "Ubiquiti Inc",
         "symbol": "UI",
-        "weight": 0.0331434
+        "weight": 0.0331467
       },
       {
         "name": "NetScout Systems Inc",
         "symbol": "NTCT",
-        "weight": 0.0327491
+        "weight": 0.0327524
       },
       {
         "name": "Viavi Solutions Inc",
         "symbol": "VIAV",
-        "weight": 0.0325278
+        "weight": 0.032531
       },
       {
         "name": "Arista Networks Inc",
         "symbol": "ANET",
-        "weight": 0.0320815
+        "weight": 0.0320846
       },
       {
         "name": "Ciena Corp",
         "symbol": "CIEN",
-        "weight": 0.0316451
+        "weight": 0.0316483
       },
       {
         "name": "Space Exploration Technologies Corp Class A",
         "symbol": "SPCX",
-        "weight": 0.0310838
+        "weight": 0.0310869
       },
       {
         "name": "Iridium Communications Inc",
         "symbol": "IRDM",
-        "weight": 0.0309444
+        "weight": 0.030947499
       },
       {
         "name": "Globalstar Inc",
         "symbol": "GSAT",
-        "weight": 0.0308522
+        "weight": 0.0308553
       }
     ],
     "XTN": [
