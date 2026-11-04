@@ -13,7 +13,7 @@ const titles = {briefing:'Now',environment:'Market pulse',leadership:'Capital fl
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let filters={search:'',group:'',adr:5,extension:4,above9d:false,above9w:false,above9m:false,liquid:false,superLiquid:false,tight:false};
-let overrides=store.get('themes',{}), selected=null;
+let overrides=store.get('themes',{}), selected=null, screenerView='kk';
 let kkSort={key:'strength',direction:'desc'};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
@@ -27,7 +27,7 @@ const isMapped = row => {
   const p=overrides[row.symbol] || db.profiles?.[row.symbol];
   return p && (!p.effective || p.effective<=session().date);
 };
-const stocks = (kind='liquid') => kind==='kk' ? (session()?.kk||[]) : (session()?.stocks||[]).filter(r=>r.kind===kind);
+const stocks = (kind='liquid') => kind==='kk' ? (session()?.kk||[]) : kind==='obc' ? (session()?.obc||[]) : (session()?.stocks||[]).filter(r=>r.kind===kind);
 const leaders = (kind='liquid') => stocks(kind).filter(r=>r.leaders.includes(frame));
 const isNEL = r => finite(r.extension) && r.extension<=4;
 const button = (label,action,cls='') => '<button class="'+cls+'" data-action="'+action+'">'+label+'</button>';
@@ -128,11 +128,18 @@ function extensionTone(value){return value>8?'purple':value>4?'orange':value>0?'
 function adrTone(value){return value>5?'positive':value<5?'negative':'';}
 function volumeTone(value){return value>500e6?'blue':value<500e6?'orange':'';}
 function trendLabel(above){return '<span class="'+(above?'positive':'negative')+'">'+(above?'Above':'Below')+'</span>';}
-function screener(){
+function kkScreener(){
   const rows=filteredKKStocks(), groups=[...new Set(stocks('kk').map(tag))].sort();
   const table=rows.length ? '<div class="table-box kk-table"><table><thead><tr>'+kkSortHeader('Stock','stock')+kkSortHeader('Theme','theme')+kkSortHeader('1M%','1m','num')+kkSortHeader('3M%','3m','num')+kkSortHeader('6M%','6m','num')+kkSortHeader('Extension','extension','num')+kkSortHeader('Avg $ Vol','dollarVolume','num')+kkSortHeader('ADR%','adr','num')+kkSortHeader('9D','above9d','num')+kkSortHeader('9W','above9w','num')+kkSortHeader('9M','above9m','num')+'</tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="kk">'+escapeHTML(r.symbol)+'</button></td><td>'+escapeHTML(tag(r))+(isMapped(r)?'<small>Custom</small>':'')+'</td><td class="num '+returnTone(r.performance['1m'])+'">'+pct(r.performance['1m'])+'</td><td class="num '+returnTone(r.performance['3m'])+'">'+pct(r.performance['3m'])+'</td><td class="num '+returnTone(r.performance['6m'])+'">'+pct(r.performance['6m'])+'</td><td class="num '+extensionTone(r.extension)+'">'+fmt(r.extension,2)+'×</td><td class="num '+volumeTone(r.dollarVolume)+'">'+money(r.dollarVolume)+'</td><td class="num '+adrTone(r.adr)+'">'+pct(r.adr)+'</td><td class="num">'+trendLabel(r.above9d)+'</td><td class="num">'+trendLabel(r.above9w)+'</td><td class="num">'+trendLabel(r.above9m)+'</td></tr>').join('')+'</tbody></table></div>' : '<p class="empty">No KK leaders match these speed and extension settings.</p>';
   return '<section class="hero"><span class="eyebrow">KK SCAN · LIQUID LEADERS</span><h2>Strength first. Speed and extension second.</h2><p>The universe is built from stocks with at least $30M average 30-day dollar volume and 350K average 10-day shares. KK then takes the exact top 2% in each of 1M, 3M and 6M performance, combines them, and removes duplicates.</p></section><div class="toolbar"><span class="note"><b>'+rows.length+'</b> of '+stocks('kk').length+' KK Liquid Leaders shown</span><span class="push"></span>'+button('Export current symbols','export-kk','primary')+'</div><div class="filters kk-filters"><label>Search<input data-filter="search" placeholder="Ticker or theme" value="'+escapeHTML(filters.search)+'"></label>'+selectFilter('group','Theme / industry',[['','All themes / industries'],...groups.map(g=>[g,g])])+'<label>Minimum ADR %<input data-filter="adr" type="number" min="0" step=".1" value="'+filters.adr+'"></label><label>Maximum extension ×<input data-filter="extension" type="number" step=".1" value="'+filters.extension+'" placeholder="No limit"></label><div class="filter-toggle-row"><span class="horizon-label">Trend & structure</span><div class="segments">'+kkToggle('> 9D EMA','above9d')+kkToggle('> 9W EMA','above9w')+kkToggle('> 9M EMA','above9m')+kkToggle('Liquid · $100M+ / 1M shares+','liquid')+kkToggle('Superliquid · $500M+','superLiquid')+kkToggle('Tight','tight')+'</div></div></div>'+table+'<p class="note">ADR, extension and trend filters only filter this already-selected leader list. They do not determine who qualifies as a KK Liquid Leader. Click a stock for its evidence and chart.</p>';
 }
+function screenerTabs(){return '<div class="toolbar screener-tabs"><span class="horizon-label">Screen</span><div class="segments"><button data-action="select-screen" data-screen="kk" class="'+(screenerView==='kk'?'active':'')+'">KK · Liquid Leaders</button><button data-action="select-screen" data-screen="obc" class="'+(screenerView==='obc'?'active':'')+'">OBC · Oversold Bounces</button></div></div>';}
+function obcScreener(){
+  const rows=[...stocks('obc')].sort((a,b)=>(a.performance['3m']??Infinity)-(b.performance['3m']??Infinity)|| (b.performance['1y']??-Infinity)-(a.performance['1y']??-Infinity));
+  const table=rows.length?'<div class="table-box"><table><thead><tr><th>Stock</th><th>Theme</th><th class="num">1Y%</th><th class="num">3M%</th><th class="num">Extension</th><th class="num">Avg $ Vol</th><th class="num">ADR%</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="obc">'+escapeHTML(r.symbol)+'</button></td><td>'+escapeHTML(tag(r))+(isMapped(r)?'<small>Custom</small>':'')+'</td><td class="num '+returnTone(r.performance['1y'])+'">'+pct(r.performance['1y'])+'</td><td class="num '+returnTone(r.performance['3m'])+'">'+pct(r.performance['3m'])+'</td><td class="num '+extensionTone(r.extension)+'">'+fmt(r.extension,2)+'×</td><td class="num '+volumeTone(r.dollarVolume)+'">'+money(r.dollarVolume)+'</td><td class="num '+adrTone(r.adr)+'">'+pct(r.adr)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="empty">No OBC snapshot is available yet. The next after-close scan will build it.</p>';
+  return '<section class="hero"><span class="eyebrow">OBC SCAN · OVERSOLD BOUNCE CANDIDATES</span><h2>Proven leaders on a meaningful pullback.</h2><p>Starts with a separate liquid US-stock universe: average 30-day dollar volume above $30M and average 10-day shares above 350K. From there, it takes the top 10% over the trailing 1 year, then selects the weakest 25% of those leaders over 3 months.</p></section><div class="toolbar"><span class="note"><b>'+rows.length+'</b> OBC candidates · sorted by weakest 3M performance first</span><span class="push"></span>'+button('Export OBC symbols','export-obc','primary')+'</div>'+table+'<p class="note">OBC identifies a pullback inside established one-year leadership. It is a research list—not an entry signal. Review structure, support and catalyst risk on the chart.</p>';
+}
+function screener(){return screenerTabs()+(screenerView==='kk'?kkScreener():obcScreener());}
 function median(values){const clean=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!clean.length)return null;const mid=Math.floor(clean.length/2);return clean.length%2?clean[mid]:(clean[mid-1]+clean[mid])/2;}
 function etfPair(payload){const available=(payload.snapshots||[]).filter(s=>s.date<=asof());return {current:available.at(-1),previous:available.at(-2)};}
 function groupTape(snapshot){
@@ -188,9 +195,11 @@ document.addEventListener('click',async event=>{
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
  const action=node.dataset.action;
+ if(action==='select-screen'){screenerView=node.dataset.screen;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
  if(action==='kk-toggle'){const key=node.dataset.toggle;filters[key]=!filters[key];render();return;}
  if(action==='export-kk')download('kk-liquid-leaders-'+session().date+'.csv','symbol\n'+[...new Set(filteredKKStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
+ if(action==='export-obc')download('obc-candidates-'+session().date+'.csv','symbol\n'+[...new Set(stocks('obc').map(r=>r.symbol))].join('\n')+'\n','text/csv');
  if(action==='save-theme'&&selected){overrides[selected.symbol]={theme:$('#theme-edit').value,effective:session().date,source:'Local owner review'};if(store.set('themes',overrides)){$('#stock-dialog').close();render();}}
  if(node.classList.contains('dialog-close'))$('#stock-dialog').close();
 });

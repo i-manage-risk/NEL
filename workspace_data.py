@@ -28,12 +28,13 @@ def build():
     snapshots = []
     stamps = {
         re.search(r'\d{4}-\d{2}-\d{2}', path.name)[0]
-        for pattern in ('filtered_universe_*.csv', 'kk_liquid_leaders_*.csv')
+        for pattern in ('filtered_universe_*.csv', 'kk_liquid_leaders_*.csv', 'obc_candidates_*.csv')
         for path in (ROOT / 'outputs').glob(pattern)
     }
     for stamp in sorted(stamps):
         records = []
         kk_records = []
+        obc_records = []
         for kind, prefix in [('liquid', ''), ('super', 'super_liquid_')]:
             tight = {row['name'] for row in read_csv(ROOT / 'outputs' / f'{prefix}tight_non_extended_leaders_{stamp}.csv')}
             for row in read_csv(ROOT / 'outputs' / f'{prefix}filtered_universe_{stamp}.csv'):
@@ -62,10 +63,21 @@ def build():
                 'performance': {frame: number(row.get(column)) for frame, column in PERF.items()},
                 'leaders': [frame for frame in ('1m', '3m', '6m') if row.get(f'is_top_{frame}', '').lower() == 'true'],
             })
+        for row in read_csv(ROOT / 'outputs' / f'obc_candidates_{stamp}.csv'):
+            obc_records.append({
+                'symbol': row['name'], 'industry': row.get('industry') or 'Unclassified',
+                'description': row.get('description', ''), 'kind': 'obc',
+                'price': number(row.get('close')), 'adr': number(row.get('ADRP')),
+                'extension': number(row.get('atr_extension_from_50d')),
+                'dollarVolume': number(row.get('average_dollar_volume_30d')),
+                'shareVolume': number(row.get('average_volume_10d_calc')),
+                'performance': {frame: number(row.get(column)) for frame, column in PERF.items()},
+                'leaders': ['1y'],
+            })
         close = date.fromisoformat(stamp) - timedelta(days=1)
         while close.weekday() >= 5 or close in nyse_holidays(close.year):
             close -= timedelta(days=1)
-        snapshots.append({'date': stamp, 'closeDate': close.isoformat(), 'stocks': records, 'kk': kk_records})
+        snapshots.append({'date': stamp, 'closeDate': close.isoformat(), 'stocks': records, 'kk': kk_records, 'obc': obc_records})
     profiles = json.loads((ROOT / 'data' / 'theme_overrides.json').read_text())
     definitions_path = ROOT / 'data' / 'stock_groups.txt'
     definitions = definitions_path.read_text() if definitions_path.exists() else ''
