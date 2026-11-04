@@ -13,6 +13,7 @@ const titles = {briefing:'Now',environment:'Market pulse',leadership:'Capital fl
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let filters={search:'',group:'',adr:5,extension:4,above9d:false,above9w:false,above9m:false,liquid:false,superLiquid:false,tight:false};
+let obcFilters={search:'',group:'',adr:'',extension:'',liquid:false,superLiquid:false};
 let overrides=store.get('themes',{}), selected=null, screenerView='kk';
 let kkSort={key:'strength',direction:'desc'};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
@@ -122,6 +123,11 @@ function kkToggle(label,key){return '<button data-action="kk-toggle" data-toggle
 function sharedScreenFilters(groups){
   return '<div class="filters kk-filters"><label>Search<input data-filter="search" placeholder="Ticker or theme" value="'+escapeHTML(filters.search)+'"></label>'+selectFilter('group','Theme / industry',[['','All themes / industries'],...groups.map(g=>[g,g])])+'<label>Minimum ADR %<input data-filter="adr" type="number" min="0" step=".1" value="'+filters.adr+'"></label><label>Maximum extension ×<input data-filter="extension" type="number" step=".1" value="'+filters.extension+'" placeholder="No limit"></label><div class="filter-toggle-row"><span class="horizon-label">Trend & structure</span><div class="segments">'+kkToggle('> 9D EMA','above9d')+kkToggle('> 9W EMA','above9w')+kkToggle('> 9M EMA','above9m')+kkToggle('Liquid · $100M+ / 1M shares+','liquid')+kkToggle('Superliquid · $500M+','superLiquid')+kkToggle('Tight','tight')+'</div></div></div>';
 }
+function obcSelectFilter(key,label,options){return '<label>'+label+'<select data-obc-filter="'+key+'">'+options.map(([v,t])=>'<option value="'+escapeHTML(v)+'" '+(obcFilters[key]===v?'selected':'')+'>'+escapeHTML(t)+'</option>').join('')+'</select></label>';}
+function obcToggle(label,key){return '<button data-action="obc-toggle" data-toggle="'+key+'" class="'+(obcFilters[key]?'active':'')+'">'+label+'</button>';}
+function obcScreenFilters(groups){
+  return '<div class="filters kk-filters"><label>Search<input data-obc-filter="search" placeholder="Ticker or theme" value="'+escapeHTML(obcFilters.search)+'"></label>'+obcSelectFilter('group','Theme / industry',[['','All themes / industries'],...groups.map(g=>[g,g])])+'<label>Minimum ADR %<input data-obc-filter="adr" type="number" min="0" step=".1" value="'+obcFilters.adr+'" placeholder="No minimum"></label><label>Maximum extension ×<input data-obc-filter="extension" type="number" step=".1" value="'+obcFilters.extension+'" placeholder="No maximum"></label><div class="filter-toggle-row"><span class="horizon-label">Liquidity</span><div class="segments">'+obcToggle('Liquid · $100M+ / 1M shares+','liquid')+obcToggle('Superliquid · $500M+','superLiquid')+'</div></div></div>';
+}
 function kkSortHeader(label,key,align=''){
   const active=kkSort.key===key, arrow=active?(kkSort.direction==='asc'?' ↑':' ↓'):'';
   return '<th class="'+align+'"><button type="button" class="sort-header" data-action="kk-sort" data-sort-key="'+key+'" aria-label="Sort by '+label+'">'+label+arrow+'</button></th>';
@@ -139,18 +145,18 @@ function kkScreener(){
 function screenerTabs(){return '<div class="toolbar screener-tabs"><span class="horizon-label">Screen</span><div class="segments"><button data-action="select-screen" data-screen="kk" class="'+(screenerView==='kk'?'active':'')+'">KK · Liquid Leaders</button><button data-action="select-screen" data-screen="obc" class="'+(screenerView==='obc'?'active':'')+'">OBC · Oversold Bounces</button></div></div>';}
 function filteredOBCStocks(){
   return stocks('obc').filter(r=>
-    (!filters.search || (r.symbol+' '+r.description+' '+tag(r)).toLowerCase().includes(filters.search.toLowerCase())) &&
-    (!filters.group || tag(r)===filters.group) && finite(r.adr) && r.adr>=Number(filters.adr) &&
-    (filters.extension==='' || (finite(r.extension)&&r.extension<Number(filters.extension))) &&
-    (!filters.above9d || r.above9d) && (!filters.above9w || r.above9w) && (!filters.above9m || r.above9m) &&
-    (!filters.liquid || (r.dollarVolume>=100e6 && r.shareVolume>=1e6)) &&
-    (!filters.superLiquid || r.dollarVolume>=500e6) && (!filters.tight || r.tight)
+    (!obcFilters.search || (r.symbol+' '+r.description+' '+tag(r)).toLowerCase().includes(obcFilters.search.toLowerCase())) &&
+    (!obcFilters.group || tag(r)===obcFilters.group) &&
+    (obcFilters.adr==='' || (finite(r.adr) && r.adr>=Number(obcFilters.adr))) &&
+    (obcFilters.extension==='' || (finite(r.extension)&&r.extension<Number(obcFilters.extension))) &&
+    (!obcFilters.liquid || (r.dollarVolume>=100e6 && r.shareVolume>=1e6)) &&
+    (!obcFilters.superLiquid || r.dollarVolume>=500e6)
   ).sort((a,b)=>(a.performance['3m']??Infinity)-(b.performance['3m']??Infinity)|| (b.performance['1y']??-Infinity)-(a.performance['1y']??-Infinity));
 }
 function obcScreener(){
   const all=stocks('obc'), groups=[...new Set(all.map(tag))].sort(), rows=filteredOBCStocks();
-  const table=rows.length?'<div class="table-box kk-table"><table><thead><tr><th>Stock</th><th>Theme</th><th class="num">1Y%</th><th class="num">3M%</th><th class="num">Extension</th><th class="num">Avg $ Vol</th><th class="num">ADR%</th><th class="num">9D</th><th class="num">9W</th><th class="num">9M</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="obc">'+escapeHTML(r.symbol)+'</button></td><td>'+escapeHTML(tag(r))+(isMapped(r)?'<small>Custom</small>':'')+'</td><td class="num '+returnTone(r.performance['1y'])+'">'+pct(r.performance['1y'])+'</td><td class="num '+returnTone(r.performance['3m'])+'">'+pct(r.performance['3m'])+'</td><td class="num '+extensionTone(r.extension)+'">'+fmt(r.extension,2)+'×</td><td class="num '+volumeTone(r.dollarVolume)+'">'+money(r.dollarVolume)+'</td><td class="num '+adrTone(r.adr)+'">'+pct(r.adr)+'</td><td class="num">'+trendLabel(r.above9d)+'</td><td class="num">'+trendLabel(r.above9w)+'</td><td class="num">'+trendLabel(r.above9m)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="empty">No OBC candidates match these filters.</p>';
-  return '<section class="hero"><span class="eyebrow">OBC SCAN · OVERSOLD BOUNCE CANDIDATES</span><h2>Proven leaders on a meaningful pullback.</h2><p>Starts with a separate liquid US-stock universe: average 30-day dollar volume above $30M and average 10-day shares above 350K. From there, it takes the top 10% over the trailing 1 year, then selects the weakest 25% of those leaders over 3 months.</p></section><div class="toolbar"><span class="note"><b>'+rows.length+'</b> of '+all.length+' OBC candidates shown · sorted by weakest 3M performance first</span><span class="push"></span>'+button('Export current symbols','export-obc','primary')+'</div>'+sharedScreenFilters(groups)+table+'<p class="note">These controls filter an already-selected OBC list. OBC identifies a pullback inside established one-year leadership; it is not an entry signal. Review structure, support and catalyst risk on the chart.</p>';
+  const table=rows.length?'<div class="table-box kk-table"><table><thead><tr><th>Stock</th><th>Theme</th><th class="num">1Y%</th><th class="num">3M%</th><th class="num">Extension</th><th class="num">Avg $ Vol</th><th class="num">ADR%</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button data-stock="'+escapeHTML(r.symbol)+'" data-kind="obc">'+escapeHTML(r.symbol)+'</button></td><td>'+escapeHTML(tag(r))+(isMapped(r)?'<small>Custom</small>':'')+'</td><td class="num '+returnTone(r.performance['1y'])+'">'+pct(r.performance['1y'])+'</td><td class="num '+returnTone(r.performance['3m'])+'">'+pct(r.performance['3m'])+'</td><td class="num '+extensionTone(r.extension)+'">'+fmt(r.extension,2)+'×</td><td class="num '+volumeTone(r.dollarVolume)+'">'+money(r.dollarVolume)+'</td><td class="num '+adrTone(r.adr)+'">'+pct(r.adr)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="empty">No OBC candidates match these filters.</p>';
+  return '<section class="hero"><span class="eyebrow">OBC SCAN · OVERSOLD BOUNCE CANDIDATES</span><h2>Proven leaders on a meaningful pullback.</h2><p>Starts with a separate liquid US-stock universe: average 30-day dollar volume above $30M and average 10-day shares above 350K. From there, it takes the top 10% over the trailing 1 year, then selects the weakest 25% of those leaders over 3 months.</p></section><div class="toolbar"><span class="note"><b>'+rows.length+'</b> of '+all.length+' OBC candidates shown · sorted by weakest 3M performance first</span><span class="push"></span>'+button('Export current symbols','export-obc','primary')+'</div>'+obcScreenFilters(groups)+table+'<p class="note">These controls filter an already-selected OBC list. OBC identifies a pullback inside established one-year leadership; it is not an entry signal. Review structure, support and catalyst risk on the chart.</p>';
 }
 function screener(){return screenerTabs()+(screenerView==='kk'?kkScreener():obcScreener());}
 function median(values){const clean=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!clean.length)return null;const mid=Math.floor(clean.length/2);return clean.length%2?clean[mid]:(clean[mid-1]+clean[mid])/2;}
@@ -211,6 +217,7 @@ document.addEventListener('click',async event=>{
  if(action==='select-screen'){screenerView=node.dataset.screen;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
  if(action==='kk-toggle'){const key=node.dataset.toggle;filters[key]=!filters[key];render();return;}
+ if(action==='obc-toggle'){const key=node.dataset.toggle;obcFilters[key]=!obcFilters[key];render();return;}
  if(action==='export-kk')download('kk-liquid-leaders-'+session().date+'.csv','symbol\n'+[...new Set(filteredKKStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
  if(action==='export-obc')download('obc-candidates-'+session().date+'.csv','symbol\n'+[...new Set(filteredOBCStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
  if(action==='save-theme'&&selected){overrides[selected.symbol]={theme:$('#theme-edit').value,effective:session().date,source:'Local owner review'};if(store.set('themes',overrides)){$('#stock-dialog').close();render();}}
@@ -218,6 +225,7 @@ document.addEventListener('click',async event=>{
 });
 document.addEventListener('change',event=>{
  const key=event.target.dataset.filter;if(key){filters[key]=event.target.value;render();}
+ const obcKey=event.target.dataset.obcFilter;if(obcKey){obcFilters[obcKey]=event.target.value;render();}
 });
 window.addEventListener('hashchange',()=>{if(session())render();});
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
