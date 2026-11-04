@@ -11,7 +11,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from focus_list import _assign_exact_top_flags, _require_columns, fetch_universe, prepare_for_export
+from focus_list import _assign_exact_top_flags, _require_columns, prepare_for_export
+from kk_scan import EMA_COLUMNS, fetch_kk_universe
+from tight_nel import find_tight_nel
 
 
 @dataclass(frozen=True)
@@ -35,8 +37,15 @@ def calculate_obc(raw: pd.DataFrame, settings: OBCSettings) -> tuple[pd.DataFram
     numeric = [column for column in REQUIRED if column not in {"name", "industry"}]
     for column in numeric:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    for column in EMA_COLUMNS:
+        if column not in frame:
+            frame[column] = pd.NA
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame["average_dollar_volume_30d"] = frame["SMA30"] * frame["average_volume_30d_calc"]
     frame["atr_extension_from_50d"] = (frame["close"] - frame["SMA50"]) / (frame["SMA50"] * (frame["ATRP"] / 100))
+    frame["above_ema9d"] = frame["close"] > frame["EMA9"]
+    frame["above_ema9w"] = frame["close"] > frame["EMA9|1W"]
+    frame["above_ema9m"] = frame["close"] > frame["EMA9|1M"]
     valid = (
         (frame[["close", "SMA30", "SMA50", "ATRP"]] > 0).all(axis=1)
         & frame[["Perf.3M", "Perf.Y"]].notna().all(axis=1)
@@ -56,6 +65,9 @@ def calculate_obc(raw: pd.DataFrame, settings: OBCSettings) -> tuple[pd.DataFram
     leaders["perf_3m_pullback_rank"] = ranks
     leaders["is_obc"] = leaders["perf_3m_pullback_rank"] <= pullback_cutoff
     candidates = leaders.loc[leaders["is_obc"]].sort_values(["Perf.3M", "Perf.Y", "name"], ascending=[True, False, True])
+    # Tightness uses this as a final tie-breaker. For OBC, trailing 1Y
+    # performance is the appropriate established-leadership score.
+    candidates["momentum_score"] = candidates["Perf.Y"]
     return universe.sort_values("Perf.Y", ascending=False), leaders.sort_values("Perf.Y", ascending=False), candidates
 
 
@@ -82,10 +94,14 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     args = parser.parse_args()
     settings = OBCSettings()
-    universe, leaders, candidates = calculate_obc(fetch_universe(), settings)
+    universe, leaders, candidates = calculate_obc(fetch_kk_universe(), settings)
+    tight, errors = find_tight_nel(candidates)
+    candidates["is_tight"] = candidates["name"].isin(set(tight["name"]))
     paths = write_outputs(universe, leaders, candidates, settings, args.output_dir, args.snapshot_date)
     print(f"OBC broad universe: {len(universe):,} | 1Y leaders: {len(leaders):,} | candidates: {len(candidates):,}")
     print("Saved:\n" + "\n".join(map(str, paths)))
+    if errors:
+        print(f"Tightness unavailable for {len(errors):,} candidate(s).")
 
 
 if __name__ == "__main__":
