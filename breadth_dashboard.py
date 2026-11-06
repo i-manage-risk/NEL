@@ -6,6 +6,9 @@ import csv
 import io
 import json
 import re
+import time
+from bisect import bisect_right, insort
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -16,6 +19,8 @@ import yfinance as yf
 SHEET_ID = "1O6OhS7ciA8zwfycBfGPbP2fWJnR0pn2UUvFZVDP9jpE"
 YEAR_GIDS = {2026:1082103394,2025:780188096,2024:1146204629,2023:632667710,2022:1394777987,2021:1981550515,2020:2093835319,2019:1089581064,2018:280217788,2017:1391207759,2016:233732777,2015:0,2014:1622090416,2013:299051502,2012:2142678713,2011:24026662,2010:1622166415,2009:1397702728,2008:1269494253,2007:908739106}
 OUT = Path("outputs/breadth_market_monitor.json")
+SPX_HISTORY_OUT = Path("outputs/spx_history.json")
+SPX_FALLBACK_URL = "https://raw.githubusercontent.com/thibeex/historical-finacial-data-analysis/main/StockData.csv"
 SOURCE_KEYS = {
     "date": "Date",
     "up4": "Number of stocks up 4% plus today",
@@ -148,15 +153,121 @@ def fetch_year(item: tuple[int, int]) -> list[dict]:
     return vertical if vertical else parse_transposed(raw, year)
 
 
-def spx_closes() -> dict[str, float]:
-    history = yf.download("^GSPC", start="2007-01-01", end=(date.today() + timedelta(days=2)).isoformat(), auto_adjust=False, actions=False, progress=False)
-    close = history["Close"]
-    if hasattr(close, "columns"):
-        close = close.iloc[:, 0]
-    return {pd_date.date().isoformat(): float(value) for pd_date, value in close.dropna().items()}
+def spx_history() -> list[dict]:
+    """Return the complete available daily SPX history with 50D/ATR context.
+
+    The S&P 500 oscillator deliberately does not inherit Stockbee's 2007
+    start date.  It uses every daily bar Yahoo provides for ^GSPC (currently
+    beginning in 1927), then computes each day's percentile using only data
+    available through that day.  This preserves Time Machine's no-lookahead
+    rule while giving current readings the fullest possible reference set.
+    """
+    # A published historical snapshot gives the loader a dependable
+    # inception-to-2026 base if Yahoo rate-limits a particular run. Yahoo is
+    # still the live source and replaces overlapping rows when it responds.
+    response = requests.get(SPX_FALLBACK_URL, timeout=90)
+    response.raise_for_status()
+    raw = csv.DictReader(io.StringIO(response.text))
+    source = {}
+    for row in raw:
+        try:
+            day = row["Date"]
+            source[day] = (float(row["Close"]), float(row["High"]), float(row["Low"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    yahoo = None
+    for attempt in range(3):
+        try:
+            yahoo = yf.download(
+                "^GSPC",
+                start="1927-01-01",
+                end=(date.today() + timedelta(days=2)).isoformat(),
+                auto_adjust=False,
+                actions=False,
+                progress=False,
+                threads=False,
+                timeout=60,
+            )
+            if not yahoo.empty:
+                break
+        except Exception as error:  # Yahoo occasionally returns an HTML rate-limit page.
+            print(f"SPX Yahoo attempt {attempt + 1} failed: {error}")
+        yahoo = None
+        time.sleep(2 * (attempt + 1))
+    if yahoo is not None and not yahoo.empty:
+        def series(name: str):
+            values = yahoo[name]
+            return values.iloc[:, 0] if hasattr(values, "columns") else values
+
+        close, high, low = series("Close"), series("High"), series("Low")
+        for timestamp, close_value in close.dropna().items():
+            source[timestamp.date().isoformat()] = (
+                float(close_value), float(high.loc[timestamp]), float(low.loc[timestamp])
+            )
+    if not source:
+        raise RuntimeError("No complete SPX OHLC history was available from either source.")
+
+    bars = []
+    closes: deque[float] = deque(maxlen=50)
+    atr = None
+    seed_ranges: list[float] = []
+    previous_close = None
+
+    for day, (c, h, l) in sorted(source.items()):
+        true_range = h - l if previous_close is None else max(h - l, abs(h - previous_close), abs(l - previous_close))
+        seed_ranges.append(true_range)
+        if len(seed_ranges) == 14 and atr is None:
+            atr = sum(seed_ranges) / 14
+        elif atr is not None:
+            atr = (atr * 13 + true_range) / 14
+        closes.append(c)
+        sma50 = sum(closes) / 50 if len(closes) == 50 else None
+        extension = None
+        if sma50 and atr and c > 0:
+            # Same convention as the stock screener: SMA50 × (ATR% / 100).
+            extension = (c - sma50) / (sma50 * (atr / c))
+        bars.append({"date": day, "close": c, "sma50": sma50, "atr14": atr, "extension": extension})
+        previous_close = c
+
+    # Map one-sided empirical percentiles into [-1, 1].  Positive and
+    # negative extensions get their own distributions, so zero remains the
+    # 50-day average and each tail describes its own historical rarity.
+    positive, negative = [], []
+    for bar in bars:
+        extension = bar["extension"]
+        oscillator = None
+        if extension is not None:
+            if abs(extension) < 1e-12:
+                oscillator = 0.0
+            elif extension > 0:
+                rank = bisect_right(positive, extension)
+                oscillator = rank / (len(positive) + 1)
+                insort(positive, extension)
+            else:
+                magnitude = abs(extension)
+                rank = bisect_right(negative, magnitude)
+                oscillator = -rank / (len(negative) + 1)
+                insort(negative, magnitude)
+        bar["oscillator"] = oscillator
+    return bars
 
 
-def load_rows() -> list[dict]:
+def attach_spx_metrics(rows: list[dict], history: list[dict]) -> None:
+    by_date = {bar["date"]: bar for bar in history}
+    for row in rows:
+        bar = by_date.get(row["date"])
+        if not bar:
+            continue
+        if row["sp"] is None:
+            row["sp"] = bar["close"]
+        row["spSma50"] = bar["sma50"]
+        row["spAtr14"] = bar["atr14"]
+        row["spExtension"] = bar["extension"]
+        row["spOscillator"] = bar["oscillator"]
+
+
+def load_rows() -> tuple[list[dict], list[dict]]:
     with ThreadPoolExecutor(max_workers=6) as executor:
         year_rows = list(executor.map(fetch_year, YEAR_GIDS.items()))
     by_date = {}
@@ -172,14 +283,12 @@ def load_rows() -> list[dict]:
             if row[key] is None and len(window) == days and all(item["up4"] is not None and item["down4"] is not None for item in window):
                 denominator = sum(item["down4"] for item in window)
                 row[key] = sum(item["up4"] for item in window) / denominator if denominator else None
-    closes = spx_closes()
-    for row in ordered:
-        if row["sp"] is None:
-            row["sp"] = closes.get(row["date"])
+    history = spx_history()
+    attach_spx_metrics(ordered, history)
     rows = list(reversed(ordered))
     if not rows:
         raise RuntimeError("The published Market Monitor contained no usable rows.")
-    return rows
+    return rows, history
 
 
 TEMPLATE = r'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Breadth | Liquid Leadership</title><meta name="description" content="A beginner-friendly view of Stockbee's daily Market Monitor breadth data."><link rel="icon" type="image/png" href="assets/nel-favicon.png"><style>
@@ -195,11 +304,12 @@ def build_page(rows: list[dict]) -> str:
 
 
 def main() -> None:
-    rows = load_rows()
+    rows, history = load_rows()
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(rows, separators=(",", ":")))
+    SPX_HISTORY_OUT.write_text(json.dumps(history, separators=(",", ":")))
     Path("breadth.html").write_text(build_page(rows))
-    print(f"Captured {len(rows)} breadth rows through {rows[0]['date']}")
+    print(f"Captured {len(rows)} breadth rows through {rows[0]['date']} and {len(history)} SPX sessions from {history[0]['date']}")
 
 
 if __name__ == "__main__":
