@@ -108,7 +108,7 @@ function briefing(){
   const leader=themesNow[0], breadthShift=old&&finite(b?.t2108)&&finite(old?.t2108)?b.t2108-old.t2108:null;
   return '<section class="command-hero '+read.tone+'"><div><span class="eyebrow">MORNING PLAN · '+escapeHTML(session().date)+'</span><h2>'+read.title+'</h2><p>'+read.plan+'</p><div class="command-tags"><span>Close: '+escapeHTML(asof())+'</span><span>'+frameNames[frame]+' leadership</span><span>Chart review required</span></div></div><aside><span>Risk posture</span><b class="'+read.tone+'">'+(read.tone==='positive'?'Press valid setups':read.tone==='negative'?'Protect capital':'Stay selective')+'</b><small>'+read.reason+'</small></aside></section><div class="toolbar">'+frameControls('Planning horizon')+'</div><section class="decision-strip">'+miniStat('◉','Breadth pressure',fmt(b?.ratio10,2),'10D · above 1 favors upside',b?.ratio10>=1?'positive':'negative')+miniStat('↕','Participation',pct(b?.t2108),'Above 40-day average',b?.t2108>=50?'positive':'gold')+miniStat('◆','Leading theme',escapeHTML(leader?.group||'—'),leader?pct(leader.median_performance)+' median':'No ETF reading','cyan')+miniStat('⚡','Tight candidates',tight,frameNames[frame]+' NEL candidates','orange')+'</section><section class="plan-grid"><div class="plan-main"><div class="section-kicker"><span>WHAT TO DO</span><small>Let the environment dictate how selective you are.</small></div><div class="action-stack">'+actionTile('⌕','Build the chart queue',tight+' tight, non-extended candidates are ready for review.','#screener','Screen','cyan')+actionTile('◆','Trade with leadership',leader?escapeHTML(leader.group)+' is the top '+frameNames[frame].toLowerCase()+' theme.':'Check the current leadership table.','#leadership','Flow','violet')+actionTile('↺','Know what changed',breadthShift===null?'Prior-close comparison is not available.':('T2108 '+signed(breadthShift)+' pp since the prior close.'),'#review','Replay',breadthShift>=0?'positive':'gold')+'</div></div><div class="plan-side"><div class="section-kicker"><span>MARKET CHECK</span><small>Not predictions—just the conditions you are trading in.</small></div><div class="stance-grid"><div><span>Up / down 4%</span><b class="'+(net>=0?'positive':'negative')+'">'+fmt(b?.up4,0)+' / '+fmt(b?.down4,0)+'</b><small>Net '+signed(net)+'</small></div><div><span>COT extremes</span><b>'+extremes+'</b><small>Weekly context only</small></div><div><span>Prior-close breadth</span><b class="'+(breadthShift>=0?'positive':'negative')+'">'+(breadthShift===null?'—':signed(breadthShift)+' pp')+'</b><small>T2108 change</small></div></div></div></section><details class="evidence-drawer"><summary>Why this plan?</summary><p>'+read.reason+' These are decision aids, not calibrated probabilities or trade instructions. Open Pulse for breadth detail, Flow for leadership detail, and Crowding for COT context.</p></details>';
 }
-let breadthWindow=15,breadthHoverRows=[],breadthHoverLatest=null;
+let breadthWindow=15,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
 function setBreadthHover(index){
   const row=index>=0?breadthHoverRows[index]:breadthHoverLatest,latest=breadthHoverLatest;
   if(!row)return;
@@ -124,11 +124,21 @@ function setBreadthHover(index){
       :'Latest close';
     el.innerHTML='<b>'+escapeHTML(el.dataset.bmLabel||key)+' '+value+'</b><small>'+change+'</small>';
   });
+  const offAth=finite(row.sp)&&finite(breadthAth)?100*(Number(row.sp)/Number(breadthAth)-1):null;
+  document.querySelectorAll('[data-bm-off-ath]').forEach(el=>el.textContent=offAth===null?'ATH unavailable':Math.abs(offAth)<.005?'At all-time high':fmt(Math.abs(offAth),2)+'% off ATH');
 }
 function bindBreadthHover(){
-  document.querySelectorAll('.bm-hit[data-bm-index]').forEach(hit=>{
-    hit.addEventListener('pointerenter',()=>setBreadthHover(Number(hit.dataset.bmIndex)));
-    hit.addEventListener('pointerleave',()=>setBreadthHover(-1));
+  document.querySelectorAll('.bm-tape').forEach(tape=>{
+    const setFromPointer=event=>{
+      const point=tape.createSVGPoint();
+      point.x=event.clientX;point.y=event.clientY;
+      const local=point.matrixTransform(tape.getScreenCTM().inverse());
+      const index=Math.max(0,Math.min(breadthHoverRows.length-1,Math.floor((local.x-8)/(912/Math.max(breadthHoverRows.length,1)))));
+      setBreadthHover(index);
+    };
+    tape.addEventListener('pointermove',setFromPointer);
+    tape.addEventListener('pointerenter',setFromPointer);
+    tape.addEventListener('pointerleave',()=>setBreadthHover(-1));
   });
 }
 function breadthPercentile(rows,key,value){
@@ -138,15 +148,18 @@ function breadthPercentile(rows,key,value){
 }
 function breadthTape(rows,keys,colors,kind='line',reference=null){
   const W=1000,H=145,L=8,R=920,T=12,B=118;
+  const references=reference===null?[]:(Array.isArray(reference)?reference:[{value:reference}]).filter(item=>finite(typeof item==='object'?item.value:item));
+  const referenceValues=references.map(item=>Number(typeof item==='object'?item.value:item));
   const values=rows.flatMap(r=>keys.filter(k=>finite(r[k])).map(k=>Number(r[k])*(kind==='bars'&&k==='down4'?-1:1)));
   if(!values.length)return '<p class="empty">No readings available.</p>';
   let lo=kind==='bars'?Math.min(0,...values):Math.min(...values),hi=Math.max(...values);
-  if(reference!==null){lo=Math.min(lo,reference);hi=Math.max(hi,reference);}
+  if(referenceValues.length){lo=Math.min(lo,...referenceValues);hi=Math.max(hi,...referenceValues);}
   const pad=Math.max((hi-lo)*.12,kind==='bars'?1:.01);lo-=pad;hi+=pad;
   if(kind==='bars'){hi=Math.ceil(Math.max(Math.abs(lo),Math.abs(hi))/100)*100;lo=-hi;}
   const step=(R-L)/Math.max(rows.length,1),x=i=>L+step*(i+.5),y=v=>B-(v-lo)/(hi-lo)*(B-T);
   let svg=[lo,(hi+lo)/2,hi].map(v=>'<line x1="'+L+'" x2="'+R+'" y1="'+y(v)+'" y2="'+y(v)+'" class="bm-grid"/><text x="'+(R+10)+'" y="'+(y(v)+4)+'">'+(kind==='bars'?(v<0?'↓ ':v>0?'↑ ':'')+fmt(Math.abs(v),0):fmt(v,keys.includes('ratio5')?2:0))+'</text>').join('');
-  if(kind==='bars'||reference!==null){const v=kind==='bars'?0:reference;svg+='<line x1="'+L+'" x2="'+R+'" y1="'+y(v)+'" y2="'+y(v)+'" class="bm-reference"/>';}
+  if(kind==='bars')svg+='<line x1="'+L+'" x2="'+R+'" y1="'+y(0)+'" y2="'+y(0)+'" class="bm-reference" style="stroke:#8d8b81"/>';
+  svg+=references.map((item,index)=>{const ref=typeof item==='object'?item:{value:item},value=Number(ref.value),label=ref.label||'',color=ref.color||'#8d8b81',offset=(index%2)*11,levelY=y(value),labelY=levelY<T+24?levelY+14+offset:levelY-5-offset;return '<line x1="'+L+'" x2="'+R+'" y1="'+levelY+'" y2="'+levelY+'" class="bm-reference" style="stroke:'+color+'"/>'+(label?'<text x="'+(L+5)+'" y="'+labelY+'" fill="'+color+'" class="bm-level-label">'+escapeHTML(label)+'</text>':'');}).join('');
   keys.forEach((key,j)=>{
     if(kind==='bars'){
       svg+=rows.map((r,i)=>{if(!finite(r[key]))return '';const v=Number(r[key])*(j?-1:1);return '<rect x="'+(x(i)-step*.28)+'" y="'+Math.min(y(v),y(0))+'" width="'+step*.56+'" height="'+Math.max(1,Math.abs(y(v)-y(0)))+'" fill="'+colors[j]+'"/>';}).join('');
@@ -164,6 +177,7 @@ function environment(){
   if(!b)return '<p class="empty">No breadth data available for this close.</p>';
   const rows=history.slice(0,breadthWindow).reverse();
   breadthHoverRows=rows;breadthHoverLatest=b;
+  breadthAth=Math.max(...history.filter(r=>finite(r.sp)).map(r=>Number(r.sp)));
   const net=finite(b.up4)&&finite(b.down4)?b.up4-b.down4:null;
   const delta=(key)=>finite(b[key])&&finite(old?.[key])?signed(b[key]-old[key],0)+' vs prior close':'No prior reading';
   const pair=(key,label,color,decimals=0,suffix='')=>'<span class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="'+label+'" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'" style="color:'+color+'"><b>'+label+' '+fmt(b[key],decimals)+suffix+'</b><small>Latest close</small></span>';
@@ -179,10 +193,17 @@ function environment(){
   ];
   const upDays=rows.filter(r=>finite(r.up4)&&r.up4>=300).length,downDays=rows.filter(r=>finite(r.down4)&&r.down4>=300).length;
   const t=finite(b.t2108)?Number(b.t2108):null;
+  const windowHigh=Math.max(...rows.filter(r=>finite(r.sp)).map(r=>Number(r.sp))),windowLow=Math.min(...rows.filter(r=>finite(r.sp)).map(r=>Number(r.sp)));
+  const offAth=finite(b.sp)&&finite(breadthAth)?100*(Number(b.sp)/breadthAth-1):null;
+  const priceLevels=[
+    {value:breadthAth,label:'ATH '+fmt(breadthAth,0),color:'#e9c46a'},
+    ...(Math.abs(windowHigh-breadthAth)>.01?[{value:windowHigh,label:breadthWindow+'D high '+fmt(windowHigh,0),color:'#00bcd4'}]:[]),
+    {value:windowLow,label:breadthWindow+'D low '+fmt(windowLow,0),color:'#ff3266'}
+  ];
   return '<div class="bm-page"><header class="bm-heading"><div><span class="eyebrow">STOCKBEE MARKET MONITOR</span><h2>The market beneath the index</h2></div><a href="breadth.html">Time Machine ↗</a></header>'+
     '<section class="bm-summary"><div><span>Latest close</span><b>'+b.date+'</b></div><div><span>Net daily 4% moves</span><b class="'+(net>=0?'positive':'negative')+'">'+(net===null?'—':signed(net,0))+'</b><small>'+fmt(b.up4,0)+' up / '+fmt(b.down4,0)+' down</small></div><div><span>10-day pressure</span><b class="'+(b.ratio10>=1?'positive':'negative')+'">'+fmt(b.ratio10,2)+'×</b><small>'+(finite(b.ratio10)?b.ratio10>=1?'More upside events':'More downside events':'Unavailable')+'</small></div><div><span>Above 40-day average</span><b>'+fmt(t,1)+'%</b><small>T2108 · '+(t===null?'Unavailable':t<20?'Below 20%':t>80?'Above 80%':'Between 20–80%')+'</small></div></section>'+
     '<section class="bm-panel"><div class="bm-section-head"><div><h3>Is buying following through?</h3><p data-bm-date>Latest close · hover any chart to inspect a session</p></div><div class="segments">'+[15,30,65].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></div>'+
-    '<div class="bm-chart-row"><div class="bm-chart-label"><b>S&P 500</b><span class="bm-hover-key bm-price-key" data-bm-key="sp" data-bm-label="SPX" data-bm-decimals="2" data-bm-suffix=""><b>SPX '+fmt(b.sp,2)+'</b><small>Latest close</small></span></div>'+breadthTape(rows,['sp'],['#86d65d'])+'</div>'+
+    '<div class="bm-chart-row"><div class="bm-chart-label"><b>S&P 500</b><span class="bm-hover-key bm-price-key" data-bm-key="sp" data-bm-label="SPX" data-bm-decimals="2" data-bm-suffix=""><b>SPX '+fmt(b.sp,2)+'</b><small>Latest close</small></span><span class="bm-sp-context"><b data-bm-off-ath>'+(offAth===null?'ATH unavailable':Math.abs(offAth)<.005?'At all-time high':fmt(Math.abs(offAth),2)+'% off ATH')+'</b><small>'+breadthWindow+'D H '+fmt(windowHigh,2)+' · L '+fmt(windowLow,2)+'</small></span></div>'+breadthTape(rows,['sp'],['#86d65d'],'line',priceLevels)+'</div>'+
     '<div class="bm-chart-row"><div class="bm-chart-label"><b>Daily 4% moves</b>'+pair('up4','↑','#85d65d')+pair('down4','↓','#ff3266')+'<small>Counts, not market share</small></div>'+breadthTape(rows,['up4','down4'],['#85d65d','#ff3266'],'bars')+'</div>'+
     '<div class="bm-chart-row"><div class="bm-chart-label"><b>Rolling pressure</b>'+pair('ratio5','5D','#e9c46a',2,'×')+pair('ratio10','10D','#6aa9ff',2,'×')+'<small>Dashed line = balance (1)</small></div>'+breadthTape(rows,['ratio5','ratio10'],['#e9c46a','#6aa9ff'],'line',1)+'</div>'+
     '<div class="bm-chart-row"><div class="bm-chart-label"><b>T2108</b>'+pair('t2108','Above 40D','#86d65d',1,'%')+'<small>20% / 80% are context zones</small></div>'+breadthTape(rows,['t2108'],['#86d65d'])+'</div>'+
