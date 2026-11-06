@@ -108,7 +108,29 @@ function briefing(){
   const leader=themesNow[0], breadthShift=old&&finite(b?.t2108)&&finite(old?.t2108)?b.t2108-old.t2108:null;
   return '<section class="command-hero '+read.tone+'"><div><span class="eyebrow">MORNING PLAN · '+escapeHTML(session().date)+'</span><h2>'+read.title+'</h2><p>'+read.plan+'</p><div class="command-tags"><span>Close: '+escapeHTML(asof())+'</span><span>'+frameNames[frame]+' leadership</span><span>Chart review required</span></div></div><aside><span>Risk posture</span><b class="'+read.tone+'">'+(read.tone==='positive'?'Press valid setups':read.tone==='negative'?'Protect capital':'Stay selective')+'</b><small>'+read.reason+'</small></aside></section><div class="toolbar">'+frameControls('Planning horizon')+'</div><section class="decision-strip">'+miniStat('◉','Breadth pressure',fmt(b?.ratio10,2),'10D · above 1 favors upside',b?.ratio10>=1?'positive':'negative')+miniStat('↕','Participation',pct(b?.t2108),'Above 40-day average',b?.t2108>=50?'positive':'gold')+miniStat('◆','Leading theme',escapeHTML(leader?.group||'—'),leader?pct(leader.median_performance)+' median':'No ETF reading','cyan')+miniStat('⚡','Tight candidates',tight,frameNames[frame]+' NEL candidates','orange')+'</section><section class="plan-grid"><div class="plan-main"><div class="section-kicker"><span>WHAT TO DO</span><small>Let the environment dictate how selective you are.</small></div><div class="action-stack">'+actionTile('⌕','Build the chart queue',tight+' tight, non-extended candidates are ready for review.','#screener','Screen','cyan')+actionTile('◆','Trade with leadership',leader?escapeHTML(leader.group)+' is the top '+frameNames[frame].toLowerCase()+' theme.':'Check the current leadership table.','#leadership','Flow','violet')+actionTile('↺','Know what changed',breadthShift===null?'Prior-close comparison is not available.':('T2108 '+signed(breadthShift)+' pp since the prior close.'),'#review','Replay',breadthShift>=0?'positive':'gold')+'</div></div><div class="plan-side"><div class="section-kicker"><span>MARKET CHECK</span><small>Not predictions—just the conditions you are trading in.</small></div><div class="stance-grid"><div><span>Up / down 4%</span><b class="'+(net>=0?'positive':'negative')+'">'+fmt(b?.up4,0)+' / '+fmt(b?.down4,0)+'</b><small>Net '+signed(net)+'</small></div><div><span>COT extremes</span><b>'+extremes+'</b><small>Weekly context only</small></div><div><span>Prior-close breadth</span><b class="'+(breadthShift>=0?'positive':'negative')+'">'+(breadthShift===null?'—':signed(breadthShift)+' pp')+'</b><small>T2108 change</small></div></div></div></section><details class="evidence-drawer"><summary>Why this plan?</summary><p>'+read.reason+' These are decision aids, not calibrated probabilities or trade instructions. Open Pulse for breadth detail, Flow for leadership detail, and Crowding for COT context.</p></details>';
 }
-let breadthWindow=15;
+let breadthWindow=15,breadthHoverRows=[],breadthHoverLatest=null;
+function setBreadthHover(index){
+  const row=index>=0?breadthHoverRows[index]:breadthHoverLatest,latest=breadthHoverLatest;
+  if(!row)return;
+  const date=document.querySelector('[data-bm-date]');
+  if(date)date.textContent=index>=0?'Viewing '+row.date+' · change vs latest':'Latest close · hover any chart to inspect a session';
+  document.querySelectorAll('[data-bm-key]').forEach(el=>{
+    const key=el.dataset.bmKey,decimals=Number(el.dataset.bmDecimals||0),suffix=el.dataset.bmSuffix||'';
+    const value=finite(row[key])?fmt(row[key],decimals)+suffix:'—';
+    const change=index>=0&&finite(row[key])&&finite(latest?.[key])
+      ?(key==='sp'
+        ?signed(Number(row[key])-Number(latest[key]),2)+' · '+signed(100*(Number(row[key])/Number(latest[key])-1),2)+'% vs latest'
+        :signed(Number(row[key])-Number(latest[key]),decimals)+suffix+' vs latest')
+      :'Latest close';
+    el.innerHTML='<b>'+escapeHTML(el.dataset.bmLabel||key)+' '+value+'</b><small>'+change+'</small>';
+  });
+}
+function bindBreadthHover(){
+  document.querySelectorAll('.bm-hit[data-bm-index]').forEach(hit=>{
+    hit.addEventListener('pointerenter',()=>setBreadthHover(Number(hit.dataset.bmIndex)));
+    hit.addEventListener('pointerleave',()=>setBreadthHover(-1));
+  });
+}
 function breadthPercentile(rows,key,value){
   if(!finite(value))return null;
   const sample=rows.filter(r=>finite(r[key])).map(r=>Number(r[key]));
@@ -133,7 +155,7 @@ function breadthTape(rows,keys,colors,kind='line',reference=null){
       svg+='<path d="'+d+'" fill="none" stroke="'+colors[j]+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';
     }
   });
-  svg+=rows.map((r,i)=>'<g class="bm-hit"><rect x="'+(L+step*i)+'" y="0" width="'+step+'" height="'+B+'" fill="transparent"/><line x1="'+x(i)+'" x2="'+x(i)+'" y1="'+T+'" y2="'+B+'"/>'+keys.filter(k=>finite(r[k])).map((k,j)=>'<circle cx="'+x(i)+'" cy="'+y(Number(r[k])*(kind==='bars'&&k==='down4'?-1:1))+'" r="4" fill="'+colors[j]+'"/>').join('')+'<title>'+r.date+' · '+keys.map(k=>k+': '+fmt(r[k],kind==='bars'?0:2)).join(' · ')+'</title></g>').join('');
+  svg+=rows.map((r,i)=>'<g class="bm-hit" data-bm-index="'+i+'"><rect x="'+(L+step*i)+'" y="0" width="'+step+'" height="'+B+'" fill="rgba(0,0,0,.001)"/><line x1="'+x(i)+'" x2="'+x(i)+'" y1="'+T+'" y2="'+B+'"/>'+keys.filter(k=>finite(r[k])).map((k,j)=>'<circle cx="'+x(i)+'" cy="'+y(Number(r[k])*(kind==='bars'&&k==='down4'?-1:1))+'" r="4" fill="'+colors[j]+'"/>').join('')+'<title>'+r.date+' · '+keys.map(k=>k+': '+fmt(r[k],kind==='bars'?0:2)).join(' · ')+'</title></g>').join('');
   svg+=rows.filter((r,i)=>i===0||i===rows.length-1||i===Math.floor(rows.length/2)).map(r=>'<text x="'+x(rows.indexOf(r))+'" y="140" text-anchor="middle">'+r.date.slice(5)+'</text>').join('');
   return '<svg class="bm-tape" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+escapeHTML(keys.join(', ')+' through '+rows.at(-1).date)+'">'+svg+'</svg>';
 }
@@ -141,9 +163,10 @@ function environment(){
   const history=breadthRows(),b=history[0],old=history[1];
   if(!b)return '<p class="empty">No breadth data available for this close.</p>';
   const rows=history.slice(0,breadthWindow).reverse();
+  breadthHoverRows=rows;breadthHoverLatest=b;
   const net=finite(b.up4)&&finite(b.down4)?b.up4-b.down4:null;
   const delta=(key)=>finite(b[key])&&finite(old?.[key])?signed(b[key]-old[key],0)+' vs prior close':'No prior reading';
-  const pair=(key,label,color)=>'<span style="color:'+color+'">'+label+' <b>'+fmt(b[key],key.startsWith('ratio')?2:0)+'</b></span>';
+  const pair=(key,label,color,decimals=0,suffix='')=>'<span class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="'+label+'" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'" style="color:'+color+'"><b>'+label+' '+fmt(b[key],decimals)+suffix+'</b><small>Latest close</small></span>';
   const rankTrack=(key,color)=>{
     const rank=breadthPercentile(history,key,b[key]);
     return '<div class="bm-rank"><div><b style="color:'+color+'">'+fmt(b[key],0)+'</b><small>'+delta(key)+'</small><span>'+(rank===null?'Unavailable':Math.round(rank)+'<small> percentile</small>')+'</span></div><div class="bm-track" style="--ink:'+color+'"><i style="width:'+(rank??0)+'%"></i>'+(rank===null?'':'<em style="left:'+Math.max(1,Math.min(99,rank))+'%"></em>')+'</div></div>';
@@ -158,10 +181,11 @@ function environment(){
   const t=finite(b.t2108)?Number(b.t2108):null;
   return '<div class="bm-page"><header class="bm-heading"><div><span class="eyebrow">STOCKBEE MARKET MONITOR</span><h2>The market beneath the index</h2></div><a href="breadth.html">Time Machine ↗</a></header>'+
     '<section class="bm-summary"><div><span>Latest close</span><b>'+b.date+'</b></div><div><span>Net daily 4% moves</span><b class="'+(net>=0?'positive':'negative')+'">'+(net===null?'—':signed(net,0))+'</b><small>'+fmt(b.up4,0)+' up / '+fmt(b.down4,0)+' down</small></div><div><span>10-day pressure</span><b class="'+(b.ratio10>=1?'positive':'negative')+'">'+fmt(b.ratio10,2)+'×</b><small>'+(finite(b.ratio10)?b.ratio10>=1?'More upside events':'More downside events':'Unavailable')+'</small></div><div><span>Above 40-day average</span><b>'+fmt(t,1)+'%</b><small>T2108 · '+(t===null?'Unavailable':t<20?'Below 20%':t>80?'Above 80%':'Between 20–80%')+'</small></div></section>'+
-    '<section class="bm-panel"><div class="bm-section-head"><div><h3>Is buying following through?</h3><p>Same sessions. Price above, breadth below.</p></div><div class="segments">'+[15,30,65].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></div>'+
-    '<div class="bm-chart-row"><div class="bm-chart-label"><b>S&P 500</b><strong>'+fmt(b.sp,2)+'</strong><small>Closing price</small></div>'+breadthTape(rows,['sp'],['#86d65d'])+'</div>'+
+    '<section class="bm-panel"><div class="bm-section-head"><div><h3>Is buying following through?</h3><p data-bm-date>Latest close · hover any chart to inspect a session</p></div><div class="segments">'+[15,30,65].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></div>'+
+    '<div class="bm-chart-row"><div class="bm-chart-label"><b>S&P 500</b><span class="bm-hover-key bm-price-key" data-bm-key="sp" data-bm-label="SPX" data-bm-decimals="2" data-bm-suffix=""><b>SPX '+fmt(b.sp,2)+'</b><small>Latest close</small></span></div>'+breadthTape(rows,['sp'],['#86d65d'])+'</div>'+
     '<div class="bm-chart-row"><div class="bm-chart-label"><b>Daily 4% moves</b>'+pair('up4','↑','#85d65d')+pair('down4','↓','#ff3266')+'<small>Counts, not market share</small></div>'+breadthTape(rows,['up4','down4'],['#85d65d','#ff3266'],'bars')+'</div>'+
-    '<div class="bm-chart-row"><div class="bm-chart-label"><b>Rolling pressure</b>'+pair('ratio5','5D','#e9c46a')+pair('ratio10','10D','#6aa9ff')+'<small>Dashed line = balance (1)</small></div>'+breadthTape(rows,['ratio5','ratio10'],['#e9c46a','#6aa9ff'],'line',1)+'</div>'+
+    '<div class="bm-chart-row"><div class="bm-chart-label"><b>Rolling pressure</b>'+pair('ratio5','5D','#e9c46a',2,'×')+pair('ratio10','10D','#6aa9ff',2,'×')+'<small>Dashed line = balance (1)</small></div>'+breadthTape(rows,['ratio5','ratio10'],['#e9c46a','#6aa9ff'],'line',1)+'</div>'+
+    '<div class="bm-chart-row"><div class="bm-chart-label"><b>T2108</b>'+pair('t2108','Above 40D','#86d65d',1,'%')+'<small>20% / 80% are context zones</small></div>'+breadthTape(rows,['t2108'],['#86d65d'])+'</div>'+
     '<div class="bm-foot"><span>300+ move days in this window: <b class="positive">'+upDays+' upside</b> / <b class="negative">'+downDays+' downside</b></span><span>Clusters matter more than one strong day.</span></div></section>'+
     '<section class="bm-panel"><div class="bm-section-head"><div><h3>How unusual is the participation?</h3><p>Each count compared with its own available history through '+b.date+'.</p></div><span class="bm-chip">Independent percentile scales</span></div><div class="bm-rank-head"><span>Measure</span><span class="positive">↑ Upside count & historical rank</span><span class="negative">↓ Downside count & historical rank</span></div>'+
     measures.map(m=>'<div class="bm-rank-row"><div><b>'+m[0]+'</b><small>'+m[1]+'</small></div>'+rankTrack(m[2],'#85d65d')+rankTrack(m[3],'#ff3266')+'</div>').join('')+
@@ -345,6 +369,7 @@ function render(){
   const b=breadthRows()[0],e=latestETF(themes);
   $('#freshness').textContent='Stock close '+asof()+' → plan '+session().date+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
   $('#view').innerHTML=({briefing,environment,leadership,positioning,screener,review,method})[route]();
+  if(route==='environment'){setBreadthHover(-1);bindBreadthHover();}
   mountTradingViewCharts();
 }
 function download(name,text,type='text/plain'){
