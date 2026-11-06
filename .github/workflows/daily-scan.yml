@@ -44,6 +44,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Breadth and after-hours jobs may have published while this scan was
+          # collecting data. Bring those harmless independent changes forward
+          # before staging this scan's outputs.
+          git pull --rebase origin main
           git add outputs industry_flow_dashboard.html index.html super-liquid.html themes.html sectors.html breadth.html data/etf_holdings_cache.json
           git diff --cached --quiet || git commit -m "Update NEL scan for $(date -u +%F)"
-          git push
+          # A second writer may still land during the scan. Retry once after a
+          # rebase; the shared workflow concurrency group prevents overlap
+          # between Actions jobs, while this covers external/manual commits.
+          git push || (git pull --rebase origin main && git push)
