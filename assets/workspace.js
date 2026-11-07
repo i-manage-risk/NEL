@@ -177,9 +177,13 @@ function flowExtensionMap(payload,snapshot){
   const magnitudes=rows.map(row=>Math.abs(Number(row.extension)));
   const scale=Math.max(4,percentile(magnitudes,.95)||0);
   const outliers=rows.filter(row=>Math.abs(Number(row.extension))>scale);
+  // Horizontal placement is intentionally non-semantic. A deterministic shuffled lane
+  // assignment makes every ETF readable without implying a second metric.
+  const lanes=[...rows].sort((a,b)=>flowHash(a.symbol)-flowHash(b.symbol));
+  const laneBySymbol=new Map(lanes.map((row,index)=>[row.symbol,lanes.length===1?50:7+86*index/(lanes.length-1)]));
   const dots=rows.map(row=>{
     const extension=Number(row.extension), top=50-44*Math.max(-scale,Math.min(scale,extension))/scale;
-    const left=5+(flowHash(row.symbol)%9000)/100;
+    const left=laneBySymbol.get(row.symbol);
     const outlier=Math.abs(extension)>scale;
     const tooltip='<span><b>'+escapeHTML(row.symbol)+' · '+fmt(extension,2)+'×</b><small>'+escapeHTML(row.group)+'</small>'+(outlier?'<em>pinned at map edge</em>':'')+'</span>';
     return '<button class="flow-dot flow-extension-dot '+extensionTone(extension)+(outlier?' outlier':'')+'" data-flow-etf="'+escapeHTML(row.symbol)+'" data-flow-group="'+escapeHTML(row.group)+'" style="left:'+left+'%;top:'+Math.max(6,Math.min(94,top))+'%" aria-label="'+escapeHTML(row.symbol)+' '+fmt(extension,2)+' times ATR extension">'+tooltip+'</button>';
