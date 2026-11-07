@@ -12,7 +12,7 @@ const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y'
 const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',positioning:'Crowding',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
-let flowFrame='1m', flowSort={key:'rank',direction:'asc'}, flowSelection='';
+let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
 let flowETFState=null, flowWidgetSerial=0;
 let filters={search:'',group:'',adr:5,extension:4,above9d:false,above9w:false,above9m:false,liquid:false,superLiquid:false,tight:false};
 let obcFilters={search:'',group:'',adr:'',extension:'',liquid:false,superLiquid:false};
@@ -169,6 +169,24 @@ function flowMap(groups,key){
   const yTitle=sessionMap?'1W raw return':flowLabels[groups[0].momentum_key]+' return vs SPX';
   const outlierNote=metrics.outliers.length?'<span class="flow-outlier-note">'+metrics.outliers.length+' outlier'+(metrics.outliers.length===1?'':'s')+' listed below</span>':'';
   return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Relative strength and near-term momentum</h3><p>Each plotted point is a theme or sector. Hover a point for its readings; extreme values are kept in the outlier panel below.</p></div>'+outlierNote+'</div><div class="flow-map-plot"><div class="flow-y-label">Y · '+escapeHTML(yTitle)+' ↑</div><div class="flow-x-axis">X · '+escapeHTML(xTitle)+' →</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
+}
+function flowHash(value){return [...String(value)].reduce((hash,char)=>(hash*31+char.charCodeAt(0))>>>0,7);}
+function flowExtensionMap(payload,snapshot){
+  const rows=(snapshot?.daily_changes||[]).filter(row=>finite(row.extension)).map(row=>({...row,group:flowGroupName(payload,row)}));
+  if(!rows.length)return '<p class="empty">No 50-day ATR extension data is available for this close.</p>';
+  const magnitudes=rows.map(row=>Math.abs(Number(row.extension)));
+  const scale=Math.max(4,percentile(magnitudes,.95)||0);
+  const outliers=rows.filter(row=>Math.abs(Number(row.extension))>scale);
+  const dots=rows.map(row=>{
+    const extension=Number(row.extension), top=50-44*Math.max(-scale,Math.min(scale,extension))/scale;
+    const left=5+(flowHash(row.symbol)%9000)/100;
+    const outlier=Math.abs(extension)>scale;
+    const tooltip='<span><b>'+escapeHTML(row.symbol)+' · '+fmt(extension,2)+'×</b><small>'+escapeHTML(row.group)+'</small>'+(outlier?'<em>pinned at map edge</em>':'')+'</span>';
+    return '<button class="flow-dot flow-extension-dot '+extensionTone(extension)+(outlier?' outlier':'')+'" data-flow-etf="'+escapeHTML(row.symbol)+'" data-flow-group="'+escapeHTML(row.group)+'" style="left:'+left+'%;top:'+Math.max(6,Math.min(94,top))+'%" aria-label="'+escapeHTML(row.symbol)+' '+fmt(extension,2)+' times ATR extension">'+tooltip+'</button>';
+  }).join('');
+  const above=rows.filter(row=>Number(row.extension)>=0).length, medianExtension=median(rows.map(row=>row.extension));
+  const outlierNote=outliers.length?'<span class="flow-outlier-note">'+outliers.length+' extreme ETF'+(outliers.length===1?'':'s')+' pinned to the edge</span>':'';
+  return '<section class="flow-map flow-extension-map"><div class="flow-map-head"><div><span class="eyebrow">50D ATR EXTENSION · ETF DISTRIBUTION</span><h3>Distance from the 50-day moving average</h3><p>One dot is one raw ETF. Its vertical position is its ATR-normalized distance from the 50-day SMA; horizontal position only prevents overlap.</p></div>'+outlierNote+'</div><div class="flow-extension-summary"><span><b>'+above+'</b> above 50D SMA</span><span><b>'+fmt(rows.length-above,0)+'</b> below 50D SMA</span><span><b class="'+extensionTone(medianExtension)+'">'+fmt(medianExtension,2)+'×</b> median extension</span></div><div class="flow-map-plot"><div class="flow-y-label">Y · 50D ATR extension ↑</div><div class="flow-extension-side above">Above 50D SMA · extended</div><div class="flow-extension-side zero">50D SMA · 0×</div><div class="flow-extension-side below">Below 50D SMA · under 50D</div><i class="flow-h-axis"></i>'+dots+'</div></section>';
 }
 function flowTable(groups,key,previousRanks){
   const columns=['one_day','one_week','one_month','three_months','six_months','one_year'];
@@ -339,10 +357,13 @@ function leadership(){
   const top=groups[0];
   if(!flowSelection||!groups.some(group=>group.group===flowSelection))flowSelection=top?.group||'';
   const selectedGroup=groups.find(group=>group.group===flowSelection);
-  const body=flowMap(groups,key)+flowGroupPanel(selectedGroup,groups,key)+flowTable(groups,key,previousRanks);
+  const extensionMode=flowMode==='extension';
+  const body=extensionMode?flowExtensionMap(payload,etf):flowMap(groups,key)+flowGroupPanel(selectedGroup,groups,key)+flowTable(groups,key,previousRanks);
   const flowHorizons=[['1d','1D','Session'],['1w','1W','Fast'],['1m','1M','Swing'],['3m','3M','Trend'],['6m','6M','Cycle'],['1y','1Y','Long']];
-  const flowHorizon='<div class="horizon"><span class="horizon-label">Map strength</span><div class="segments" aria-label="Map performance horizon">'+flowHorizons.map(([id,label,role])=>'<button data-flow-frame="'+id+'" class="'+(flowFrame===id?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('')+'</div></div>';
-  return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(top?.group||'Leadership map')+'</h2><p>'+subcopy+' A theme with one ETF has the same weight as a theme with ten.</p></div></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+flowHorizon+'</div><section class="flow-stage">'+body+'</section><section class="flow-next">'+actionTile('⌕','Find the stock expression','Move from a leading group into the liquid-leader and OBC screens.','#screener','Radar','cyan')+actionTile('◉','Check whether the tape supports it','Relative strength works best alongside improving participation.','#environment','Pulse','gold')+'</section>';
+  const flowHorizon='<div class="horizon"><span class="horizon-label">Map view</span><div class="segments" aria-label="Map view">'+flowHorizons.map(([id,label,role])=>'<button data-flow-frame="'+id+'" class="'+(!extensionMode&&flowFrame===id?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('')+'<span class="flow-mode-divider" aria-hidden="true"></span><button data-flow-mode="extension" class="flow-extension-button '+(extensionMode?'active':'')+'"><b>Extension</b><small>50D SMA</small></button></div></div>';
+  const pageTitle=extensionMode?'50D SMA extension':top?.group||'Leadership map';
+  const pageCopy=extensionMode?'Raw ETF extension distribution. This is a separate technical-state view, not a performance timeframe.':subcopy+' A theme with one ETF has the same weight as a theme with ten.';
+  return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(pageTitle)+'</h2><p>'+pageCopy+'</p></div></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+flowHorizon+'</div><section class="flow-stage">'+body+'</section><section class="flow-next">'+actionTile('⌕','Find the stock expression','Move from a leading group into the liquid-leader and OBC screens.','#screener','Radar','cyan')+actionTile('◉','Check whether the tape supports it','Relative strength works best alongside improving participation.','#environment','Pulse','gold')+'</section>';
 }
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -522,7 +543,8 @@ document.addEventListener('click',async event=>{
  if(node.dataset.flowEtf){openFlowETF(node.dataset.flowEtf,node.dataset.flowGroup);return;}
  if(node.dataset.frame){frame=node.dataset.frame;render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
- if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowSelection='';render();return;}
+ if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';flowSelection='';render();return;}
+ if(node.dataset.flowMode){flowMode=node.dataset.flowMode;flowSelection='';render();return;}
  if(node.dataset.flowGroup){flowSelection=node.dataset.flowGroup;render();return;}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
