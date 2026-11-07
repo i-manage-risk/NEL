@@ -13,6 +13,7 @@ const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',p
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowSort={key:'rank',direction:'asc'}, flowSelection='';
+let flowETFState=null, flowWidgetSerial=0;
 let filters={search:'',group:'',adr:5,extension:4,above9d:false,above9w:false,above9m:false,liquid:false,superLiquid:false,tight:false};
 let obcFilters={search:'',group:'',adr:'',extension:'',liquid:false,superLiquid:false};
 let overrides=store.get('themes',{}), selected=null, screenerView='kk';
@@ -97,8 +98,35 @@ function buildFlowGroups(payload,snapshot,key){
 function flowRanks(payload,snapshot,key){return new Map(buildFlowGroups(payload,snapshot,key).map(group=>[group.group,group.rank]));}
 function flowGroupPanel(group){
   if(!group)return '';
-  const rows=group.members.map(row=>'<tr><td><a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(row.symbol)+'">'+escapeHTML(row.symbol)+'</a></td><td class="num '+returnTone(row.one_day)+'">'+pct(row.one_day)+'</td><td class="num '+returnTone(row.one_week)+'">'+pct(row.one_week)+'</td><td class="num '+returnTone(row.one_month)+'">'+pct(row.one_month)+'</td><td class="num '+returnTone(row.three_months)+'">'+pct(row.three_months)+'</td><td class="num '+returnTone(row.six_months)+'">'+pct(row.six_months)+'</td></tr>').join('');
+  const rows=group.members.map(row=>'<tr><td><button class="flow-etf-link" data-flow-etf="'+escapeHTML(row.symbol)+'" data-flow-group="'+escapeHTML(group.group)+'">'+escapeHTML(row.symbol)+'</button></td><td class="num '+returnTone(row.one_day)+'">'+pct(row.one_day)+'</td><td class="num '+returnTone(row.one_week)+'">'+pct(row.one_week)+'</td><td class="num '+returnTone(row.one_month)+'">'+pct(row.one_month)+'</td><td class="num '+returnTone(row.three_months)+'">'+pct(row.three_months)+'</td><td class="num '+returnTone(row.six_months)+'">'+pct(row.six_months)+'</td></tr>').join('');
   return '<section class="flow-detail"><div><span class="eyebrow">GROUP BREAKDOWN</span><h3>'+escapeHTML(group.group)+'</h3><p>'+group.member_count+' ETF'+(group.member_count===1?'':'s')+' · equal-weight median return: <b class="'+returnTone(group.performance)+'">'+pct(group.performance)+'</b></p></div><a class="lead-link" href="'+(leadershipKind==='sectors'?'sectors.html':'themes.html')+'">Open detailed research <b>↗</b></a><div class="table-box"><table><thead><tr><th>ETF</th><th class="num">1D</th><th class="num">1W</th><th class="num">1M</th><th class="num">3M</th><th class="num">6M</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+}
+function flowPayload(){return leadershipKind==='sectors'?sectors:themes;}
+function flowETFDetails(payload,symbol){
+  const snapshot=etfSnapshot(payload), daily=(snapshot?.daily_changes||[]).find(row=>row.symbol===symbol)||{};
+  const member=Object.values(snapshot?.windows||{}).flatMap(groups=>groups.flatMap(group=>group.members||[])).find(row=>row.symbol===symbol)||{};
+  return {...member,...daily,symbol,description:member.description||daily.description||'ETF statistics unavailable in this snapshot.',adrp:member.adrp??daily.adrp,average_dollar_volume_30d:member.average_dollar_volume_30d??daily.average_dollar_volume_30d,extension:member.extension??daily.extension};
+}
+function flowHoldingRows(items){
+  if(!items?.length)return '<tr><td colspan="5" class="empty">No qualifying common-stock holdings are available for this ETF.</td></tr>';
+  return items.map(item=>'<tr><td><button class="flow-holding-link" data-flow-holding="'+escapeHTML(item.symbol)+'" data-flow-holding-name="'+escapeHTML(item.name)+'">'+escapeHTML(item.symbol)+'</button></td><td>'+escapeHTML(item.name)+'</td><td class="num">'+pct(Number(item.weight)*100)+'</td><td class="num">'+money(item.average_dollar_volume_30d)+'</td><td class="num '+extensionTone(item.extension)+'">'+(finite(item.extension)?fmt(item.extension,2)+'×':'—')+'</td></tr>').join('');
+}
+function flowETFDialog(){
+  const state=flowETFState;if(!state)return;
+  const dialog=$('#flow-etf-dialog'), detail=flowETFDetails(state.payload,state.etf), holdings=state.payload.holdings?.[state.etf]||[];
+  const selected=state.chartSymbol===state.etf?'ETF chart':'Holding chart · '+state.chartSymbol;
+  const chartId='flow-detail-chart-'+(++flowWidgetSerial);
+  $('#flow-etf-content').innerHTML='<div class="flow-dialog-head"><div><span class="eyebrow">'+escapeHTML(state.group)+' · ETF DETAIL</span><h2>'+escapeHTML(state.etf)+' <small>'+escapeHTML(detail.description)+'</small></h2></div><button data-action="flow-dialog-close" class="flow-dialog-close" aria-label="Close ETF details">×</button></div><div class="flow-dialog-grid"><section class="flow-dialog-data"><div class="flow-stat-grid"><div><span>1D</span><b class="'+returnTone(detail.one_day)+'">'+pct(detail.one_day)+'</b></div><div><span>1W</span><b class="'+returnTone(detail.one_week)+'">'+pct(detail.one_week)+'</b></div><div><span>'+flowLabels[flowFrameKey[flowFrame]]+'</span><b class="'+returnTone(detail[flowFrameKey[flowFrame]])+'">'+pct(detail[flowFrameKey[flowFrame]])+'</b></div><div><span>ADR</span><b>'+pct(detail.adrp)+'</b></div><div><span>Avg $ vol</span><b>'+money(detail.average_dollar_volume_30d)+'</b></div><div><span>Extension</span><b class="'+extensionTone(detail.extension)+'">'+(finite(detail.extension)?fmt(detail.extension,2)+'×':'—')+'</b></div></div><div class="flow-holdings-head"><div><span class="eyebrow">TOP STOCK HOLDINGS</span><h3>'+holdings.length+' disclosed stocks</h3></div><button class="flow-chart-reset '+(state.chartSymbol===state.etf?'active':'')+'" data-flow-etf="'+escapeHTML(state.etf)+'" data-flow-group="'+escapeHTML(state.group)+'">Show '+escapeHTML(state.etf)+'</button></div><div class="table-box flow-holdings"><table><thead><tr><th>Ticker</th><th>Company</th><th class="num">Weight</th><th class="num">Avg $ vol</th><th class="num">Extension</th></tr></thead><tbody>'+flowHoldingRows(holdings)+'</tbody></table></div><p class="note">Holdings exclude cash, bonds, swaps, futures, options, collateral, commodities, crypto assets, and fund holdings. Holdings disclosure: '+escapeHTML(state.payload.holdings_as_of||'unavailable')+'.</p></section><section class="flow-dialog-chart"><div><span class="eyebrow">'+escapeHTML(selected)+'</span><h3>'+escapeHTML(state.chartSymbol)+'</h3></div><div id="'+chartId+'" class="flow-tv-chart" data-flow-tv-symbol="'+escapeHTML(state.chartSymbol)+'"><span>Loading chart…</span></div><a class="lead-link" target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(state.chartSymbol)+'">Open in TradingView <b>↗</b></a></section></div>';
+  if(!dialog.open)dialog.showModal();
+  mountFlowTradingView(chartId,state.chartSymbol);
+}
+async function mountFlowTradingView(id,symbol){
+  const node=$('#'+id);if(!node)return;
+  try{await loadTradingView();if(!node.isConnected)return;node.textContent='';new TradingView.widget({container_id:id,symbol,interval:'D',timezone:'America/New_York',theme:'dark',style:'1',locale:'en',toolbar_bg:'#141414',hide_top_toolbar:true,hide_side_toolbar:true,allow_symbol_change:false,enable_publishing:false,save_image:false,withdateranges:true,autosize:true,studies:['STD;EMA'],studies_overrides:{'moving average exponential.length':9,'moving average exponential.plot.color':'#F5F2E8','moving average exponential.plot.linewidth':2},overrides:{'mainSeriesProperties.priceScaleProperties.log':true,'mainSeriesProperties.candleStyle.upColor':'#85d65d','mainSeriesProperties.candleStyle.downColor':'#ff3266','mainSeriesProperties.candleStyle.borderUpColor':'#85d65d','mainSeriesProperties.candleStyle.borderDownColor':'#ff3266','mainSeriesProperties.candleStyle.wickUpColor':'#85d65d','mainSeriesProperties.candleStyle.wickDownColor':'#ff3266'}});}catch(error){node.innerHTML='<span class="chart-unavailable">Chart unavailable · <a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(symbol)+'">open in TradingView ↗</a></span>';}
+}
+function openFlowETF(symbol,groupName){
+  const payload=flowPayload(), snapshot=etfSnapshot(payload), group=groupName||((snapshot?.daily_changes||[]).find(row=>row.symbol===symbol)?.group)||'';
+  flowETFState={payload,etf:symbol,group,chartSymbol:symbol};flowETFDialog();
 }
 function flowMap(groups,key){
   if(!groups.length)return '<p class="empty">No group leadership data is available for this close.</p>';
@@ -462,6 +490,8 @@ function showStock(symbol,kind){
 }
 document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group]');if(!node)return;
+ if(node.dataset.flowHolding&&flowETFState){flowETFState.chartSymbol=node.dataset.flowHolding;flowETFDialog();return;}
+ if(node.dataset.flowEtf){openFlowETF(node.dataset.flowEtf,node.dataset.flowGroup);return;}
  if(node.dataset.frame){frame=node.dataset.frame;render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
  if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowSelection='';render();return;}
@@ -476,6 +506,7 @@ document.addEventListener('click',async event=>{
  if(action==='screener-view'){screenerDisplay=node.dataset.view;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
  if(action==='flow-sort'){const key=node.dataset.sortKey;flowSort={key,direction:flowSort.key===key&&flowSort.direction==='asc'?'desc':'asc'};render();return;}
+ if(action==='flow-dialog-close'){$('#flow-etf-dialog').close();return;}
  if(action==='kk-toggle'){const key=node.dataset.toggle;filters[key]=!filters[key];render();return;}
  if(action==='obc-toggle'){const key=node.dataset.toggle;obcFilters[key]=!obcFilters[key];render();return;}
  if(action==='export-kk')download('kk-liquid-leaders-'+session().date+'.csv','symbol\n'+[...new Set(filteredKKStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
