@@ -357,7 +357,6 @@ function leadership(){
   const snapshots=payload.snapshots?.filter(snapshot=>snapshot.date<=etf?.date)||[];
   const previous=snapshots.at(-6), previousRanks=previous?flowRanks(payload,previous,key):new Map();
   const labels={themes:'Themes',sectors:'Sectors'};
-  const subcopy='Which '+labels[leadershipKind].toLowerCase()+' have the strongest equal-weight price leadership?';
   const top=groups[0];
   if(!flowSelection||!groups.some(group=>group.group===flowSelection))flowSelection=top?.group||'';
   const selectedGroup=groups.find(group=>group.group===flowSelection);
@@ -366,7 +365,7 @@ function leadership(){
   const flowHorizons=[['1d','1D','Session'],['1w','1W','Fast'],['1m','1M','Swing'],['3m','3M','Trend'],['6m','6M','Cycle'],['1y','1Y','Long']];
   const flowHorizon='<div class="horizon"><span class="horizon-label">Map view</span><div class="segments" aria-label="Map view">'+flowHorizons.map(([id,label,role])=>'<button data-flow-frame="'+id+'" class="'+(!extensionMode&&flowFrame===id?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('')+'<span class="flow-mode-divider" aria-hidden="true"></span><button data-flow-mode="extension" class="flow-extension-button '+(extensionMode?'active':'')+'"><b>Extension</b><small>50D SMA</small></button></div></div>';
   const pageTitle=extensionMode?'50D SMA extension':top?.group||'Leadership map';
-  const pageCopy=extensionMode?'Raw ETF extension distribution. This is a separate technical-state view, not a performance timeframe.':subcopy+' A theme with one ETF has the same weight as a theme with ten.';
+  const pageCopy=extensionMode?'Raw ETF extension distribution. This is a separate technical-state view, not a performance timeframe.':'Strongest '+(leadershipKind==='themes'?'theme':'sector')+' in the selected map view.';
   return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(pageTitle)+'</h2><p>'+pageCopy+'</p></div></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+flowHorizon+'</div><section class="flow-stage">'+body+'</section>';
 }
 function positioning(){
