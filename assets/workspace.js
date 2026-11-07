@@ -507,7 +507,7 @@ function showStock(symbol,kind){
   $('#stock-dialog').showModal();
 }
 document.addEventListener('click',async event=>{
- const node=event.target.closest('button,[data-filter-group]');if(!node)return;
+ const node=event.target.closest('button,[data-filter-group],[data-flow-group]');if(!node)return;
  if(node.dataset.flowHolding&&flowETFState){flowETFState.chartSymbol=node.dataset.flowHolding;flowETFDialog();return;}
  if(node.dataset.flowEtf){openFlowETF(node.dataset.flowEtf,node.dataset.flowGroup);return;}
  if(node.dataset.frame){frame=node.dataset.frame;render();}
