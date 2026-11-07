@@ -382,6 +382,7 @@ def build_snapshots(
                         "three_months": None,
                         "six_months": None,
                         "one_year": None,
+                        "extension": None,
                     }
                 )
                 continue
@@ -397,6 +398,7 @@ def build_snapshots(
                     "three_months": _clean_number(row.get("perf_3m")),
                     "six_months": _clean_number(row.get("perf_6m")),
                     "one_year": _clean_number(row.get("perf_1y")),
+                    "extension": _clean_number(row.get("extension")),
                 }
             )
         snapshot = {"date": session.isoformat(), "windows": windows, "daily_changes": daily_changes}

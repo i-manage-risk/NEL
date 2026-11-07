@@ -101,8 +101,10 @@ class EtfStrengthTests(unittest.TestCase):
         self.assertEqual(snapshots[0]["daily_changes"][0]["intraday"], 1.25)
         self.assertEqual(snapshots[0]["daily_changes"][0]["one_day"], -0.75)
         self.assertEqual(snapshots[0]["daily_changes"][0]["one_week"], 2.5)
+        self.assertEqual(snapshots[0]["daily_changes"][0]["extension"], 2.0)
         self.assertEqual(snapshots[0]["daily_changes"][1]["symbol"], "MISS")
         self.assertIsNone(snapshots[0]["daily_changes"][1]["one_day"])
+        self.assertIsNone(snapshots[0]["daily_changes"][1]["extension"])
 
     def test_overlapping_theme_etfs_share_one_group(self):
         universe = load_universe(DATA_DIR / "theme_etfs.tsv").set_index("Ticker")
