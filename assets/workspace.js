@@ -73,25 +73,34 @@ const flowKeys={one_day:'one_day',one_week:'one_week',one_month:'one_month',thre
 const flowLabels={one_day:'1D',one_week:'1W',one_month:'1M',three_months:'3M',six_months:'6M',one_year:'1Y'};
 const flowFrameKey={ '1d':'one_day','1w':'one_week','1m':'one_month','3m':'three_months','6m':'six_months','1y':'one_year'};
 const flowSessions={one_day:1,one_week:5,one_month:21,three_months:63,six_months:126,one_year:252};
+const flowMomentumKey={one_day:'one_week',one_week:'one_day',one_month:'one_week',three_months:'one_week',six_months:'one_week',one_year:'one_week'};
 function median(values){const sorted=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!sorted.length)return null;const mid=Math.floor(sorted.length/2);return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;}
+function percentile(values,p){const sorted=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!sorted.length)return null;const index=(sorted.length-1)*p,low=Math.floor(index),high=Math.ceil(index);return low===high?sorted[low]:sorted[low]+(sorted[high]-sorted[low])*(index-low);}
 function etfSnapshot(payload,date=asof()){return payload.snapshots?.filter(s=>s.date<=date).at(-1);}
 function flowBenchmark(date,key){
   const rows=spxHistory.filter(r=>r.date<=date&&finite(r.close)).sort((a,b)=>a.date.localeCompare(b.date));
   const now=rows.at(-1), then=rows.at(-(flowSessions[key]+1));
   return now&&then?100*(Number(now.close)/Number(then.close)-1):null;
 }
+function flowGroupName(payload,row){
+  // BWET is tanker-freight futures exposure, not a basket of shipping-company equities.
+  // Keeping it separate prevents one niche macro instrument from defining the Shipping theme.
+  if(payload?.kind==='themes'&&row.symbol==='BWET')return 'Tanker freight';
+  return String(row.group||'Unclassified');
+}
 function buildFlowGroups(payload,snapshot,key){
-  const benchmark=flowBenchmark(snapshot?.date,key), grouped=new Map();
+  const benchmark=flowBenchmark(snapshot?.date,key), momentumKey=flowMomentumKey[key], momentumBenchmark=flowBenchmark(snapshot?.date,momentumKey), grouped=new Map();
   (snapshot?.daily_changes||[]).filter(row=>row.symbol!=='SVIX').forEach(row=>{
     if(!finite(row[key]))return;
-    const group=String(row.group||'Unclassified'), item=grouped.get(group)||{group,members:[]};
+    const group=flowGroupName(payload,row), item=grouped.get(group)||{group,members:[]};
     item.members.push(row);grouped.set(group,item);
   });
   const groups=[...grouped.values()].map(group=>{
     const performance=median(group.members.map(row=>row[key]));
     const returns=Object.fromEntries(Object.keys(flowKeys).map(metric=>[metric,median(group.members.map(row=>row[metric]))]));
     const ordered=[...group.members].sort((a,b)=>Number(b[key])-Number(a[key]));
-    return {...group,...returns,performance,relative:finite(benchmark)?performance-benchmark:null,leader:ordered[0]?.symbol||'—',member_count:ordered.length,members:ordered};
+    const momentum=returns[momentumKey];
+    return {...group,...returns,performance,relative:finite(benchmark)?performance-benchmark:null,momentum,momentum_relative:finite(momentumBenchmark)?momentum-momentumBenchmark:null,momentum_key:momentumKey,leader:ordered[0]?.symbol||'—',member_count:ordered.length,members:ordered};
   }).sort((a,b)=>Number(b.performance)-Number(a.performance)||a.group.localeCompare(b.group));
   return groups.map((group,index)=>({...group,rank:index+1,benchmark}));
 }
@@ -130,13 +139,17 @@ function openFlowETF(symbol,groupName){
 }
 function flowMap(groups,key){
   if(!groups.length)return '<p class="empty">No group leadership data is available for this close.</p>';
-  const xValues=groups.map(group=>finite(group.relative)?group.relative:group.performance), yValues=groups.map(group=>group.one_week??group.performance);
-  const maxX=Math.max(3,...xValues.map(value=>Math.abs(Number(value))));const maxY=Math.max(3,...yValues.map(value=>Math.abs(Number(value))));
+  const xValues=groups.map(group=>finite(group.relative)?group.relative:group.performance), yValues=groups.map(group=>finite(group.momentum_relative)?group.momentum_relative:group.momentum);
+  // A 95th-percentile scale keeps one extraordinary return from flattening the rest of the map.
+  // The point still remains visible at the edge and is explicitly marked as an outlier.
+  const maxX=Math.max(3,percentile(xValues.map(value=>Math.abs(Number(value))),.95)||0);
+  const maxY=Math.max(3,percentile(yValues.map(value=>Math.abs(Number(value))),.95)||0);
   const top=new Set(groups.slice(0,3).map(group=>group.group));
   if(flowSelection)top.add(flowSelection);
-  const dots=groups.map(group=>{const x=finite(group.relative)?group.relative:group.performance,y=group.one_week??group.performance;const left=50+45*Number(x)/maxX,topPos=50-42*Number(y)/maxY;const active=flowSelection===group.group;return '<button class="flow-dot '+(active?'active ':'')+(group.performance>=0?'positive':'negative')+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+' '+pct(group.performance)+'">'+(top.has(group.group)?'<span>'+escapeHTML(group.group)+'</span>':'')+'</button>';}).join('');
+  const dots=groups.map(group=>{const x=finite(group.relative)?group.relative:group.performance,y=finite(group.momentum_relative)?group.momentum_relative:group.momentum;const xOutlier=Math.abs(Number(x))>maxX,yOutlier=Math.abs(Number(y))>maxY,left=50+45*Number(x)/maxX,topPos=50-42*Number(y)/maxY;const active=flowSelection===group.group;const label=top.has(group.group)?'<span>'+escapeHTML(group.group)+(xOutlier||yOutlier?'<em> outlier</em>':'')+'</span>':'';return '<button class="flow-dot '+(active?'active ':'')+(group.performance>=0?'positive':'negative')+((xOutlier||yOutlier)?' outlier':'')+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+' '+pct(group.performance)+(xOutlier||yOutlier?' outlier':'')+'">'+label+'</button>';}).join('');
   const xTitle=finite(groups[0].relative)?flowLabels[key]+' return vs SPX':'Median '+flowLabels[key]+' return';
-  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Leadership and acceleration</h3><p>Every group is one equal-sized point. Horizontal position is '+xTitle+'; vertical position is 1W return.</p></div><div class="flow-map-key"><span>← Lagging</span><span>Leading →</span></div></div><div class="flow-map-plot"><div class="flow-y-label">1W improving ↑</div><div class="flow-x-axis">'+escapeHTML(xTitle)+'</div><div class="flow-quadrant q-one">Leading</div><div class="flow-quadrant q-two">Picking up</div><div class="flow-quadrant q-three">Cooling</div><div class="flow-quadrant q-four">Lagging</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
+  const yTitle=flowLabels[groups[0].momentum_key]+' return vs SPX';
+  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Leadership and near-term momentum</h3><p>Every group is one equal-sized point. Horizontal position is '+xTitle+'; vertical position is '+yTitle+'. The axis uses a 95th-percentile scale so an extreme point cannot flatten the rest.</p></div><div class="flow-map-key"><span>← Lagging</span><span>Leading →</span></div></div><div class="flow-map-plot"><div class="flow-y-label">'+escapeHTML(yTitle)+' improving ↑</div><div class="flow-x-axis">'+escapeHTML(xTitle)+'</div><div class="flow-quadrant q-one">Leading</div><div class="flow-quadrant q-two">Picking up</div><div class="flow-quadrant q-three">Cooling</div><div class="flow-quadrant q-four">Lagging</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
 }
 function flowTable(groups,key,previousRanks){
   const columns=['one_day','one_week','one_month','three_months','six_months','one_year'];
