@@ -465,25 +465,19 @@ def latest_holding_stats(history: pd.DataFrame, as_of: date) -> dict | None:
     frame = history.loc[history.index <= pd.Timestamp(as_of)].copy()
     if len(frame) < 50:
         return None
-    for column in ["high", "low", "close", "volume"]:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
-    previous_close = frame["close"].shift(1)
-    true_range = pd.concat(
-        [frame["high"] - frame["low"], (frame["high"] - previous_close).abs(), (frame["low"] - previous_close).abs()],
-        axis=1,
-    ).max(axis=1)
-    atr = wilder_average(true_range, 14).iloc[-1]
-    close = frame["close"].iloc[-1]
-    sma30 = frame["close"].rolling(30).mean().iloc[-1]
-    sma50 = frame["close"].rolling(50).mean().iloc[-1]
-    average_volume_30d = frame["volume"].rolling(30).mean().iloc[-1]
-    if not all(pd.notna(value) and value > 0 for value in [atr, close, sma30, sma50, average_volume_30d]):
+    metrics = build_metric_history(frame)
+    row = metrics.iloc[-1]
+    if not all(pd.notna(row.get(value)) for value in ["average_dollar_volume_30d", "extension"]):
         return None
-    atrp = 100 * atr / close
-    extension = (close - sma50) / (sma50 * (atrp / 100))
     return {
-        "average_dollar_volume_30d": round(float(sma30 * average_volume_30d), 2),
-        "extension": round(float(extension), 3),
+        "average_dollar_volume_30d": _clean_number(row.get("average_dollar_volume_30d")),
+        "extension": _clean_number(row.get("extension")),
+        "one_day": _clean_number(row.get("close_to_close_change")),
+        "one_week": _clean_number(row.get("perf_1w")),
+        "one_month": _clean_number(row.get("perf_1m")),
+        "three_months": _clean_number(row.get("perf_3m")),
+        "six_months": _clean_number(row.get("perf_6m")),
+        "one_year": _clean_number(row.get("perf_1y")),
     }
 
 
@@ -501,7 +495,7 @@ def enrich_holdings(
         for item in items
         if "." not in item["symbol"] and ":" not in item["symbol"]
     })
-    start = close_date - timedelta(days=150)
+    start = close_date - timedelta(days=400)
     histories, _ = download_prices(symbols, start, close_date, chunk_size=40)
     stats = {symbol: latest_holding_stats(history, close_date) for symbol, history in histories.items()}
     enriched = {}
