@@ -105,9 +105,10 @@ function buildFlowGroups(payload,snapshot,key){
   return groups.map((group,index)=>({...group,rank:index+1,benchmark}));
 }
 function flowRanks(payload,snapshot,key){return new Map(buildFlowGroups(payload,snapshot,key).map(group=>[group.group,group.rank]));}
-function flowMapMetrics(groups){
-  const x=group=>finite(group.relative)?group.relative:group.performance;
-  const y=group=>finite(group.momentum_relative)?group.momentum_relative:group.momentum;
+function flowMapMetrics(groups,key){
+  const sessionMap=key==='one_day';
+  const x=group=>sessionMap?group.performance:(finite(group.relative)?group.relative:group.performance);
+  const y=group=>sessionMap?group.one_week:(finite(group.momentum_relative)?group.momentum_relative:group.momentum);
   const maxX=Math.max(3,percentile(groups.map(group=>Math.abs(Number(x(group)))),.95)||0);
   const maxY=Math.max(3,percentile(groups.map(group=>Math.abs(Number(y(group)))),.95)||0);
   const clipped=group=>Math.abs(Number(x(group)))>maxX||Math.abs(Number(y(group)))>maxY;
@@ -116,9 +117,9 @@ function flowMapMetrics(groups){
 function flowGroupPanel(group,groups,key){
   if(!group)return '';
   const rows=group.members.map(row=>'<tr><td><button class="flow-etf-link" data-flow-etf="'+escapeHTML(row.symbol)+'" data-flow-group="'+escapeHTML(group.group)+'">'+escapeHTML(row.symbol)+'</button></td><td class="num '+returnTone(row.one_day)+'">'+pct(row.one_day)+'</td><td class="num '+returnTone(row.one_week)+'">'+pct(row.one_week)+'</td><td class="num '+returnTone(row.one_month)+'">'+pct(row.one_month)+'</td><td class="num '+returnTone(row.three_months)+'">'+pct(row.three_months)+'</td><td class="num '+returnTone(row.six_months)+'">'+pct(row.six_months)+'</td><td class="num '+returnTone(row.one_year)+'">'+pct(row.one_year)+'</td></tr>').join('');
-  const metrics=flowMapMetrics(groups), selectedLabel=flowLabels[key], momentumLabel=flowLabels[group.momentum_key];
-  const outliers=metrics.outliers.map(item=>{const axes=[];if(Math.abs(Number(metrics.x(item)))>metrics.maxX)axes.push(selectedLabel+' strength');if(Math.abs(Number(metrics.y(item)))>metrics.maxY)axes.push(momentumLabel+' momentum');return '<tr><td><button data-flow-group="'+escapeHTML(item.group)+'">'+escapeHTML(item.group)+'</button><small>'+escapeHTML(item.leader)+' · '+escapeHTML(axes.join(' + '))+'</small></td><td class="num '+returnTone(item.relative)+'">'+signed(item.relative)+' pp</td><td class="num '+returnTone(item.momentum_relative)+'">'+signed(item.momentum_relative)+' pp</td></tr>';}).join('');
-  const outlierPanel=metrics.outliers.length?'<aside class="flow-outliers"><div><span class="eyebrow">MAP OUTLIERS</span><h3>'+metrics.outliers.length+' clipped point'+(metrics.outliers.length===1?'':'s')+'</h3><p>Raw data remains intact; these points sit at the plot edge so the rest stays readable.</p></div><div class="flow-outlier-table"><table><thead><tr><th>Theme / sector</th><th class="num">'+selectedLabel+' vs SPX</th><th class="num">'+momentumLabel+' vs SPX</th></tr></thead><tbody>'+outliers+'</tbody></table></div></aside>':'<aside class="flow-outliers empty"><span class="eyebrow">MAP OUTLIERS</span><h3>No clipped points</h3><p>Every group fits within the current map scale.</p></aside>';
+  const metrics=flowMapMetrics(groups,key), selectedLabel=flowLabels[key], momentumLabel=flowLabels[group.momentum_key], sessionMap=key==='one_day', xColumn=sessionMap?'1D raw':selectedLabel+' vs SPX', yColumn=sessionMap?'1W raw':momentumLabel+' vs SPX';
+  const outliers=metrics.outliers.map(item=>{const axes=[];if(Math.abs(Number(metrics.x(item)))>metrics.maxX)axes.push(selectedLabel+(sessionMap?' change':' strength'));if(Math.abs(Number(metrics.y(item)))>metrics.maxY)axes.push(momentumLabel+(sessionMap?' trend':' momentum'));return '<tr><td><button data-flow-group="'+escapeHTML(item.group)+'">'+escapeHTML(item.group)+'</button><small>'+escapeHTML(item.leader)+' · '+escapeHTML(axes.join(' + '))+'</small></td><td class="num '+returnTone(metrics.x(item))+'">'+(sessionMap?pct(metrics.x(item)):signed(metrics.x(item))+' pp')+'</td><td class="num '+returnTone(metrics.y(item))+'">'+(sessionMap?pct(metrics.y(item)):signed(metrics.y(item))+' pp')+'</td></tr>';}).join('');
+  const outlierPanel=metrics.outliers.length?'<aside class="flow-outliers"><div><span class="eyebrow">MAP OUTLIERS</span><h3>'+metrics.outliers.length+' clipped point'+(metrics.outliers.length===1?'':'s')+'</h3><p>Raw data remains intact; these points stay out of the plot so the rest remains readable.</p></div><div class="flow-outlier-table"><table><thead><tr><th>Theme / sector</th><th class="num">'+xColumn+'</th><th class="num">'+yColumn+'</th></tr></thead><tbody>'+outliers+'</tbody></table></div></aside>':'<aside class="flow-outliers empty"><span class="eyebrow">MAP OUTLIERS</span><h3>No clipped points</h3><p>Every group fits within the current map scale.</p></aside>';
   return '<section class="flow-detail"><div><span class="eyebrow">GROUP BREAKDOWN</span><h3>'+escapeHTML(group.group)+'</h3><p>'+group.member_count+' ETF'+(group.member_count===1?'':'s')+' · equal-weight median '+selectedLabel+' return: <b class="'+returnTone(group.performance)+'">'+pct(group.performance)+'</b></p></div>'+outlierPanel+'<div class="table-box"><table><thead><tr><th>ETF</th><th class="num">1D</th><th class="num">1W</th><th class="num">1M</th><th class="num">3M</th><th class="num">6M</th><th class="num">1Y</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
 }
 function flowPayload(){return leadershipKind==='sectors'?sectors:themes;}
@@ -152,10 +153,10 @@ function flowMap(groups,key){
   if(!groups.length)return '<p class="empty">No group leadership data is available for this close.</p>';
   // A 95th-percentile scale identifies values that would flatten the map.
   // Those values are reported in the outlier panel instead of crowding the scatter field.
-  const metrics=flowMapMetrics(groups), {x,y,maxX,maxY}=metrics;
+  const metrics=flowMapMetrics(groups,key), {x,y,maxX,maxY}=metrics, sessionMap=key==='one_day';
   const dots=groups.filter(group=>!metrics.clipped(group)).map(group=>{const xValue=x(group),yValue=y(group),left=50+45*Number(xValue)/maxX,topPos=50-42*Number(yValue)/maxY,active=flowSelection===group.group,edge=left>74?' edge-right':'';const tooltip='<span><b>'+escapeHTML(group.group)+'</b></span>';return '<button class="flow-dot '+(active?'active ':'')+(xValue>=0?'positive':'negative')+edge+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+'">'+tooltip+'</button>';}).join('');
-  const xTitle=finite(groups[0].relative)?flowLabels[key]+' return vs SPX':'Median '+flowLabels[key]+' return';
-  const yTitle=flowLabels[groups[0].momentum_key]+' return vs SPX';
+  const xTitle=sessionMap?'1D raw return':finite(groups[0].relative)?flowLabels[key]+' return vs SPX':'Median '+flowLabels[key]+' return';
+  const yTitle=sessionMap?'1W raw return':flowLabels[groups[0].momentum_key]+' return vs SPX';
   const outlierNote=metrics.outliers.length?'<span class="flow-outlier-note">'+metrics.outliers.length+' outlier'+(metrics.outliers.length===1?'':'s')+' listed below</span>':'';
   return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Relative strength and near-term momentum</h3><p>Each plotted point is a theme or sector. Hover a point for its readings; extreme values are kept in the outlier panel below.</p></div>'+outlierNote+'</div><div class="flow-map-plot"><div class="flow-y-label">Y · '+escapeHTML(yTitle)+' ↑</div><div class="flow-x-axis">X · '+escapeHTML(xTitle)+' →</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
 }
