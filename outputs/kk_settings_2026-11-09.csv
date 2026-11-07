@@ -1,0 +1,4 @@
+setting,value
+min_dollar_volume,30000000.0
+min_avg_volume_10d,350000.0
+top_pct,0.02
