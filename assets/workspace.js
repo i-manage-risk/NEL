@@ -150,15 +150,14 @@ function openFlowETF(symbol,groupName){
 }
 function flowMap(groups,key){
   if(!groups.length)return '<p class="empty">No group leadership data is available for this close.</p>';
-  // A 95th-percentile scale keeps one extraordinary return from flattening the rest of the map.
-  // The point still remains visible at the edge and is explicitly marked as an outlier.
+  // A 95th-percentile scale identifies values that would flatten the map.
+  // Those values are reported in the outlier panel instead of crowding the scatter field.
   const metrics=flowMapMetrics(groups), {x,y,maxX,maxY}=metrics;
-  const top=new Set(groups.slice(0,3).map(group=>group.group));
-  if(flowSelection)top.add(flowSelection);
-  const dots=groups.map(group=>{const xValue=x(group),yValue=y(group),xOutlier=Math.abs(Number(xValue))>maxX,yOutlier=Math.abs(Number(yValue))>maxY,left=50+45*Number(xValue)/maxX,topPos=50-42*Number(yValue)/maxY;const active=flowSelection===group.group;const label=top.has(group.group)?'<span>'+escapeHTML(group.group)+(xOutlier||yOutlier?'<em> outlier</em>':'')+'</span>':'';return '<button class="flow-dot '+(active?'active ':'')+(group.performance>=0?'positive':'negative')+((xOutlier||yOutlier)?' outlier':'')+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+' '+pct(group.performance)+(xOutlier||yOutlier?' outlier':'')+'">'+label+'</button>';}).join('');
+  const dots=groups.filter(group=>!metrics.clipped(group)).map(group=>{const xValue=x(group),yValue=y(group),left=50+45*Number(xValue)/maxX,topPos=50-42*Number(yValue)/maxY,active=flowSelection===group.group,edge=left>74?' edge-right':'';const tooltip='<span><b>'+escapeHTML(group.group)+'</b><small>X '+signed(xValue)+' pp · Y '+signed(yValue)+' pp</small></span>';return '<button class="flow-dot '+(active?'active ':'')+(xValue>=0?'positive':'negative')+edge+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+' X '+signed(xValue)+' percentage points, Y '+signed(yValue)+' percentage points">'+tooltip+'</button>';}).join('');
   const xTitle=finite(groups[0].relative)?flowLabels[key]+' return vs SPX':'Median '+flowLabels[key]+' return';
   const yTitle=flowLabels[groups[0].momentum_key]+' return vs SPX';
-  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Relative strength and near-term momentum</h3><p>Every group is one equal-sized point. The axes, not quadrant labels, describe the signal. The scale uses the 95th percentile so an extreme point cannot flatten the rest.</p></div></div><div class="flow-map-plot"><div class="flow-y-label">Y · '+escapeHTML(yTitle)+' ↑</div><div class="flow-x-axis">X · '+escapeHTML(xTitle)+' →</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
+  const outlierNote=metrics.outliers.length?'<span class="flow-outlier-note">'+metrics.outliers.length+' outlier'+(metrics.outliers.length===1?'':'s')+' listed below</span>':'';
+  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Relative strength and near-term momentum</h3><p>Each plotted point is a theme or sector. Hover a point for its readings; extreme values are kept in the outlier panel below.</p></div>'+outlierNote+'</div><div class="flow-map-plot"><div class="flow-y-label">Y · '+escapeHTML(yTitle)+' ↑</div><div class="flow-x-axis">X · '+escapeHTML(xTitle)+' →</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
 }
 function flowTable(groups,key,previousRanks){
   const columns=['one_day','one_week','one_month','three_months','six_months','one_year'];
