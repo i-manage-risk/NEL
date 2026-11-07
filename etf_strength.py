@@ -314,7 +314,10 @@ def rank_groups_for_session(
     for group, members in grouped.items():
         scores = pd.Series([member["percentile"] for member in members])
         performances = pd.Series([member["row"][performance_column] for member in members])
-        group_score = 0.7 * scores.median() + 0.3 * scores.max()
+        # A theme is one observation regardless of how many ETFs represent it.
+        # The median ETF percentile keeps a single exceptional fund from giving
+        # a broadly weaker theme an artificial ranking advantage.
+        group_score = scores.median()
         ordered = sorted(members, key=lambda item: item["row"][performance_column], reverse=True)
         ranked.append(
             {

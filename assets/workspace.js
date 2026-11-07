@@ -11,7 +11,8 @@ const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Mon
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
 const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',positioning:'Crowding',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
-let db={}, themes={}, sectors={}, breadth=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
+let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
+let flowFrame='1m', flowSort={key:'rank',direction:'asc'}, flowSelection='';
 let filters={search:'',group:'',adr:5,extension:4,above9d:false,above9w:false,above9m:false,liquid:false,superLiquid:false,tight:false};
 let obcFilters={search:'',group:'',adr:'',extension:'',liquid:false,superLiquid:false};
 let overrides=store.get('themes',{}), selected=null, screenerView='kk';
@@ -67,10 +68,54 @@ function rangeMeter(value,label,tone='cyan'){
   const position=Math.max(1,Math.min(99,Number(value)||0));
   return '<div class="range-meter '+tone+'" aria-label="'+escapeHTML(label)+' '+fmt(value,0)+'"><div class="range-fill" style="width:'+position+'%"></div><i style="left:'+position+'%"></i><span>0</span><span>50</span><span>100</span></div>';
 }
-function flowRankCards(groups){
+const flowKeys={one_day:'one_day',one_week:'one_week',one_month:'one_month',three_months:'three_months',six_months:'six_months',one_year:'one_year'};
+const flowLabels={one_day:'1D',one_week:'1W',one_month:'1M',three_months:'3M',six_months:'6M',one_year:'1Y'};
+const flowFrameKey={ '1w':'one_week','1m':'one_month','3m':'three_months','6m':'six_months','1y':'one_year'};
+const flowSessions={one_day:1,one_week:5,one_month:21,three_months:63,six_months:126,one_year:252};
+function median(values){const sorted=values.filter(finite).map(Number).sort((a,b)=>a-b);if(!sorted.length)return null;const mid=Math.floor(sorted.length/2);return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;}
+function etfSnapshot(payload,date=asof()){return payload.snapshots?.filter(s=>s.date<=date).at(-1);}
+function flowBenchmark(date,key){
+  const rows=spxHistory.filter(r=>r.date<=date&&finite(r.close)).sort((a,b)=>a.date.localeCompare(b.date));
+  const now=rows.at(-1), then=rows.at(-(flowSessions[key]+1));
+  return now&&then?100*(Number(now.close)/Number(then.close)-1):null;
+}
+function buildFlowGroups(payload,snapshot,key){
+  const benchmark=flowBenchmark(snapshot?.date,key), grouped=new Map();
+  (snapshot?.daily_changes||[]).filter(row=>row.symbol!=='SVIX').forEach(row=>{
+    if(!finite(row[key]))return;
+    const group=String(row.group||'Unclassified'), item=grouped.get(group)||{group,members:[]};
+    item.members.push(row);grouped.set(group,item);
+  });
+  const groups=[...grouped.values()].map(group=>{
+    const performance=median(group.members.map(row=>row[key]));
+    const returns=Object.fromEntries(Object.keys(flowKeys).map(metric=>[metric,median(group.members.map(row=>row[metric]))]));
+    const ordered=[...group.members].sort((a,b)=>Number(b[key])-Number(a[key]));
+    return {...group,...returns,performance,relative:finite(benchmark)?performance-benchmark:null,leader:ordered[0]?.symbol||'—',member_count:ordered.length,members:ordered};
+  }).sort((a,b)=>Number(b.performance)-Number(a.performance)||a.group.localeCompare(b.group));
+  return groups.map((group,index)=>({...group,rank:index+1,benchmark}));
+}
+function flowRanks(payload,snapshot,key){return new Map(buildFlowGroups(payload,snapshot,key).map(group=>[group.group,group.rank]));}
+function flowGroupPanel(group){
+  if(!group)return '';
+  const rows=group.members.map(row=>'<tr><td><a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(row.symbol)+'">'+escapeHTML(row.symbol)+'</a></td><td class="num '+returnTone(row.one_day)+'">'+pct(row.one_day)+'</td><td class="num '+returnTone(row.one_week)+'">'+pct(row.one_week)+'</td><td class="num '+returnTone(row.one_month)+'">'+pct(row.one_month)+'</td><td class="num '+returnTone(row.three_months)+'">'+pct(row.three_months)+'</td><td class="num '+returnTone(row.six_months)+'">'+pct(row.six_months)+'</td></tr>').join('');
+  return '<section class="flow-detail"><div><span class="eyebrow">GROUP BREAKDOWN</span><h3>'+escapeHTML(group.group)+'</h3><p>'+group.member_count+' ETF'+(group.member_count===1?'':'s')+' · equal-weight median return: <b class="'+returnTone(group.performance)+'">'+pct(group.performance)+'</b></p></div><a class="lead-link" href="'+(leadershipKind==='sectors'?'sectors.html':'themes.html')+'">Open detailed research <b>↗</b></a><div class="table-box"><table><thead><tr><th>ETF</th><th class="num">1D</th><th class="num">1W</th><th class="num">1M</th><th class="num">3M</th><th class="num">6M</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+}
+function flowMap(groups,key){
   if(!groups.length)return '<p class="empty">No group leadership data is available for this close.</p>';
-  const max=Math.max(...groups.map(g=>Math.abs(Number(g.median_performance)||0)),1);
-  return '<div class="rank-cards">'+groups.slice(0,3).map((g,index)=>'<article class="rank-card rank-'+(index+1)+'"><span class="rank-number">0'+(index+1)+'</span><div><small>'+escapeHTML(g.leader_etf||'ETF leader')+' · '+g.confirmation+'/'+g.member_count+' confirmed</small><h3>'+escapeHTML(g.group)+'</h3><div class="rank-bar"><i style="width:'+Math.max(8,Math.abs(Number(g.median_performance)||0)/max*100)+'%"></i></div></div><b class="'+returnTone(g.median_performance)+'">'+pct(g.median_performance)+'</b></article>').join('')+'</div>';
+  const xValues=groups.map(group=>finite(group.relative)?group.relative:group.performance), yValues=groups.map(group=>group.one_week??group.performance);
+  const maxX=Math.max(3,...xValues.map(value=>Math.abs(Number(value))));const maxY=Math.max(3,...yValues.map(value=>Math.abs(Number(value))));
+  const top=new Set(groups.slice(0,3).map(group=>group.group));
+  if(flowSelection)top.add(flowSelection);
+  const dots=groups.map(group=>{const x=finite(group.relative)?group.relative:group.performance,y=group.one_week??group.performance;const left=50+45*Number(x)/maxX,topPos=50-42*Number(y)/maxY;const active=flowSelection===group.group;return '<button class="flow-dot '+(active?'active ':'')+(group.performance>=0?'positive':'negative')+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+' '+pct(group.performance)+'">'+(top.has(group.group)?'<span>'+escapeHTML(group.group)+'</span>':'')+'</button>';}).join('');
+  const xTitle=finite(groups[0].relative)?flowLabels[key]+' return vs SPX':'Median '+flowLabels[key]+' return';
+  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Leadership and acceleration</h3><p>Every group is one equal-sized point. Horizontal position is '+xTitle+'; vertical position is 1W return.</p></div><div class="flow-map-key"><span>← Lagging</span><span>Leading →</span></div></div><div class="flow-map-plot"><div class="flow-y-label">1W improving ↑</div><div class="flow-x-axis">'+escapeHTML(xTitle)+'</div><div class="flow-quadrant q-one">Leading</div><div class="flow-quadrant q-two">Picking up</div><div class="flow-quadrant q-three">Cooling</div><div class="flow-quadrant q-four">Lagging</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
+}
+function flowTable(groups,key,previousRanks){
+  const columns=['one_day','one_week','one_month','three_months','six_months'];
+  const sorted=[...groups].sort((a,b)=>{const av=flowSort.key==='rank'?a.rank:a[flowSort.key],bv=flowSort.key==='rank'?b.rank:b[flowSort.key];const dir=flowSort.direction==='asc'?1:-1;return (Number(av)-Number(bv))*dir||a.group.localeCompare(b.group);});
+  const head=(label,sortKey,align='')=>'<th class="'+align+'"><button data-action="flow-sort" data-sort-key="'+sortKey+'">'+label+(flowSort.key===sortKey?' '+(flowSort.direction==='asc'?'↑':'↓'):'')+'</button></th>';
+  const body=sorted.map(group=>{const prior=previousRanks.get(group.group),delta=finite(prior)?Number(prior)-group.rank:null;return '<tr class="'+(flowSelection===group.group?'selected':'')+'" data-flow-group="'+escapeHTML(group.group)+'"><td class="num">'+group.rank+'</td><td><button data-flow-group="'+escapeHTML(group.group)+'">'+escapeHTML(group.group)+'</button><small>'+group.member_count+' ETF'+(group.member_count===1?'':'s')+' · '+escapeHTML(group.leader)+'</small></td>'+columns.map(column=>'<td class="num '+returnTone(group[column]??group.performance)+'">'+pct(group[column]??group.performance)+'</td>').join('')+'<td class="num '+returnTone(group.relative)+'">'+(finite(group.relative)?signed(group.relative)+' pp':'—')+'</td><td class="num '+(delta===null?'':delta>0?'positive':delta<0?'negative':'')+'">'+(delta===null?'—':delta>0?'↑ '+delta:delta<0?'↓ '+Math.abs(delta):'—')+'</td></tr>';}).join('');
+  return '<section class="flow-ranking"><div class="flow-ranking-head"><div><span class="eyebrow">COMPLETE RANKING</span><h3>Ranked by median '+flowLabels[key]+' return</h3></div><p>Rank change compares with the saved close five sessions earlier.</p></div><div class="table-box"><table><thead><tr><th class="num">#</th>'+head('Theme / sector','group')+columns.map(column=>head(flowLabels[column],column,'num')).join('')+head('vs SPX','relative','num')+head('Rank Δ','rank','num')+'</tr></thead><tbody>'+body+'</tbody></table></div></section>';
 }
 function actionTile(icon,title,copy,href,label,tone='cyan'){return '<a class="action-tile '+tone+'" href="'+href+'"><i>'+icon+'</i><div><b>'+title+'</b><span>'+copy+'</span></div><em>'+label+' →</em></a>';}
 const breadthViews={
@@ -226,17 +271,22 @@ function environment(){
 }
 function leadership(){
   const payload=leadershipKind==='sectors'?sectors:themes;
-  const etf=latestETF(payload), groups=etf?.windows?.[frame]||[];
+  const etf=etfSnapshot(payload), key=flowFrameKey[flowFrame], groups=buildFlowGroups(payload,etf,key);
+  const snapshots=payload.snapshots?.filter(snapshot=>snapshot.date<=etf?.date)||[];
+  const previous=snapshots.at(-6), previousRanks=previous?flowRanks(payload,previous,key):new Map();
   const rows=leaders(), aggregate=new Map();
   rows.forEach(r=>{const key=tag(r);const g=aggregate.get(key)||{name:key,count:0,nel:0,tight:0,symbols:[]};g.count++;g.nel+=isNEL(r)?1:0;g.tight+=r.tight?1:0;g.symbols.push(r.symbol);aggregate.set(key,g);});
   const stockGroups=[...aggregate.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));
   const labels={themes:'Themes',sectors:'Sectors',stocks:'Stock groups'};
-  const subcopy=leadershipKind==='stocks'?'Which stock themes are producing the most leaders?':('Which '+labels[leadershipKind].toLowerCase()+' are attracting relative strength?');
+  const subcopy=leadershipKind==='stocks'?'Which stock themes are producing the most leaders?':('Which '+labels[leadershipKind].toLowerCase()+' have the strongest equal-weight price leadership?');
   const top=groups[0];
+  if(!flowSelection||!groups.some(group=>group.group===flowSelection))flowSelection=top?.group||'';
+  const selectedGroup=groups.find(group=>group.group===flowSelection);
   const body=leadershipKind==='stocks'
     ? '<div class="flow-stock-summary">'+miniStat('◆','Leader groups',stockGroups.length,'Across the active stock universe','cyan')+miniStat('⚡','Non-extended',stockGroups.reduce((sum,g)=>sum+g.nel,0),'Leaders below 4× ATR extension','positive')+miniStat('◌','Tight',stockGroups.reduce((sum,g)=>sum+g.tight,0),'Coil candidates inside leaders','orange')+'</div><details class="evidence-drawer"><summary>Open stock-group evidence</summary><div class="table-box"><table><thead><tr><th>Theme / vendor group</th><th class="num">Leaders</th><th class="num">NEL</th><th class="num">Tight</th><th>Members</th></tr></thead><tbody>'+stockGroups.map(g=>'<tr><td><button data-filter-group="'+escapeHTML(g.name)+'">'+escapeHTML(g.name)+'</button></td><td class="num">'+g.count+'</td><td class="num">'+g.nel+'</td><td class="num">'+g.tight+'</td><td>'+escapeHTML(g.symbols.join(', '))+'</td></tr>').join('')+'</tbody></table></div></details>'
-    : flowRankCards(groups)+'<details class="evidence-drawer"><summary>Open complete '+labels[leadershipKind].toLowerCase()+' ranking</summary><div class="table-box"><table><thead><tr><th>Rank</th><th>Group</th><th class="num">Median return</th><th class="num">Strength score</th><th>Leading ETF</th><th>Confirmation</th></tr></thead><tbody>'+groups.map(g=>'<tr><td>'+g.rank+'</td><td>'+escapeHTML(g.group)+'</td><td class="num '+returnTone(g.median_performance)+'">'+pct(g.median_performance)+'</td><td class="num">'+fmt(g.score)+'</td><td>'+escapeHTML(g.leader_etf)+'</td><td>'+g.confirmation+' / '+g.member_count+'</td></tr>').join('')+'</tbody></table></div><p>Strength score = 70% median ETF-performance percentile + 30% best-ETF percentile. Confirmation is members in the top 20% of ETF returns. This measures price leadership, not reported fund flows.</p></details>';
-  return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(top?.group||'Leadership map')+'</h2><p>'+subcopy+' Start with the leader, then open its detailed ETF or stock evidence before choosing an expression.</p></div><a class="lead-link" href="'+(leadershipKind==='sectors'?'sectors.html':'themes.html')+'">Detailed view <b>↗</b></a></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors','stocks'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+frameControls('Leadership horizon')+'</div><section class="flow-stage"><div class="section-kicker"><span>'+labels[leadershipKind].toUpperCase()+' IN FAVOR</span><small>'+frameNames[frame]+' · ranked at the latest available close</small></div>'+body+'</section><section class="flow-next">'+actionTile('⌕','Find the stock expression','Move from a leading group into the liquid-leader and OBC screens.','#screener','Radar','cyan')+actionTile('◉','Check whether the tape supports it','Relative strength works best alongside improving participation.','#environment','Pulse','gold')+'</section>';
+    : flowMap(groups,key)+flowGroupPanel(selectedGroup)+flowTable(groups,key,previousRanks);
+  const flowHorizon='<div class="horizon"><span class="horizon-label">Map strength</span><div class="segments" aria-label="Map performance horizon">'+Object.entries(frames).filter(([id])=>id!=='1y'||leadershipKind==='sectors'||leadershipKind==='themes').map(([id,label])=>'<button data-flow-frame="'+id+'" class="'+(flowFrame===id?'active':'')+'"><b>'+label+'</b><small>'+frameRoles[id]+'</small></button>').join('')+'</div></div>';
+  return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(top?.group||'Leadership map')+'</h2><p>'+subcopy+' A theme with one ETF has the same weight as a theme with ten.</p></div><a class="lead-link" href="'+(leadershipKind==='sectors'?'sectors.html':'themes.html')+'">Detailed view <b>↗</b></a></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors','stocks'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+(leadershipKind==='stocks'?frameControls('Stock horizon'):flowHorizon)+'</div><section class="flow-stage">'+body+'</section><section class="flow-next">'+actionTile('⌕','Find the stock expression','Move from a leading group into the liquid-leader and OBC screens.','#screener','Radar','cyan')+actionTile('◉','Check whether the tape supports it','Relative strength works best alongside improving participation.','#environment','Pulse','gold')+'</section>';
 }
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -414,6 +464,8 @@ document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group]');if(!node)return;
  if(node.dataset.frame){frame=node.dataset.frame;render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
+ if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowSelection='';render();return;}
+ if(node.dataset.flowGroup){flowSelection=node.dataset.flowGroup;render();return;}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
  const action=node.dataset.action;
@@ -423,6 +475,7 @@ document.addEventListener('click',async event=>{
  if(action==='select-screen'){screenerView=node.dataset.screen;render();return;}
  if(action==='screener-view'){screenerDisplay=node.dataset.view;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
+ if(action==='flow-sort'){const key=node.dataset.sortKey;flowSort={key,direction:flowSort.key===key&&flowSort.direction==='asc'?'desc':'asc'};render();return;}
  if(action==='kk-toggle'){const key=node.dataset.toggle;filters[key]=!filters[key];render();return;}
  if(action==='obc-toggle'){const key=node.dataset.toggle;obcFilters[key]=!obcFilters[key];render();return;}
  if(action==='export-kk')download('kk-liquid-leaders-'+session().date+'.csv','symbol\n'+[...new Set(filteredKKStocks().map(r=>r.symbol))].join('\n')+'\n','text/csv');
@@ -438,7 +491,7 @@ window.addEventListener('hashchange',()=>{if(session())render();});
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
 async function start(){
  try{
- [db,themes,sectors,breadth,cot,context]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true)]);
+ [db,themes,sectors,breadth,spxHistory,cot,context]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/spx_history.json',true),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true)]);
  if(!db.snapshots?.length)throw Error('No saved stock snapshots available.');
  $('#session').innerHTML=db.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+s.date+'</option>').join('');
  $('#session').addEventListener('change',render);render();
