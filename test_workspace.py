@@ -6,10 +6,10 @@ from site_chrome import apply_chrome
 
 class WorkspaceTests(unittest.TestCase):
     def test_index_boundaries(self):
-        self.assertIsNone(range_index(list(range(155))))
-        self.assertIsNone(range_index([1]*156))
-        self.assertEqual(range_index(list(range(156))), 100)
-        self.assertEqual(range_index(list(range(155,-1,-1))), 0)
+        self.assertIsNone(range_index(list(range(25))))
+        self.assertIsNone(range_index([1]*26))
+        self.assertEqual(range_index(list(range(26))), 100)
+        self.assertEqual(range_index(list(range(25,-1,-1))), 0)
 
     def test_all_scans_preserved_in_workspace(self):
         payload=json.loads(Path('outputs/workspace.json').read_text())
