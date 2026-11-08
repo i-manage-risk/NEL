@@ -1,15 +1,15 @@
 import unittest
 import json
 from pathlib import Path
-from positioning import range_index
+from positioning import LOOKBACK_REPORTS, range_index
 from site_chrome import apply_chrome
 
 class WorkspaceTests(unittest.TestCase):
     def test_index_boundaries(self):
-        self.assertIsNone(range_index(list(range(25))))
-        self.assertIsNone(range_index([1]*26))
-        self.assertEqual(range_index(list(range(26))), 100)
-        self.assertEqual(range_index(list(range(25,-1,-1))), 0)
+        self.assertIsNone(range_index(list(range(LOOKBACK_REPORTS - 1))))
+        self.assertIsNone(range_index([1] * LOOKBACK_REPORTS))
+        self.assertEqual(range_index(list(range(LOOKBACK_REPORTS))), 100)
+        self.assertEqual(range_index(list(range(LOOKBACK_REPORTS - 1, -1, -1))), 0)
 
     def test_all_scans_preserved_in_workspace(self):
         payload=json.loads(Path('outputs/workspace.json').read_text())
