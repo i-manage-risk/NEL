@@ -577,6 +577,10 @@ function render(){
   $('#view').innerHTML=({briefing,environment,leadership,positioning,screener,review,method})[route]();
   if(route==='environment'){setBreadthHover(-1);bindBreadthHover();}
   mountTradingViewCharts();
+  document.querySelectorAll('.cot-row').forEach(row=>{
+    const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
+    if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);}
+  });
 }
 function download(name,text,type='text/plain'){
   const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);
@@ -626,7 +630,7 @@ document.addEventListener('pointermove',event=>{
  const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-260);
  const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)*780/rect.width;
  const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
- const row=history[j],previous=history[j-1],read=svg.parentElement.querySelector('.cot-hover-read');
+ const row=history[j],previous=history[j-1],read=svg.closest('.cot-row').querySelector('.cot-hover-read');
  const readKeys=cotParticipant==='all'?['large','commercials','small']:[cotParticipant];
  const names={large:'Large speculators',small:'Small speculators',commercials:'Commercials'};
  const all=market.history.filter(r=>finite(r.participants.large?.net)),endIndex=all.findIndex(r=>r.date===row.date);
