@@ -20,6 +20,12 @@ let overrides=store.get('themes',{}), selected=null, screenerView='kk';
 let kkSort={key:'strength',direction:'desc'};
 let screenerDisplay='list', tvObserver=null, tvScriptPromise=null;
 let breadthMetric='daily', breadthRange='3m';
+let cotWindow='5y', cotChartMetric='index', cotInstrument='futures';
+const cotFutures={
+  'S&P 500':'CME_MINI:ES1!','Nasdaq 100':'CME_MINI:NQ1!','Russell 2000':'CME_MINI:RTY1!',
+  Gold:'COMEX:GC1!',Silver:'COMEX:SI1!',Copper:'COMEX:HG1!',
+  'WTI crude oil':'NYMEX:CL1!','Natural gas':'NYMEX:NG1!',Bitcoin:'CME:BTC1!',Ether:'CME:ETH1!'
+};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
 const breadthRows = () => breadth.filter(r=>r.date<=asof()).sort((a,b)=>b.date.localeCompare(a.date));
@@ -370,28 +376,33 @@ function leadership(){
 }
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">CFTC positioning is unavailable.</p>';
-  const participants=[['large','Large specs'],['small','Small specs'],['commercials','Commercials']];
+  const participants=[['large','Large specs','#00bcd4'],['small','Small specs','#e040fb'],['commercials','Commercials','#ff9800']];
+  const labels={"1y":"1 year","3y":"3 years","5y":"5 years"};
+  const index=(key,row)=>row?.participants?.[key]?.indices?.[cotWindow]??row?.participants?.[key]?.index;
   const extreme=v=>finite(v)&&(Number(v)<=5||Number(v)>=95);
   const markets=cot.markets.map(m=>({...m,last:m.history.at(-1),prior:m.history.at(-2)})).sort((a,b)=>{
-    const score=m=>Math.max(...participants.map(([k])=>finite(m.last?.participants?.[k]?.index)?Math.abs(m.last.participants[k].index-50):-1));
+    const score=m=>Math.max(...participants.map(([k])=>finite(index(k,m.last))?Math.abs(index(k,m.last)-50):-1));
     return score(b)-score(a);
   });
-  const watches=markets.filter(m=>participants.some(([k])=>extreme(m.last?.participants?.[k]?.index)));
+  const watches=markets.filter(m=>participants.some(([k])=>extreme(index(k,m.last))));
   const latest=markets.map(m=>m.last?.date).filter(Boolean).sort().at(-1);
-  const meter=(m,k,label)=>{
-    const p=m.last?.participants?.[k]||{},prev=m.prior?.participants?.[k],v=p.index,valid=finite(v),delta=valid&&finite(prev?.index)?Number(v)-Number(prev.index):null;
+  const meter=(m,k,label,color)=>{
+    const v=index(k,m.last),prev=index(k,m.prior),valid=finite(v),delta=valid&&finite(prev)?Number(v)-Number(prev):null;
     const state=!valid?'Insufficient history':v<=5?'SHORT EXTREME':v>=95?'LONG EXTREME':'Within range';
-    return '<div class="cot-participant"><div><b>'+label+'</b><strong class="'+(extreme(v)?'orange':'')+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
+    return '<div class="cot-participant"><div><b>'+label+'</b><strong style="color:'+color+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%;background:'+color+'"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
   };
   const card=m=>{
-    const p=m.last?.participants||{},short=['large','small'].filter(k=>finite(p[k]?.index)&&p[k].index<=5),long=['large','small'].filter(k=>finite(p[k]?.index)&&p[k].index>=95);
+    const p=m.last?.participants||{},short=['large','small'].filter(k=>finite(index(k,m.last))&&index(k,m.last)<=5),long=['large','small'].filter(k=>finite(index(k,m.last))&&index(k,m.last)>=95);
     const label=short.length&&long.length?'Speculators disagree':short.length?'Crowded short':long.length?'Crowded long':extreme(p.commercials?.index)?'Commercial extreme':'No extreme';
     const tone=short.length&&!long.length?'positive':long.length&&!short.length?'negative':'';
-    const confirmation=short.length&&!long.length?'Watch for price holding up despite bearish news.':long.length&&!short.length?'Watch for price failing to rally on bullish news.':'Compare participant history and price response.';
+    const confirmation=short.length&&!long.length?'Crowding is short relative to its selected history.':long.length&&!short.length?'Crowding is long relative to its selected history.':'No participant is at an extreme in the selected history.';
     const chartId='cot-tv-'+m.etf.replace(/[^a-z0-9]/gi,'');
-    return '<article class="cot-market '+tone+'"><header><div><small>'+escapeHTML(m.group)+' · COT '+escapeHTML(m.last?.date||'')+'</small><h3>'+escapeHTML(m.name)+'</h3></div><b>'+escapeHTML(m.etf)+'</b></header><h4 class="'+tone+'">'+label+'</h4>'+participants.map(([k,l])=>meter(m,k,l)).join('')+'<p class="cot-confirm">'+confirmation+' <b>Confirmation not assessed.</b></p><section class="cot-chart"><span>Price action · '+escapeHTML(m.etf)+'</span><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-tv-symbol="'+escapeHTML(m.etf)+'"><span>Loading daily chart…</span></div></section><details><summary>Five-year COT history & actual positions</summary>'+cotSpark(m)+'<div class="table-box"><table><thead><tr><th>Participant</th><th>Net contracts</th><th>Net / OI</th></tr></thead><tbody>'+participants.map(([k,l])=>'<tr><td>'+l+'</td><td>'+signed(p[k]?.net,0)+'</td><td>'+pct(p[k]?.netPctOI)+'</td></tr>').join('')+'</tbody></table></div><small>'+escapeHTML(m.contract)+'</small></details></article>';
+    const symbol=cotInstrument==='futures'?(cotFutures[m.name]||m.etf):m.etf;
+    return '<article class="cot-row '+tone+'"><section class="cot-position"><header><div><small>'+escapeHTML(m.group)+' · COT '+escapeHTML(m.last?.date||'')+'</small><h3>'+escapeHTML(m.name)+'</h3></div><b>'+escapeHTML(m.etf)+'</b></header><h4 class="'+tone+'">'+label+'</h4>'+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<p class="cot-confirm">'+confirmation+'</p><div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div class="cot-chart-head"><span>'+escapeHTML(cotInstrument==='futures'?'Underlying futures':'Tradeable ETF')+'</span><small>'+escapeHTML(symbol)+'</small></div><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-tv-symbol="'+escapeHTML(symbol)+'"><span>Loading daily chart…</span></div><details><summary>Position history & actual positions</summary>'+cotSpark(m)+'<div class="table-box"><table><thead><tr><th>Participant</th><th>Net contracts</th><th>Net / OI</th></tr></thead><tbody>'+participants.map(([k,l])=>'<tr><td>'+l+'</td><td>'+signed(p[k]?.net,0)+'</td><td>'+pct(p[k]?.netPctOI)+'</td></tr>').join('')+'</tbody></table></div><small>'+escapeHTML(m.contract)+'</small></details></section></article>';
   };
-  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>Where is the crowd stretched?</h2><p>Compare speculators with commercial hedgers, then study the price chart for a reversal response.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-overview"><b>'+watches.length+' markets at an extreme</b><span>0–5: near historical short extreme</span><span>95–100: near historical long extreme</span><span>Five-year crowding range</span></section><h3>Extreme positioning</h3><section class="cot-grid">'+(watches.length?watches.map(card).join(''):'<p>No participant is at a 5 / 95 extreme in the latest reports.</p>')+'</section><h3>Other markets</h3><section class="cot-grid">'+markets.filter(m=>!watches.includes(m)).map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each participant is compared with its own previous five years of weekly reports: 100 × (net position − minimum net) / (maximum net − minimum net). A low index can mean less net long, and a high index can mean less net short. It does not describe the percentage of traders on either side.</p><p>This is our transparent five-year normalization, not Jason Shapiro’s proprietary CMR index. His public approach combines historical positioning extremes with market-action confirmation, including news failure. Commercials hedge business exposure; an opposite position is context, not an independent buy signal. Crypto futures can include hedged positions.</p><p>Orange marks any participant at an extreme. Green / red headings indicate the speculative crowd is short / long relative to history, not confirmed trade signals. The expandable history chart holds up to five years of large-speculator readings. Report dates are independent of the stock plan selector.</p><a target="_blank" rel="noopener" href="https://www.crowdedmarketreport.com/sample-reports/">Shapiro’s public reports ↗</a> · <a target="_blank" rel="noopener" href="https://publicreporting.cftc.gov/">Official CFTC data ↗</a></details>';
+  const windows=['1y','3y','5y'].map(key=>'<button data-cot-window="'+key+'" class="'+(cotWindow===key?'active':'')+'"><b>'+key.toUpperCase()+'</b><small>range</small></button>').join('');
+  const instruments=[['futures','Underlying futures'],['etf','Tradeable ETF']].map(([key,label])=>'<button data-cot-instrument="'+key+'" class="'+(cotInstrument===key?'active':'')+'">'+label+'</button>').join('');
+  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>How extreme is positioning?</h2><p>Current net positions compared with their own 1-, 3-, or 5-year history.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-controls"><div><span>Comparison history</span><div class="segments">'+windows+'</div></div><div><span>Price series</span><div class="segments">'+instruments+'</div></div></section><section class="cot-overview"><b>'+watches.length+' markets at a '+labels[cotWindow]+' extreme</b><span>0–5: short-side extreme</span><span>95–100: long-side extreme</span></section><section class="cot-rows">'+markets.map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each reading is a range location for net position: 100 × (current net − selected-period minimum) / (maximum − minimum). It is not the percentage of traders on either side, a probability, or a trade instruction.</p><p>This is a transparent CFTC-data normalization, not Jason Shapiro’s proprietary CMR index. Commercial positions are context, not an independent vote.</p></details>';
 }
 function legacyPositioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -406,9 +417,9 @@ function legacyPositioning(){
   }).join('')+'</section><details class="evidence-drawer"><summary>Methodology and timing</summary><p>Positions are official CFTC Legacy Futures-only data. They represent Tuesday positions, usually released Friday; this page is not tied to the daily stock-session selector. Commercials, large specs, and small/nonreportable positions are calculated from net long minus short. The 5 / 95 thresholds are attention flags, not predictions.</p></details>';
 }
 function cotSpark(m){
-  const history=m.history.filter(r=>r.participants.large.index!==null).slice(-260);
-  const points=history.map((r,i)=>(10+i*480/Math.max(1,history.length-1))+','+(110-r.participants.large.index)).join(' ');
-  return '<svg class="sparkline" viewBox="0 0 500 130" role="img" aria-label="Large speculator COT index, up to 52 reports"><path d="M10 15H490 M10 105H490" stroke="#565144" stroke-dasharray="4 4"/><polyline points="'+points+'" fill="none" stroke="#86d65d" stroke-width="2"/><text x="10" y="128" fill="#aaa89f" font-size="10">'+(history[0]?.date||'')+'</text><text x="420" y="128" fill="#aaa89f" font-size="10">'+(history.at(-1)?.date||'')+'</text></svg>';
+  const history=m.history.filter(r=>(r.participants.large.indices?.[cotWindow]??r.participants.large.index)!==null).slice(-260);
+  const points=history.map((r,i)=>(10+i*480/Math.max(1,history.length-1))+','+(110-(r.participants.large.indices?.[cotWindow]??r.participants.large.index))).join(' ');
+  return '<svg class="sparkline" viewBox="0 0 500 130" role="img" aria-label="Large speculator COT index"><path d="M10 15H490 M10 105H490" stroke="#565144" stroke-dasharray="4 4"/><polyline points="'+points+'" fill="none" stroke="#86d65d" stroke-width="2"/><text x="10" y="128" fill="#aaa89f" font-size="10">'+(history[0]?.date||'')+'</text><text x="420" y="128" fill="#aaa89f" font-size="10">'+(history.at(-1)?.date||'')+'</text></svg>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
@@ -574,6 +585,8 @@ document.addEventListener('click',async event=>{
  if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';flowSelection='';render();return;}
  if(node.dataset.flowMode){flowMode=node.dataset.flowMode;flowSelection='';render();return;}
  if(node.dataset.flowGroup){flowSelection=node.dataset.flowGroup;render();return;}
+ if(node.dataset.cotWindow){cotWindow=node.dataset.cotWindow;render();return;}
+ if(node.dataset.cotInstrument){cotInstrument=node.dataset.cotInstrument;render();return;}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
  const action=node.dataset.action;

@@ -22,6 +22,7 @@ MARKETS = {
 PARTICIPANTS = {'commercials': 'comm', 'large': 'noncomm', 'small': 'nonrept'}
 LOOKBACK_REPORTS = 260
 CHART_HISTORY_REPORTS = 260
+INDEX_WINDOWS = {'1y': 52, '3y': 156, '5y': LOOKBACK_REPORTS}
 # Keep prior observations so every displayed historical index still has its own
 # five-year window behind it. This is not the index calculation itself.
 FETCH_HISTORY_WEEKS = 11 * 52
@@ -46,7 +47,13 @@ def build_market(code, rows):
             short = int(row[f'{prefix}_positions_short_all'])
             net = long - short
             running[key].append(net)
-            participants[key] = {'long': long, 'short': short, 'net': net, 'index': range_index(running[key]), 'netPctOI': round(100 * net / int(row['open_interest_all']), 2) if int(row['open_interest_all']) else None}
+            indices = {window: range_index(running[key], length) for window, length in INDEX_WINDOWS.items()}
+            participants[key] = {
+                'long': long, 'short': short, 'net': net,
+                # Kept for compatibility with older dashboard clients.
+                'index': indices['5y'], 'indices': indices,
+                'netPctOI': round(100 * net / int(row['open_interest_all']), 2) if int(row['open_interest_all']) else None
+            }
         if sum(item['net'] for item in participants.values()) != 0:
             raise ValueError(f'Position balance failed for {code}')
         history.append({'date': row['report_date_as_yyyy_mm_dd'][:10], 'participants': participants})
@@ -65,7 +72,7 @@ def main():
     markets = [build_market(code, [row for row in rows if row['cftc_contract_market_code'] == code]) for code in MARKETS]
     if any(not market['history'] for market in markets):
         raise ValueError('Missing CFTC market; preserve previous complete dataset')
-    payload = {'source': ENDPOINT, 'fetchedAt': datetime.now(timezone.utc).isoformat(), 'lookback': LOOKBACK_REPORTS, 'contextLookback': CHART_HISTORY_REPORTS, 'reportType': 'Legacy futures only', 'markets': markets}
+    payload = {'source': ENDPOINT, 'fetchedAt': datetime.now(timezone.utc).isoformat(), 'lookback': LOOKBACK_REPORTS, 'indexWindows': INDEX_WINDOWS, 'contextLookback': CHART_HISTORY_REPORTS, 'reportType': 'Legacy futures only', 'markets': markets}
     target = ROOT / 'outputs' / 'positioning.json'
     temp = target.with_suffix('.tmp')
     temp.write_text(json.dumps(payload, separators=(',', ':'), allow_nan=False))
