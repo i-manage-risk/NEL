@@ -63,6 +63,7 @@ body{background:#141414}.hero,.command-hero,.breadth-command{background:#222}.ca
 @media(max-width:760px){.flow-mode-divider{display:none}.flow-extension-summary{gap:10px}.flow-extension-side{font-size:9px}}
 
 /* Flow ETF drill-down */
+.positioning-page .cot-bars-head>div:first-child{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.positioning-page .cot-bars-head{margin-bottom:3px}.positioning-page .cot-bars svg{margin-top:3px}.positioning-page .cot-bars-head small{font-size:10px}
 .positioning-page .cot-row .cot-visual{grid-template-rows:minmax(0,1.05fr) minmax(0,1fr)}@media(max-width:900px){.positioning-page .cot-row .cot-visual{grid-template-rows:310px auto}}
 .positioning-page .workspace-main{padding-top:12px}.positioning-page .cot-page-header{padding:4px 0 10px;margin-bottom:12px;gap:12px}.cot-page-header>div:first-child{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.positioning-page .cot-page-header h2{font-size:19px;line-height:1.3}.positioning-page .cot-page-header small{font-size:10px}.positioning-page .cot-extreme-links{gap:7px}.positioning-page .cot-extreme-links button{padding:4px 8px;font-size:11px}.positioning-page .cot-extreme-links>span{font-size:10px}@media(max-width:650px){.cot-page-header>div:first-child{gap:7px}}
 .positioning-page .cot-row{grid-template-columns:minmax(230px,.43fr) minmax(0,1fr)}@media(min-width:1600px){.positioning-page .cot-rows .cot-row{grid-template-columns:minmax(230px,.43fr) minmax(0,1fr)}}@media(max-width:900px){.positioning-page .cot-row{grid-template-columns:1fr}}
