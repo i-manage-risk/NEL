@@ -628,7 +628,9 @@ document.addEventListener('pointermove',event=>{
  const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
  const row=history[j],previous=history[j-1],read=svg.parentElement.querySelector('.cot-hover-read');
  const ranges=[['5Y',260]].map(([label,length])=>{const all=market.history.filter(r=>finite(r.participants.large?.net)),end=all.findIndex(r=>r.date===row.date),window=end+1>=length?all.slice(end+1-length,end+1):[];if(!window.length)return label+' unavailable';const values=window.map(r=>r.participants[cotParticipant]?.net).filter(finite);return label+' '+signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0);});
- read.textContent=row.date+' · '+cotParticipant+' '+signed(row.participants[cotParticipant]?.net,0)+' · week '+signed(row.participants[cotParticipant]?.net-previous?.participants[cotParticipant]?.net,0)+' · '+ranges.join(' · ');
+ const net=row.participants[cotParticipant]?.net,delta=net-previous?.participants[cotParticipant]?.net;
+ const participantName={large:'Large speculators',small:'Small speculators',commercials:'Commercials'}[cotParticipant];
+ read.textContent='Report: '+row.date+' | '+participantName+' | Net '+(net>=0?'long ':'short ')+fmt(Math.abs(net),0)+' contracts | Weekly change: '+(finite(delta)?(delta>=0?'+':'−')+fmt(Math.abs(delta),0)+' contracts':'unavailable')+' | 5-year net position range: '+ranges.join('').replace(/^5Y /,'')+' contracts';
  const guide=svg.querySelector('.cot-hover-line'),gx=32+j*716/Math.max(1,history.length-1);guide.setAttribute('x1',gx);guide.setAttribute('x2',gx);guide.setAttribute('opacity','0.7');
 });
 document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget))svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');});
