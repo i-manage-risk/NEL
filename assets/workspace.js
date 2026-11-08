@@ -369,6 +369,30 @@ function leadership(){
   return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(pageTitle)+'</h2><p>'+pageCopy+'</p></div></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+flowHorizon+'</div><section class="flow-stage">'+body+'</section>';
 }
 function positioning(){
+  if(!cot.markets?.length)return '<p class="empty">CFTC positioning is unavailable.</p>';
+  const participants=[['large','Large specs'],['small','Small specs'],['commercials','Commercials']];
+  const extreme=v=>finite(v)&&(Number(v)<=5||Number(v)>=95);
+  const markets=cot.markets.map(m=>({...m,last:m.history.at(-1),prior:m.history.at(-2)})).sort((a,b)=>{
+    const score=m=>Math.max(...participants.map(([k])=>finite(m.last?.participants?.[k]?.index)?Math.abs(m.last.participants[k].index-50):-1));
+    return score(b)-score(a);
+  });
+  const watches=markets.filter(m=>participants.some(([k])=>extreme(m.last?.participants?.[k]?.index)));
+  const latest=markets.map(m=>m.last?.date).filter(Boolean).sort().at(-1);
+  const meter=(m,k,label)=>{
+    const p=m.last?.participants?.[k]||{},prev=m.prior?.participants?.[k],v=p.index,valid=finite(v),delta=valid&&finite(prev?.index)?Number(v)-Number(prev.index):null;
+    const state=!valid?'Insufficient history':v<=5?'SHORT EXTREME':v>=95?'LONG EXTREME':'Within range';
+    return '<div class="cot-participant"><div><b>'+label+'</b><strong class="'+(extreme(v)?'orange':'')+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
+  };
+  const card=m=>{
+    const p=m.last?.participants||{},short=['large','small'].filter(k=>finite(p[k]?.index)&&p[k].index<=5),long=['large','small'].filter(k=>finite(p[k]?.index)&&p[k].index>=95);
+    const label=short.length&&long.length?'Speculators disagree':short.length?'Crowded short':long.length?'Crowded long':extreme(p.commercials?.index)?'Commercial extreme':'No extreme';
+    const tone=short.length&&!long.length?'positive':long.length&&!short.length?'negative':'';
+    const confirmation=short.length&&!long.length?'Watch for price holding up despite bearish news.':long.length&&!short.length?'Watch for price failing to rally on bullish news.':'Compare participant history and price response.';
+    return '<article class="cot-market '+tone+'"><header><div><small>'+escapeHTML(m.group)+' · '+escapeHTML(m.last?.date||'')+'</small><h3>'+escapeHTML(m.name)+'</h3></div><a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(m.etf)+'">'+escapeHTML(m.etf)+' ↗</a></header><h4 class="'+tone+'">'+label+'</h4>'+participants.map(([k,l])=>meter(m,k,l)).join('')+'<p class="cot-confirm">'+confirmation+' <b>Confirmation not assessed.</b></p><details><summary>History & actual positions</summary>'+cotSpark(m)+'<div class="table-box"><table><thead><tr><th>Participant</th><th>Net contracts</th><th>Net / OI</th></tr></thead><tbody>'+participants.map(([k,l])=>'<tr><td>'+l+'</td><td>'+signed(p[k]?.net,0)+'</td><td>'+pct(p[k]?.netPctOI)+'</td></tr>').join('')+'</tbody></table></div><small>'+escapeHTML(m.contract)+'</small></details></article>';
+  };
+  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>Where is the crowd stretched?</h2><p>Compare speculators with commercial hedgers, then study how price responds.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-overview"><b>'+watches.length+' markets at an extreme</b><span>0–5: near historical short extreme</span><span>95–100: near historical long extreme</span><span>156-report range · not percentage long or short</span></section><h3>Extreme positioning</h3><section class="cot-grid">'+(watches.length?watches.map(card).join(''):'<p>No participant is at a 5 / 95 extreme in the latest reports.</p>')+'</section><h3>Other markets</h3><section class="cot-grid">'+markets.filter(m=>!watches.includes(m)).map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each participant is compared with its own previous 156 reports: 100 × (net position − minimum net) / (maximum net − minimum net). A low index can mean less net long, and a high index can mean less net short. It does not describe the percentage of traders on either side.</p><p>This is our transparent range index, not Jason Shapiro’s proprietary CMR index. His public approach combines historical positioning extremes with market-action confirmation, including news failure. Commercials hedge business exposure; an opposite position is context, not an independent buy signal. Crypto futures can include hedged positions.</p><p>Orange marks any participant at an extreme. Green / red headings indicate the speculative crowd is short / long relative to history, not confirmed trade signals. History charts below use the large-speculator index. Report dates are independent of the stock plan selector.</p><a target="_blank" rel="noopener" href="https://www.crowdedmarketreport.com/sample-reports/">Shapiro’s public reports ↗</a> · <a target="_blank" rel="noopener" href="https://publicreporting.cftc.gov/">Official CFTC data ↗</a></details>';
+}
+function legacyPositioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
   const markets=cot.markets.map(m=>({...m,last:m.history.at(-1)}));
   const extremes=markets.filter(m=>{const i=m.last?.participants?.large?.index;return i!==null&&(i<=5||i>=95);});
