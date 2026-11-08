@@ -378,7 +378,8 @@ function positioning(){
   const extreme=v=>finite(v)&&(Number(v)<=5||Number(v)>=95);
   const markets=cot.markets.map(m=>({...m,last:m.history.at(-1),prior:m.history.at(-2)})).sort((a,b)=>{
     const score=m=>{const v=index('large',m.last);return finite(v)?Number(v):-1;};
-    return score(b)-score(a)||a.name.localeCompare(b.name);
+    const groupOrder={'Equity index':0,'Crypto':1,'Metals':2,'Energy':3};
+    return (groupOrder[a.group]??3)-(groupOrder[b.group]??3)||score(b)-score(a)||a.name.localeCompare(b.name);
   });
   // The framework is deliberately based on large-spec extremes. Small specs and
   // commercials remain context, rather than independent directional signals.
