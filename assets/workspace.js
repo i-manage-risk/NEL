@@ -630,6 +630,18 @@ function updateCOTReadings(svg,j){
  const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-156);
  if(j<0)j=history.length-1;
  const row=history[j],previous=history[j-1],read=svg.closest('.cot-row').querySelector('.cot-hover-read');
+ const card=svg.closest('.cot-row'),latestView=j===history.length-1;
+ const price=market.prices?.filter(p=>latestView||p.date<=row.date).at(-1);
+ let quote=card.querySelector('.cot-etf-quote');
+ if(!quote){quote=document.createElement('div');quote.className='cot-etf-quote';card.querySelector('.cot-position header').after(quote);}
+ quote.textContent=market.etf+' · '+(price?'$'+fmt(price.close,2)+' · close '+price.date:'Price unavailable for this date');
+ card.querySelectorAll('.cot-participant').forEach((node,i)=>{
+   const key=['large','small','commercials'][i],value=row.participants[key]?.indices?.['5y'],prior=previous?.participants[key]?.indices?.['5y'];
+   node.querySelector('strong').textContent=fmt(value,1);
+   const marker=node.querySelector('.cot-track>b');if(marker){marker.style.left=(finite(value)?value:0)+'%';marker.style.display=finite(value)?'':'none';}
+   const notes=node.querySelectorAll('small');notes[0].textContent=!finite(value)?'Insufficient history':value<=5?'Near range low':value>=95?'Near range high':'Within range';
+   notes[1].textContent=finite(value)&&finite(prior)?signed(value-prior,1)+' pts this week':'';
+ });
  const readKeys=cotParticipant==='all'?['large','commercials','small']:[cotParticipant];
  const names={large:'Large speculators',small:'Small speculators',commercials:'Commercials'};
  const all=market.history.filter(r=>finite(r.participants.large?.net)),endIndex=all.findIndex(r=>r.date===row.date);

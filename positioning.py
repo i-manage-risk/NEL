@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
+import yfinance as yf
 
 ROOT = Path(__file__).resolve().parent
 ENDPOINT = 'https://publicreporting.cftc.gov/resource/6dca-aqww.json'
@@ -72,6 +73,9 @@ def main():
     markets = [build_market(code, [row for row in rows if row['cftc_contract_market_code'] == code]) for code in MARKETS]
     if any(not market['history'] for market in markets):
         raise ValueError('Missing CFTC market; preserve previous complete dataset')
+    for market in markets:
+        prices = yf.Ticker(market['etf']).history(period='5y', auto_adjust=False)
+        market['prices'] = [{'date': day.date().isoformat(), 'close': round(float(row['Close']), 4)} for day, row in prices.iterrows() if row['Close'] == row['Close']]
     payload = {'source': ENDPOINT, 'fetchedAt': datetime.now(timezone.utc).isoformat(), 'lookback': LOOKBACK_REPORTS, 'indexWindows': INDEX_WINDOWS, 'contextLookback': CHART_HISTORY_REPORTS, 'reportType': 'Legacy futures only', 'markets': markets}
     target = ROOT / 'outputs' / 'positioning.json'
     temp = target.with_suffix('.tmp')
