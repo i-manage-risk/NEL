@@ -412,14 +412,22 @@ function legacyPositioning(){
 function cotSpark(m){
   // These colors intentionally match the positioning gauges at left.
   const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#ff9800'],['small','Small specs','#e040fb']];
-  const history=m.history.filter(r=>finite(r.participants.large?.net)).slice(-52);
-  const max=Math.max(1,...history.flatMap(row=>keys.map(([key])=>Math.abs(Number(row.participants[key]?.net)||0))));
+  const fullHistory=m.history.filter(r=>finite(r.participants.large?.net));
+  const history=fullHistory.slice(-52);
+  const max=Math.max(1,...fullHistory.flatMap(row=>keys.map(([key])=>Math.abs(Number(row.participants[key]?.net)||0))));
   // Keep the zero axis centered: COT net longs and shorts share one symmetric scale.
   // This prevents bars from being clipped below the chart when one side is extreme.
   const width=780,height=220,left=28,right=752,zero=104,amplitude=72,unit=amplitude/max,step=(right-left)/Math.max(1,history.length-1),bar=Math.min(5.5,Math.max(1.4,step*.18));
+  const rangeBand=(key,color,lookback,opacity,dash)=>{
+    const values=fullHistory.slice(-lookback).map(row=>Number(row.participants[key]?.net)).filter(finite);
+    if(!values.length)return '';
+    const high=Math.max(...values),low=Math.min(...values),top=Math.max(32,zero-high*unit),bottom=Math.min(176,zero-low*unit);
+    return '<rect x="'+left+'" y="'+top.toFixed(1)+'" width="'+(right-left)+'" height="'+Math.max(1,bottom-top).toFixed(1)+'" fill="'+color+'" opacity="'+opacity+'"/><path d="M'+left+' '+top.toFixed(1)+'H'+right+' M'+left+' '+bottom.toFixed(1)+'H'+right+'" stroke="'+color+'" opacity="'+(opacity*2.4).toFixed(2)+'" stroke-dasharray="'+dash+'"/>';
+  };
+  const ranges=keys.map(([key,,color])=>rangeBand(key,color,260,.045,'3 4')+rangeBand(key,color,156,.09,'2 3')).join('');
   const bars=history.map((row,n)=>keys.map(([key,,color],offset)=>{const net=Number(row.participants[key]?.net)||0,x=left+n*step+(offset-1)*(bar+1),h=Math.abs(net)*unit,y=net>=0?zero-h:zero;return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bar.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+color+'"/>';}).join('')).join('');
   const legend=keys.map(([key,label,color])=>'<span><i style="background:'+color+'"></i>'+label+' <b>'+signed(m.history.at(-1)?.participants[key]?.net,0)+'</b></span>').join('');
-  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>52 weekly COT reports · contracts · symmetric scale</small></div><div class="cot-bars-legend">'+legend+'</div></div><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="52-week net positioning chart"><path d="M'+left+' 32H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' 176H'+right+'" stroke="#383838"/><path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/><text x="'+left+'" y="204" fill="#aaa89f" font-size="9">'+(history[0]?.date||'')+'</text><text x="'+(right-66)+'" y="204" fill="#aaa89f" font-size="9">'+(history.at(-1)?.date||'')+'</text>'+bars+'</svg></section>';
+  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>52 weekly COT reports · solid bars · faint 5Y and stronger 3Y range bands</small></div><div class="cot-bars-legend">'+legend+'</div></div><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="52-week net positioning chart with 3-year and 5-year historical ranges"><path d="M'+left+' 32H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' 176H'+right+'" stroke="#383838"/>'+ranges+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/><text x="'+left+'" y="204" fill="#aaa89f" font-size="9">'+(history[0]?.date||'')+'</text><text x="'+(right-66)+'" y="204" fill="#aaa89f" font-size="9">'+(history.at(-1)?.date||'')+'</text>'+bars+'</svg></section>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
