@@ -415,7 +415,7 @@ function legacyPositioning(){
 function cotSpark(m){
   const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#e040fb'],['small','Small specs','#ff9800']];
   const fullHistory=m.history.filter(r=>finite(r.participants.large?.net));
-  const history=fullHistory.slice(-260);
+  const history=fullHistory.slice(-156);
   const left=32,right=748,top=24,bottom=184,plot=right-left,step=plot/Math.max(1,history.length-1),bar=Math.max(.6,Math.min(3,step*.23));
   const selected=keys.find(([key])=>key===cotParticipant)||keys[0];
   const start=fullHistory.length-history.length;
@@ -430,7 +430,7 @@ function cotSpark(m){
   const participantButtons='<button type="button" data-cot-participant="all" class="'+(cotParticipant==='all'?'active':'')+'">All</button>'+keys.map(([key,label,color])=>'<button type="button" data-cot-participant="'+key+'" class="'+(key===cotParticipant?'active':'')+'" style="--participant-color:'+color+'">'+label+'</button>').join('');
   const rangeButtons=windows.map(([name])=>'<button type="button" data-cot-range="'+name+'" class="'+(cotRanges[name]?'active':'')+'">'+name.toUpperCase()+' range</button>').join('');
   const latest=history.at(-1),latestNet=latest?.participants[selected[0]]?.net;
-  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>Last 5 years · weekly reports · rolling 5-year range</small></div><div class="cot-bars-legend">' +participantButtons+ '</div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
+  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>Last 3 years displayed · 5-year calculation lookback</small></div><div class="cot-bars-legend">' +participantButtons+ '</div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
@@ -627,7 +627,7 @@ window.addEventListener('hashchange',()=>{if(session())render();});
 document.addEventListener('pointermove',event=>{
  const svg=event.target.closest?.('[data-cot-chart]');if(!svg)return;
  const market=cot.markets?.find(m=>m.code===svg.dataset.cotChart);if(!market)return;
- const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-260);
+ const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-156);
  const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)*780/rect.width;
  const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
  const row=history[j],previous=history[j-1],read=svg.closest('.cot-row').querySelector('.cot-hover-read');
