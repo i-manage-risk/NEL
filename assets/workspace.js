@@ -371,7 +371,7 @@ function leadership(){
 }
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">CFTC positioning is unavailable.</p>';
-  const participants=[['large','Large specs','#00bcd4'],['small','Small specs','#e040fb'],['commercials','Commercials','#ff9800']];
+  const participants=[['large','Large specs','#00bcd4'],['small','Small specs','#ff9800'],['commercials','Commercials','#e040fb']];
   const labels={"1y":"1 year","3y":"3 years","5y":"5 years"};
   const index=(key,row)=>row?.participants?.[key]?.indices?.[cotWindow]??row?.participants?.[key]?.index;
   const extreme=v=>finite(v)&&(Number(v)<=5||Number(v)>=95);
@@ -379,7 +379,9 @@ function positioning(){
     const score=m=>Math.max(...participants.map(([k])=>finite(index(k,m.last))?Math.abs(index(k,m.last)-50):-1));
     return score(b)-score(a);
   });
-  const watches=markets.filter(m=>participants.some(([k])=>extreme(index(k,m.last))));
+  // The framework is deliberately based on large-spec extremes. Small specs and
+  // commercials remain context, rather than independent directional signals.
+  const watches=markets.filter(m=>extreme(index('large',m.last)));
   const latest=markets.map(m=>m.last?.date).filter(Boolean).sort().at(-1);
   const meter=(m,k,label,color)=>{
     const v=index(k,m.last),prev=index(k,m.prior),valid=finite(v),delta=valid&&finite(prev)?Number(v)-Number(prev):null;
@@ -387,15 +389,16 @@ function positioning(){
     return '<div class="cot-participant"><div><b>'+label+'</b><strong style="color:'+color+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%;background:'+color+'"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
   };
   const card=m=>{
-    const p=m.last?.participants||{},short=['large','small'].filter(k=>finite(index(k,m.last))&&index(k,m.last)<=5),long=['large','small'].filter(k=>finite(index(k,m.last))&&index(k,m.last)>=95);
-    const label=short.length&&long.length?'Speculators disagree':short.length?'Crowded short':long.length?'Crowded long':extreme(p.commercials?.index)?'Commercial extreme':'No extreme';
-    const tone=short.length&&!long.length?'positive':long.length&&!short.length?'negative':'';
-    const confirmation=short.length&&!long.length?'Crowding is short relative to its selected history.':long.length&&!short.length?'Crowding is long relative to its selected history.':'No participant is at an extreme in the selected history.';
+    const p=m.last?.participants||{},largeIndex=index('large',m.last),crypto=m.group==='Crypto';
+    const low=finite(largeIndex)&&largeIndex<=5,high=finite(largeIndex)&&largeIndex>=95;
+    const label=!low&&!high?'No large-spec extreme':crypto?(low?'Bearish trend-follow watch':'Bullish trend-follow watch'):(low?'Bullish fade watch':'Bearish fade watch');
+    const tone=(!low&&!high)?'':(crypto?(low?'negative':'positive'):(low?'positive':'negative'));
+    const confirmation=!low&&!high?'Large specs are within their selected historical range. Small specs and commercials are context only.':crypto?(low?'Large specs are at a short-side extreme. Crypto uses a trend-following interpretation.':'Large specs are at a long-side extreme. Crypto uses a trend-following interpretation.'):(low?'Large specs are at a short-side extreme. Non-crypto markets use a contrarian fade interpretation.':'Large specs are at a long-side extreme. Non-crypto markets use a contrarian fade interpretation.');
     const chartId='cot-tv-'+m.etf.replace(/[^a-z0-9]/gi,'');
     return '<article class="cot-row '+tone+'"><section class="cot-position"><header><div><small>'+escapeHTML(m.group)+' · COT '+escapeHTML(m.last?.date||'')+'</small><h3>'+escapeHTML(m.name)+'</h3></div><b>'+escapeHTML(m.etf)+'</b></header><h4 class="'+tone+'">'+label+'</h4>'+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<p class="cot-confirm">'+confirmation+'</p><div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div class="cot-chart-head"><span>Tradeable ETF · weekly</span><small>'+escapeHTML(m.etf)+'</small></div><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-tv-symbol="'+escapeHTML(m.etf)+'" data-tv-interval="W"><span>Loading weekly chart…</span></div>'+cotSpark(m)+'</section></article>';
   };
   const windows=['1y','3y','5y'].map(key=>'<button data-cot-window="'+key+'" class="'+(cotWindow===key?'active':'')+'"><b>'+key.toUpperCase()+'</b><small>range</small></button>').join('');
-  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>How extreme is positioning?</h2><p>Current net positions compared with their own 1-, 3-, or 5-year history.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-controls"><div><span>Comparison history</span><div class="segments">'+windows+'</div></div></section><section class="cot-overview"><b>'+watches.length+' markets at a '+labels[cotWindow]+' extreme</b><span>0–5: short-side extreme</span><span>95–100: long-side extreme</span></section><section class="cot-rows">'+markets.map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each reading is a range location for net position: 100 × (current net − selected-period minimum) / (maximum − minimum). It is not the percentage of traders on either side, a probability, or a trade instruction.</p><p>This is a transparent CFTC-data normalization, not Jason Shapiro’s proprietary CMR index. Commercial positions are context, not an independent vote.</p></details>';
+  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>How extreme is positioning?</h2><p>Current net positions compared with their own 1-, 3-, or 5-year history.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-controls"><div><span>Comparison history</span><div class="segments">'+windows+'</div></div></section><section class="cot-overview"><b>'+watches.length+' large-spec '+labels[cotWindow]+' extreme'+(watches.length===1?'':'s')+'</b><span>Non-crypto: fade the extreme</span><span>Crypto: follow the extreme</span><span>0–5: short-side · 95–100: long-side</span></section><section class="cot-rows">'+markets.map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each reading is a range location for net position: 100 × (current net − selected-period minimum) / (maximum − minimum). It is not the percentage of traders on either side, a probability, or a trade instruction.</p><p>Large-spec extremes drive the displayed watch. Non-crypto markets use a contrarian fade interpretation; Crypto uses a trend-following interpretation. Commercial and small-spec positions are context, not independent votes.</p></details>';
 }
 function legacyPositioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -411,7 +414,7 @@ function legacyPositioning(){
 }
 function cotSpark(m){
   // These colors intentionally match the positioning gauges at left.
-  const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#ff9800'],['small','Small specs','#e040fb']];
+  const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#e040fb'],['small','Small specs','#ff9800']];
   const fullHistory=m.history.filter(r=>finite(r.participants.large?.net));
   const history=fullHistory.slice(-52);
   const max=Math.max(1,...fullHistory.flatMap(row=>keys.map(([key])=>Math.abs(Number(row.participants[key]?.net)||0))));
