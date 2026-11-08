@@ -570,6 +570,7 @@ function method(){
 function render(){
   route=location.hash.slice(1)||'briefing';if(!titles[route])route='briefing';
   $('#page-title').textContent=titles[route];
+  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=route==='positioning'?'none':'';});
   $('#session-label').textContent=route==='review'?'Debrief snapshot':'Plan for session';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);
