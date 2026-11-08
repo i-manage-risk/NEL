@@ -20,8 +20,8 @@ let overrides=store.get('themes',{}), selected=null, screenerView='kk';
 let kkSort={key:'strength',direction:'desc'};
 let screenerDisplay='list', tvObserver=null, tvScriptPromise=null;
 let breadthMetric='daily', breadthRange='3m';
-let cotWindow='5y';
-let cotParticipant='large',cotRanges={"3y":true,"5y":true};
+const cotWindow='5y';
+let cotParticipant='large';const cotRanges={"5y":true};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
 const breadthRows = () => breadth.filter(r=>r.date<=asof()).sort((a,b)=>b.date.localeCompare(a.date));
@@ -398,8 +398,7 @@ function positioning(){
     const chartId='cot-tv-'+m.etf.replace(/[^a-z0-9]/gi,'');
     return '<article class="cot-row '+tone+'"><section class="cot-position"><header><div><small>'+escapeHTML(m.group)+' · COT '+escapeHTML(m.last?.date||'')+'</small><h3>'+escapeHTML(m.name)+'</h3></div><b>'+escapeHTML(m.etf)+'</b></header><h4 class="'+tone+'">'+label+'</h4><p class="cot-exposure">Large specs · '+(finite(largeIndex)?fmt(largeIndex,1)+'/100 · '+(largeIndex<=5?'near '+labels[cotWindow]+' range low':largeIndex>=95?'near '+labels[cotWindow]+' range high':'within '+labels[cotWindow]+' range'):'insufficient history')+'<br>Net '+(p.large?.net>=0?'long ':'short ')+fmt(Math.abs(p.large?.net),0)+' contracts · weekly change '+signed((p.large?.net??0)-(m.prior?.participants?.large?.net??0),0)+'</p>'+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<p class="cot-confirm">'+confirmation+'</p><div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div class="cot-chart-head"><span>Tradeable ETF · weekly</span><small>'+escapeHTML(m.etf)+'</small></div><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-tv-symbol="'+escapeHTML(m.etf)+'" data-tv-interval="W"><span>Loading weekly chart…</span></div>'+cotSpark(m)+'</section></article>';
   };
-  const windows=['1y','3y','5y'].map(key=>'<button data-cot-window="'+key+'" class="'+(cotWindow===key?'active':'')+'"><b>'+key.toUpperCase()+'</b><small>range</small></button>').join('');
-  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>How extreme is positioning?</h2><p>Current net positions compared with their own 1-, 3-, or 5-year history.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-controls"><div><span>Comparison history</span><div class="segments">'+windows+'</div></div></section><section class="cot-overview"><b>'+watches.length+' large-spec '+labels[cotWindow]+' extreme'+(watches.length===1?'':'s')+'</b><span>Non-crypto: fade the extreme</span><span>Crypto: follow the extreme</span><span>0–5: range low · 95–100: range high</span></section><section class="cot-rows">'+markets.map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each reading is a range location for net position: 100 × (current net − selected-period minimum) / (maximum − minimum). It is not the percentage of traders on either side, a probability, or a trade instruction.</p><p>Large-spec extremes drive the displayed watch. Non-crypto markets use a contrarian fade interpretation; Crypto uses a trend-following interpretation. Commercial and small-spec positions are context, not independent votes. ETF weekly candles may contain price action after the Tuesday COT observation.</p></details>';
+  return '<section class="page-lead"><div><span class="eyebrow">POSITIONING · CFTC</span><h2>How extreme is positioning?</h2><p>Current net positions compared with their own 5-year history.</p></div><div class="source-stamp"><b>Positions as of</b><span>'+escapeHTML(latest||'Unavailable')+'</span><small>Weekly Tuesday positions · generally released Friday</small></div></section><section class="cot-overview"><b>'+watches.length+' large-spec '+labels[cotWindow]+' extreme'+(watches.length===1?'':'s')+'</b><span>Non-crypto: fade the extreme</span><span>Crypto: follow the extreme</span><span>0–5: range low · 95–100: range high</span></section><section class="cot-rows">'+markets.map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each reading is a range location for net position: 100 × (current net − selected-period minimum) / (maximum − minimum). It is not the percentage of traders on either side, a probability, or a trade instruction.</p><p>Large-spec extremes drive the displayed watch. Non-crypto markets use a contrarian fade interpretation; Crypto uses a trend-following interpretation. Commercial and small-spec positions are context, not independent votes. ETF weekly candles may contain price action after the Tuesday COT observation.</p></details>';
 }
 function legacyPositioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -420,7 +419,7 @@ function cotSpark(m){
   const left=32,right=748,top=24,bottom=184,plot=right-left,step=plot/Math.max(1,history.length-1),bar=3;
   const selected=keys.find(([key])=>key===cotParticipant)||keys[0];
   const start=fullHistory.length-history.length;
-  const windows=[['5y',260],['3y',156]];
+  const windows=[['5y',260]];
   const rangeAt=(i,key,length)=>{if(i+1<length)return null;const values=fullHistory.slice(i+1-length,i+1).map(r=>r.participants[key]?.net);if(values.some(v=>!finite(v)))return null;return {low:Math.min(...values),high:Math.max(...values)};};
   const displayed=history.flatMap(row=>keys.map(([key])=>Number(row.participants[key]?.net)));
   windows.filter(([name])=>cotRanges[name]).forEach(([,length])=>history.forEach((row,j)=>{const range=rangeAt(start+j,selected[0],length);if(range)displayed.push(range.low,range.high); }));
@@ -431,7 +430,7 @@ function cotSpark(m){
   const participantButtons=keys.map(([key,label,color])=>'<button type="button" data-cot-participant="'+key+'" class="'+(key===cotParticipant?'active':'')+'" style="--participant-color:'+color+'">'+label+'</button>').join('');
   const rangeButtons=windows.map(([name])=>'<button type="button" data-cot-range="'+name+'" class="'+(cotRanges[name]?'active':'')+'">'+name.toUpperCase()+' range</button>').join('');
   const latest=history.at(-1),latestNet=latest?.participants[selected[0]]?.net;
-  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>52 weekly reports · rolling ranges through each report date</small></div><div class="cot-bars-legend">'+participantButtons+rangeButtons+'</div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" role="img" aria-label="Weekly net positions and rolling three- and five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
+  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>52 weekly reports · 5-year rolling range</small></div><div class="cot-bars-legend">' +participantButtons+ '</div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
@@ -597,9 +596,7 @@ document.addEventListener('click',async event=>{
  if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';flowSelection='';render();return;}
  if(node.dataset.flowMode){flowMode=node.dataset.flowMode;flowSelection='';render();return;}
  if(node.dataset.flowGroup){flowSelection=node.dataset.flowGroup;render();return;}
- if(node.dataset.cotWindow){cotWindow=node.dataset.cotWindow;render();return;}
  if(node.dataset.cotParticipant){cotParticipant=node.dataset.cotParticipant;render();return;}
- if(node.dataset.cotRange){cotRanges[node.dataset.cotRange]=!cotRanges[node.dataset.cotRange];render();return;}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
  const action=node.dataset.action;
@@ -630,7 +627,7 @@ document.addEventListener('pointermove',event=>{
  const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)*780/rect.width;
  const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
  const row=history[j],previous=history[j-1],read=svg.parentElement.querySelector('.cot-hover-read');
- const ranges=[['3Y',156],['5Y',260]].map(([label,length])=>{const all=market.history.filter(r=>finite(r.participants.large?.net)),end=all.findIndex(r=>r.date===row.date),window=end+1>=length?all.slice(end+1-length,end+1):[];if(!window.length)return label+' unavailable';const values=window.map(r=>r.participants[cotParticipant]?.net).filter(finite);return label+' '+signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0);});
+ const ranges=[['5Y',260]].map(([label,length])=>{const all=market.history.filter(r=>finite(r.participants.large?.net)),end=all.findIndex(r=>r.date===row.date),window=end+1>=length?all.slice(end+1-length,end+1):[];if(!window.length)return label+' unavailable';const values=window.map(r=>r.participants[cotParticipant]?.net).filter(finite);return label+' '+signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0);});
  read.textContent=row.date+' · '+cotParticipant+' '+signed(row.participants[cotParticipant]?.net,0)+' · week '+signed(row.participants[cotParticipant]?.net-previous?.participants[cotParticipant]?.net,0)+' · '+ranges.join(' · ');
  const guide=svg.querySelector('.cot-hover-line'),gx=32+j*716/Math.max(1,history.length-1);guide.setAttribute('x1',gx);guide.setAttribute('x2',gx);guide.setAttribute('opacity','0.7');
 });
