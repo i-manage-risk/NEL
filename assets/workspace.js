@@ -21,7 +21,7 @@ let kkSort={key:'strength',direction:'desc'};
 let screenerDisplay='list', tvObserver=null, tvScriptPromise=null;
 let breadthMetric='daily', breadthRange='3m';
 const cotWindow='5y';
-let cotParticipant='large';const cotRanges={"5y":true};
+let cotParticipant='all';const cotRanges={"5y":true};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
 const breadthRows = () => breadth.filter(r=>r.date<=asof()).sort((a,b)=>b.date.localeCompare(a.date));
@@ -579,7 +579,7 @@ function render(){
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
-    if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);}
+    if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);updateCOTReadings(row.querySelector('[data-cot-chart]'),-1);}
   });
 }
 function download(name,text,type='text/plain'){
@@ -624,12 +624,10 @@ document.addEventListener('change',event=>{
  const obcKey=event.target.dataset.obcFilter;if(obcKey){obcFilters[obcKey]=event.target.value;render();}
 });
 window.addEventListener('hashchange',()=>{if(session())render();});
-document.addEventListener('pointermove',event=>{
- const svg=event.target.closest?.('[data-cot-chart]');if(!svg)return;
+function updateCOTReadings(svg,j){
  const market=cot.markets?.find(m=>m.code===svg.dataset.cotChart);if(!market)return;
  const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-156);
- const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)*780/rect.width;
- const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
+ if(j<0)j=history.length-1;
  const row=history[j],previous=history[j-1],read=svg.closest('.cot-row').querySelector('.cot-hover-read');
  const readKeys=cotParticipant==='all'?['large','commercials','small']:[cotParticipant];
  const names={large:'Large speculators',small:'Small speculators',commercials:'Commercials'};
@@ -639,9 +637,18 @@ document.addEventListener('pointermove',event=>{
  const values=endIndex+1>=260?all.slice(endIndex-259,endIndex+1).map(r=>r.participants[key]?.net).filter(finite):[];
  return '<div><b>'+names[key]+'</b><span>Net '+(net>=0?'long ':'short ')+'<strong>'+fmt(Math.abs(net),0)+'</strong></span><span>Weekly change <strong>'+signed(delta,0)+'</strong></span><small>5Y range · '+(values.length===260?signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0):'Insufficient history')+' contracts</small></div>';
  }).join('')+'</div>';
+
+}
+document.addEventListener('pointermove',event=>{
+ const svg=event.target.closest?.('[data-cot-chart]');if(!svg)return;
+ const market=cot.markets?.find(m=>m.code===svg.dataset.cotChart);if(!market)return;
+ const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-156);
+ const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)*780/rect.width;
+ const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
+ updateCOTReadings(svg,j);
  const guide=svg.querySelector('.cot-hover-line'),gx=32+j*716/Math.max(1,history.length-1);guide.setAttribute('x1',gx);guide.setAttribute('x2',gx);guide.setAttribute('opacity','0.7');
 });
-document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget))svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');});
+document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget)){svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');updateCOTReadings(svg,-1);}});
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
 async function start(){
  try{
