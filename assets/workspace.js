@@ -416,14 +416,14 @@ function cotSpark(m){
   const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#e040fb'],['small','Small specs','#ff9800']];
   const fullHistory=m.history.filter(r=>finite(r.participants.large?.net));
   const history=fullHistory.slice(-52);
-  const left=32,right=748,top=24,bottom=184,plot=right-left,step=plot/Math.max(1,history.length-1),bar=Math.max(.6,Math.min(3,step*.23));
+  const left=32,right=748,top=8,bottom=207,plot=right-left,step=plot/Math.max(1,history.length-1),bar=Math.max(.6,Math.min(3,step*.23));
   const selected=keys.find(([key])=>key===cotParticipant)||keys[0];
   const start=fullHistory.length-history.length;
   const windows=[['5y',260]];
   const rangeAt=(i,key,length)=>{if(i+1<length)return null;const values=fullHistory.slice(i+1-length,i+1).map(r=>r.participants[key]?.net);if(values.some(v=>!finite(v)))return null;return {low:Math.min(...values),high:Math.max(...values)};};
   const displayed=history.flatMap(row=>keys.map(([key])=>Number(row.participants[key]?.net)));
   windows.filter(([name])=>cotRanges[name]).forEach(([,length])=>history.forEach((row,j)=>{const range=rangeAt(start+j,selected[0],length);if(range)displayed.push(range.low,range.high); }));
-  const max=Math.max(1,...displayed.map(Math.abs))*1.12,zero=(top+bottom)/2,scale=(bottom-top)/2/max,y=value=>zero-value*scale;
+  const max=Math.max(1,...displayed.map(Math.abs))*1.04,zero=(top+bottom)/2,scale=(bottom-top)/2/max,y=value=>zero-value*scale;
   const path=(length,edge)=>{let d='';history.forEach((row,j)=>{const range=rangeAt(start+j,selected[0],length);if(!range){d='';return;}const point=(left+j*step).toFixed(1)+' '+y(range[edge]).toFixed(1);d+=(d?' L':'M')+point;});return d;};
   const overlays=cotParticipant==='all'?'':windows.filter(([name])=>cotRanges[name]).map(([name,length])=>['high','low'].map(edge=>'<path d="'+path(length,edge)+'" fill="none" stroke="'+selected[2]+'" opacity="'+(name==='3y'?.72:.38)+'" stroke-width="'+(name==='3y'?1.5:1)+'" stroke-dasharray="'+(name==='3y'?'':'4 4')+'"/>').join('')).join('');
   const bars=history.map((row,j)=>keys.map(([key,,color],offset)=>{const net=Number(row.participants[key]?.net)||0,x=left+j*step+(offset-1)*(bar+.25),h=Math.abs(net)*scale;return '<rect x="'+x.toFixed(1)+'" y="'+(net>=0?y(net):zero).toFixed(1)+'" width="'+bar+'" height="'+h.toFixed(1)+'" fill="'+color+'" opacity="'+(cotParticipant==='all'||key===cotParticipant?1:.24)+'"/>';}).join('')).join('');
