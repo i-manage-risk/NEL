@@ -21,7 +21,7 @@ let kkSort={key:'strength',direction:'desc'};
 let screenerDisplay='list', tvObserver=null, tvScriptPromise=null;
 let breadthMetric='daily', breadthRange='3m';
 const cotWindow='5y';
-let cotParticipant='all';const cotRanges={"5y":true};
+const cotParticipant='all';const cotRanges={"5y":true};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
 const breadthRows = () => breadth.filter(r=>r.date<=asof()).sort((a,b)=>b.date.localeCompare(a.date));
@@ -387,7 +387,7 @@ function positioning(){
   const meter=(m,k,label,color)=>{
     const v=index(k,m.last),prev=index(k,m.prior),valid=finite(v),delta=valid&&finite(prev)?Number(v)-Number(prev):null;
     const state=!valid?'Insufficient history':v<=5?'Near range low':v>=95?'Near range high':'Within range';
-    return '<div class="cot-participant"><div><b>'+label+'</b><strong style="color:'+color+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%;background:'+color+'"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
+    return '<div class="cot-participant" style="--party-color:'+color+'"><div><b>'+label+'</b><strong style="color:'+color+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%;background:'+color+'"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
   };
   const card=m=>{
     const p=m.last?.participants||{},largeIndex=index('large',m.last),crypto=m.group==='Crypto';
@@ -430,7 +430,7 @@ function cotSpark(m){
   const participantButtons='<button type="button" data-cot-participant="all" class="'+(cotParticipant==='all'?'active':'')+'">All</button>'+keys.map(([key,label,color])=>'<button type="button" data-cot-participant="'+key+'" class="'+(key===cotParticipant?'active':'')+'" style="--participant-color:'+color+'">'+label+'</button>').join('');
   const rangeButtons=windows.map(([name])=>'<button type="button" data-cot-range="'+name+'" class="'+(cotRanges[name]?'active':'')+'">'+name.toUpperCase()+' range</button>').join('');
   const latest=history.at(-1),latestNet=latest?.participants[selected[0]]?.net;
-  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>Last 3 years displayed · 5-year calculation lookback</small></div><div class="cot-bars-legend">' +participantButtons+ '</div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
+  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>Last 3 years displayed · 5-year calculation lookback</small></div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
@@ -600,7 +600,6 @@ document.addEventListener('click',async event=>{
  if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';flowSelection='';render();return;}
  if(node.dataset.flowMode){flowMode=node.dataset.flowMode;flowSelection='';render();return;}
  if(node.dataset.flowGroup){flowSelection=node.dataset.flowGroup;render();return;}
- if(node.dataset.cotParticipant){cotParticipant=node.dataset.cotParticipant;render();return;}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
  const action=node.dataset.action;
@@ -635,7 +634,7 @@ function updateCOTReadings(svg,j){
  read.innerHTML='<span class="cot-read-date">Report · '+escapeHTML(row.date)+'</span><div class="cot-read-grid">'+readKeys.map(key=>{
  const net=row.participants[key]?.net,delta=net-previous?.participants[key]?.net;
  const values=endIndex+1>=260?all.slice(endIndex-259,endIndex+1).map(r=>r.participants[key]?.net).filter(finite):[];
- return '<div><b>'+names[key]+'</b><span>Net '+(net>=0?'long ':'short ')+'<strong>'+fmt(Math.abs(net),0)+'</strong></span><span>Weekly change <strong>'+signed(delta,0)+'</strong></span><small>5Y range · '+(values.length===260?signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0):'Insufficient history')+' contracts</small></div>';
+ return '<div data-cot-party="'+key+'"><b>'+names[key]+'</b><span>Net '+(net>=0?'long ':'short ')+'<strong>'+fmt(Math.abs(net),0)+'</strong></span><span>Weekly change <strong>'+signed(delta,0)+'</strong></span><small>5Y range · '+(values.length===260?signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0):'Insufficient history')+' contracts</small></div>';
  }).join('')+'</div>';
 
 }
