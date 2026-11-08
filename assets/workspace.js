@@ -414,10 +414,12 @@ function cotSpark(m){
   const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#ff9800'],['small','Small specs','#e040fb']];
   const history=m.history.filter(r=>finite(r.participants.large?.net)).slice(-52);
   const max=Math.max(1,...history.flatMap(row=>keys.map(([key])=>Math.abs(Number(row.participants[key]?.net)||0))));
-  const width=760,zero=142,unit=104/max,step=width/Math.max(1,history.length),bar=Math.max(1.5,step*.18);
-  const bars=history.map((row,n)=>keys.map(([key,,color],offset)=>{const net=Number(row.participants[key]?.net)||0,x=18+n*step+offset*(bar+1),height=Math.abs(net)*unit,y=net>=0?zero-height:zero;return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bar.toFixed(1)+'" height="'+height.toFixed(1)+'" fill="'+color+'"/>';}).join('')).join('');
+  // Keep the zero axis centered: COT net longs and shorts share one symmetric scale.
+  // This prevents bars from being clipped below the chart when one side is extreme.
+  const width=780,height=220,left=28,right=752,zero=104,amplitude=72,unit=amplitude/max,step=(right-left)/Math.max(1,history.length-1),bar=Math.min(5.5,Math.max(1.4,step*.18));
+  const bars=history.map((row,n)=>keys.map(([key,,color],offset)=>{const net=Number(row.participants[key]?.net)||0,x=left+n*step+(offset-1)*(bar+1),h=Math.abs(net)*unit,y=net>=0?zero-h:zero;return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bar.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+color+'"/>';}).join('')).join('');
   const legend=keys.map(([key,label,color])=>'<span><i style="background:'+color+'"></i>'+label+' <b>'+signed(m.history.at(-1)?.participants[key]?.net,0)+'</b></span>').join('');
-  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>52 weekly COT reports · contracts</small></div><div class="cot-bars-legend">'+legend+'</div></div><svg viewBox="0 0 780 175" role="img" aria-label="52-week net positioning chart"><path d="M10 38H770 M10 '+zero+'H770 M10 170H770" stroke="#383838"/><path d="M10 '+zero+'H770" stroke="#aaa89f"/><text x="12" y="173" fill="#aaa89f" font-size="9">'+(history[0]?.date||'')+'</text><text x="704" y="173" fill="#aaa89f" font-size="9">'+(history.at(-1)?.date||'')+'</text>'+bars+'</svg></section>';
+  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>52 weekly COT reports · contracts · symmetric scale</small></div><div class="cot-bars-legend">'+legend+'</div></div><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="52-week net positioning chart"><path d="M'+left+' 32H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' 176H'+right+'" stroke="#383838"/><path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/><text x="'+left+'" y="204" fill="#aaa89f" font-size="9">'+(history[0]?.date||'')+'</text><text x="'+(right-66)+'" y="204" fill="#aaa89f" font-size="9">'+(history.at(-1)?.date||'')+'</text>'+bars+'</svg></section>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
