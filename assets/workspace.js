@@ -2,7 +2,8 @@
 const $ = selector => document.querySelector(selector);
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const finite = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
-const fmt = (v, d=1) => finite(v) ? Number(v).toLocaleString(undefined,{maximumFractionDigits:d}) : '—';
+const numberFormatters=new Map();
+const fmt = (v,d=1) => {if(!finite(v))return '—';if(!numberFormatters.has(d))numberFormatters.set(d,new Intl.NumberFormat(undefined,{maximumFractionDigits:d}));return numberFormatters.get(d).format(Number(v));};
 const pct = v => finite(v) ? fmt(v,1)+'%' : '—';
 const signed = (v,d=1) => finite(v) ? (v>0?'+':'')+fmt(v,d) : '—';
 const money = v => finite(v) ? '$'+fmt(v/(v>=1e9?1e9:1e6),1)+(v>=1e9?'B':'M') : '—';
@@ -237,12 +238,18 @@ function briefing(){
   const leader=themesNow[0], breadthShift=old&&finite(b?.t2108)&&finite(old?.t2108)?b.t2108-old.t2108:null;
   return '<section class="command-hero '+read.tone+'"><div><span class="eyebrow">MORNING PLAN · '+escapeHTML(session().date)+'</span><h2>'+read.title+'</h2><p>'+read.plan+'</p><div class="command-tags"><span>Close: '+escapeHTML(asof())+'</span><span>'+frameNames[frame]+' leadership</span><span>Chart review required</span></div></div><aside><span>Risk posture</span><b class="'+read.tone+'">'+(read.tone==='positive'?'Press valid setups':read.tone==='negative'?'Protect capital':'Stay selective')+'</b><small>'+read.reason+'</small></aside></section><div class="toolbar">'+frameControls('Planning horizon')+'</div><section class="decision-strip">'+miniStat('◉','Breadth pressure',fmt(b?.ratio10,2),'10D · above 1 favors upside',b?.ratio10>=1?'positive':'negative')+miniStat('↕','Participation',pct(b?.t2108),'Above 40-day average',b?.t2108>=50?'positive':'gold')+miniStat('◆','Leading theme',escapeHTML(leader?.group||'—'),leader?pct(leader.median_performance)+' median':'No ETF reading','cyan')+miniStat('⚡','Tight candidates',tight,frameNames[frame]+' NEL candidates','orange')+'</section><section class="plan-grid"><div class="plan-main"><div class="section-kicker"><span>WHAT TO DO</span><small>Let the environment dictate how selective you are.</small></div><div class="action-stack">'+actionTile('⌕','Build the chart queue',tight+' tight, non-extended candidates are ready for review.','#screener','Screen','cyan')+actionTile('◆','Trade with leadership',leader?escapeHTML(leader.group)+' is the top '+frameNames[frame].toLowerCase()+' theme.':'Check the current leadership table.','#leadership','Flow','violet')+actionTile('↺','Know what changed',breadthShift===null?'Prior-close comparison is not available.':('T2108 '+signed(breadthShift)+' pp since the prior close.'),'#review','Replay',breadthShift>=0?'positive':'gold')+'</div></div><div class="plan-side"><div class="section-kicker"><span>MARKET CHECK</span><small>Not predictions—just the conditions you are trading in.</small></div><div class="stance-grid"><div><span>Up / down 4%</span><b class="'+(net>=0?'positive':'negative')+'">'+fmt(b?.up4,0)+' / '+fmt(b?.down4,0)+'</b><small>Net '+signed(net)+'</small></div><div><span>COT extremes</span><b>'+extremes+'</b><small>Weekly context only</small></div><div><span>Prior-close breadth</span><b class="'+(breadthShift>=0?'positive':'negative')+'">'+(breadthShift===null?'—':signed(breadthShift)+' pp')+'</b><small>T2108 change</small></div></div></div></section><details class="evidence-drawer"><summary>Why this plan?</summary><p>'+read.reason+' These are decision aids, not calibrated probabilities or trade instructions. Open Pulse for breadth detail, Flow for leadership detail, and Crowding for COT context.</p></details>';
 }
-let breadthSelected='Daily 4% moves';let breadthPinned=-1;let breadthDate='',breadthWindow=65,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
+let breadthSelected='Daily 4% moves';let breadthPinned=-1;let breadthDate='',breadthWindow=252,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
+let breadthSPXChangeSource=null,breadthSPXChanges=new Map();
+function breadthSPXChange(date){
+ if(breadthSPXChangeSource!==breadth){breadthSPXChangeSource=breadth;breadthSPXChanges=new Map();const ordered=[...breadth].sort((a,b)=>a.date.localeCompare(b.date));let previous=null;ordered.forEach(row=>{if(finite(row.sp)){breadthSPXChanges.set(row.date,previous&&Number(previous.sp)!==0?100*(Number(row.sp)/Number(previous.sp)-1):null);previous=row;}});}
+ return breadthSPXChanges.get(date)??null;
+}
+function breadthSPXChangeLabel(date){const change=breadthSPXChange(date);return change===null?'':(' ('+signed(change,2)+'%)');}
 function setBreadthHover(index){
  document.querySelector('.bm-workstation')?._updateBoard?.(index);
   const row=index>=0?breadthHoverRows[index]:breadthHoverLatest,latest=breadthHoverLatest;
   if(!row)return;
-  document.querySelectorAll('.bm-hit').forEach(node=>node.classList.toggle('bm-linked-active',index>=0&&Number(node.dataset.bmIndex)===index));
+  document.querySelectorAll('.bm-explorer-canvas > :not([hidden]) .bm-hit').forEach(node=>node.classList.toggle('bm-linked-active',index>=0&&Number(node.dataset.bmIndex)===index));
   const prior=breadth.filter(r=>r.date<row.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
   const available=breadth.filter(r=>r.date<=row.date);
   document.querySelectorAll('[data-bm-percentile]').forEach(node=>{const k=node.dataset.bmPercentile,rank=breadthPercentile(available,k,row[k]);node.textContent=(k.startsWith('up')?'Upside':'Downside')+' historical rank: '+(rank===null?'—':'percentile '+fmt(rank,0)+'/100');node.style.color=k.startsWith('up')?'#85d65d':'#ff3266';});
@@ -252,32 +259,70 @@ function setBreadthHover(index){
  const unpin=document.querySelector('[data-bm-unpin]');if(unpin)unpin.hidden=breadthPinned<0;
   document.querySelectorAll('[data-bm-key]').forEach(el=>{
     const key=el.dataset.bmKey,decimals=Number(el.dataset.bmDecimals||0),suffix=el.dataset.bmSuffix||'';
-    const value=finite(row[key])?fmt(row[key],decimals)+suffix:'—';
+    const value=finite(row[key])?fmt(row[key],decimals)+suffix+(key==='sp'?breadthSPXChangeLabel(row.date):''):'—';
     const change=index>=0&&finite(row[key])&&finite(latest?.[key])
       ?(key==='sp'
         ?signed(Number(row[key])-Number(latest[key]),2)+' · '+signed(100*(Number(row[key])/Number(latest[key])-1),2)+'% vs latest'
         :signed(Number(row[key])-Number(latest[key]),decimals)+suffix+' vs latest')
       :'Latest close';
-    el.innerHTML='<b>'+escapeHTML(el.dataset.bmLabel||key)+' '+value+'</b><small>'+change+'</small>';
+    el.innerHTML='<b>'+escapeHTML(el.dataset.bmLabel===undefined?key:el.dataset.bmLabel)+' '+value+'</b><small>'+change+'</small>';
     if(document.body.classList.contains('breadth-page'))el.querySelector('small').textContent=finite(row[key])&&finite(prior?.[key])?signed(Number(row[key])-Number(prior[key]),decimals)+suffix+' vs prior session':'Prior session unavailable';
+    if(key==='sp'){const daily=breadthSPXChange(row.date);el.style.color=daily===null||daily===0?'#f5f2e8':daily>0?'#85d65d':'#ff3266';el.style.opacity='1';}else{el.style.color=key.startsWith('up')?'#85d65d':key.startsWith('down')?'#ff3266':breadthInk(row,key);el.style.opacity=key.startsWith('up')||key.startsWith('down')?'1':breadthOpacity(row,key);}
   });
+  document.querySelectorAll('[data-spx-performance]').forEach(node=>{
+ const first=breadthHoverRows.find(r=>finite(r.sp)),valid=first&&finite(row.sp)&&Number(first.sp)!==0;
+ const performance=valid?100*(Number(row.sp)/Number(first.sp)-1):null;
+ const period=({5:'1 week',21:'1 month',63:'3 month',126:'6 month',252:'1 year',756:'3 year',1260:'5 year',100000:'All time'})[breadthWindow]||'';
+ node.innerHTML='<b>'+period+' Performance: '+(performance===null?'—':signed(performance,2)+'%')+'</b>';
+ node.style.color=performance===null||performance===0?'#f5f2e8':performance>0?'#85d65d':'#ff3266';
+ });
+  document.querySelectorAll('[data-range-key]').forEach(gauge=>{
+ const key=gauge.dataset.rangeKey;
+ if(key==='sp'){
+ const bar=spxHistory.find(bar=>bar.date===row.date),score=bar?.oscillator;
+ if(!finite(score)){gauge.hidden=true;return;}gauge.hidden=false;
+ const marker=gauge.querySelector('i');marker.style.left=(50+50*Math.max(-1,Math.min(1,Number(score))))+'%';marker.style.background=Number(score)>0?'#85d65d':Number(score)<0?'#ff3266':'#f5f2e8';
+ const zero=gauge.querySelector('em');zero.hidden=false;zero.style.left='50%';
+ const ends=gauge.querySelector('.bm-range-ends');ends.innerHTML='<small>−1</small><small>'+signed(score,2)+'</small><small>+1</small>';
+ gauge.setAttribute('aria-label','50-day ATR extension index '+score+'; zero is the 50-day average; normalized using all available prior SPX history');return;
+ }
+ const values=breadth.filter(r=>r.date<=row.date&&finite(r[key])).map(r=>Number(r[key]));
+ const rail=gauge.querySelector('.bm-range-rail'),ends=gauge.querySelectorAll('.bm-range-ends small');
+ if(!values.length||!finite(row[key])){gauge.hidden=true;return;}gauge.hidden=false;
+ const low=Math.min(...values),high=Math.max(...values),span=high-low,position=value=>span?Math.max(0,Math.min(100,100*(value-low)/span)):50;
+ const marker=rail.querySelector('i');marker.style.left=position(Number(row[key]))+'%';marker.style.background=breadthInk(row,key);
+ const balance=rail.querySelector('em');balance.hidden=!key.startsWith('ratio')||low>1||high<1;balance.style.left=position(1)+'%';
+ const suffix=key==='t2108'?'%':key==='sp'?'':'×';ends[0].textContent=fmt(low,key==='t2108'?1:2)+suffix;ends[1].textContent=fmt(high,key==='t2108'?1:2)+suffix;
+ gauge.setAttribute('aria-label','All-time range through '+row.date+': low '+low+', high '+high+', current '+row[key]);
+ });
+  if(!document.querySelector('[data-bm-off-ath]'))return;
   const ath=Math.max(...spxHistory.filter(r=>r.date<=row.date&&finite(r.close)).map(r=>Number(r.close)),...available.filter(r=>finite(r.sp)).map(r=>Number(r.sp)));
   const offAth=finite(row.sp)&&finite(ath)?100*(Number(row.sp)/ath-1):null;
   document.querySelectorAll('[data-bm-off-ath]').forEach(el=>el.textContent=offAth===null?'ATH unavailable':Math.abs(offAth)<.005?'At all-time high':fmt(Math.abs(offAth),2)+'% off ATH');
 }
 function bindBreadthHover(){
+  if(document.querySelector('.bm-console'))document.querySelectorAll('.bm-console .bm-tape title').forEach(node=>node.remove());
   document.querySelectorAll('.bm-tape').forEach(tape=>{
+    if(tape.dataset.hoverBound)return;tape.dataset.hoverBound='true';
     const setFromPointer=event=>{
       const point=tape.createSVGPoint();
       point.x=event.clientX;point.y=event.clientY;
       const local=point.matrixTransform(tape.getScreenCTM().inverse());
-      const index=Math.max(0,Math.min(breadthHoverRows.length-1,Math.floor((local.x-8)/(912/Math.max(breadthHoverRows.length,1)))));
-      tape.dataset.inspectedIndex=index;setBreadthHover(index);
+      const index=Math.max(0,Math.min(breadthHoverRows.length-1,Math.floor((local.x-18)/(892/Math.max(breadthHoverRows.length,1)))));
+      if(tape.dataset.inspectedIndex!==String(index)){tape.dataset.inspectedIndex=index;setBreadthHover(index);}
+      const canvas=tape.closest('.bm-explorer-canvas');if(!canvas)return;
+      let overlay=canvas.querySelector('.bm-axis-crosshair');if(!overlay){overlay=document.createElement('div');overlay.className='bm-axis-crosshair';overlay.innerHTML='<i></i><span class="bm-axis-value"></span><span class="bm-axis-date"></span>';canvas.append(overlay);}
+      const box=tape.getBoundingClientRect(),parent=canvas.getBoundingClientRect(),cursorY=Math.max(24,Math.min(330,local.y)),low=Number(tape.dataset.low),high=Number(tape.dataset.high),value=high-(cursorY-24)/306*(high-low),spec=JSON.parse(tape.dataset.series);
+      overlay.hidden=false;const top=box.top-parent.top+cursorY/380*box.height,left=box.left-parent.left;
+      const line=overlay.querySelector('i');line.style.top=top+'px';line.style.left=(left+18/1000*box.width)+'px';line.style.width=(892/1000*box.width)+'px';
+      const tag=overlay.querySelector('.bm-axis-value');tag.textContent=fmt(value,spec.keys.some(k=>['sp','ratio5','ratio10'].includes(k))?2:spec.keys.includes('t2108')?1:0)+(spec.keys.includes('t2108')?'%':'');tag.style.top=top+'px';tag.style.left=(left+910/1000*box.width)+'px';
+      const dateTag=overlay.querySelector('.bm-axis-date');dateTag.textContent=breadthHoverRows[index]?.date||'';dateTag.style.top=(box.top-parent.top+330/380*box.height+6)+'px';dateTag.style.left=(left+Math.max(55,Math.min(box.width-65,(18+892*(index+.5)/breadthHoverRows.length)/1000*box.width)))+'px';
+
     };
-    tape.addEventListener('pointermove',setFromPointer);
+    let hoverFrame=0,lastPointer=null;tape.addEventListener('pointermove',event=>{lastPointer=event;if(!hoverFrame)hoverFrame=requestAnimationFrame(()=>{hoverFrame=0;setFromPointer(lastPointer);});},{passive:true});
     tape.addEventListener('pointerenter',setFromPointer);
     tape.addEventListener('click',()=>{breadthPinned=Number(tape.dataset.inspectedIndex??-1);setBreadthHover(breadthPinned);});
-    tape.addEventListener('pointerleave',()=>setBreadthHover(breadthPinned));
+    tape.addEventListener('pointerleave',()=>{cancelAnimationFrame(hoverFrame);hoverFrame=0;delete tape.dataset.inspectedIndex;setBreadthHover(breadthPinned);const overlay=tape.closest('.bm-explorer-canvas')?.querySelector('.bm-axis-crosshair');if(overlay)overlay.hidden=true;});
   });
 }
 function breadthPercentile(rows,key,value){
@@ -285,36 +330,54 @@ function breadthPercentile(rows,key,value){
   const sample=rows.filter(r=>finite(r[key])).map(r=>Number(r[key]));
   return sample.length?100*(sample.filter(v=>v<Number(value)).length+.5*sample.filter(v=>v===Number(value)).length)/sample.length:null;
 }
+let spxRangeSample=null,spxRangeAverage=null;
+function stockbeeColor(r,key){
+ if(key==='sp'){if(spxRangeSample!==breadthHoverRows){spxRangeSample=breadthHoverRows;const sample=breadthHoverRows.filter(x=>finite(x.sp));spxRangeAverage=sample.length?sample.reduce((sum,x)=>sum+Number(x.sp),0)/sample.length:null;}if(!finite(r.sp)||spxRangeAverage===null)return '';const average=spxRangeAverage;return Number(r.sp)>average?'sb-green':Number(r.sp)<average?'sb-red':'';}
+ const value=Number(r[key]);if(!finite(r[key]))return '';
+ if(key==='up4')return !finite(r.down4)?'':value<Number(r.down4)?'sb-soft-red':value>=300?'sb-dark-green':'sb-green';
+ if(key==='down4')return value>=300?'sb-red':!finite(r.up4)?'':Number(r.up4)<value?'sb-soft-red':'sb-green';
+ if(key==='ratio5'||key==='ratio10')return value>=2?'sb-green':value<.5?'sb-red':'';
+ for(const [up,down] of [['up25q','down25q'],['up25m','down25m'],['up13d34','down13d34']])if(key===up||key===down)return finite(r[up])&&finite(r[down])?(Number(r[up])>=Number(r[down])?'sb-green':'sb-red'):'';
+ if(key==='up50m')return value>=20?'sb-red':'';
+ if(key==='down50m')return value>=20?'sb-green':'';
+ if(key==='t2108')return value<20?'sb-green':'';
+ return '';
+}
+
+function breadthInk(r,key){return {'sb-green':'#85d65d','sb-dark-green':'#85d65d','sb-red':'#ff3266','sb-soft-red':'#ff3266'}[stockbeeColor(r,key)]||'#f5f2e8';}
+function breadthOpacity(r,key){return {'sb-green':.65,'sb-dark-green':1,'sb-red':1,'sb-soft-red':.4}[stockbeeColor(r,key)]??1;}
 function breadthTape(rows,keys,colors,kind='line',reference=null){
-  const W=1000,H=145,L=8,R=920,T=12,B=118;
+  const W=1000,H=380,L=18,R=910,T=24,B=330;
   const references=reference===null?[]:(Array.isArray(reference)?reference:[{value:reference}]).filter(item=>finite(typeof item==='object'?item.value:item));
+  if(keys.length===1&&keys[0]==='sp'){const sample=rows.filter(r=>finite(r.sp));if(sample.length)references.push({value:sample.reduce((sum,r)=>sum+Number(r.sp),0)/sample.length,label:'Range average',color:'#aaa89f'});}
   const referenceValues=references.map(item=>Number(typeof item==='object'?item.value:item));
-  const values=rows.flatMap(r=>keys.filter(k=>finite(r[k])).map(k=>Number(r[k])*(kind==='bars'&&k==='down4'?-1:1)));
+  const values=rows.flatMap(r=>keys.filter(k=>finite(r[k])).map(k=>Number(r[k])*(kind==='bars'&&k.startsWith('down')?-1:1)));
   if(!values.length)return '<p class="empty">No readings available.</p>';
   let lo=kind==='bars'?Math.min(0,...values):Math.min(...values),hi=Math.max(...values);
   if(referenceValues.length){lo=Math.min(lo,...referenceValues);hi=Math.max(hi,...referenceValues);}
   const pad=Math.max((hi-lo)*.12,kind==='bars'?1:.01);lo-=pad;hi+=pad;
-  if(kind==='bars'){hi=Math.ceil(Math.max(Math.abs(lo),Math.abs(hi))/100)*100;lo=-hi;}
+  if(kind==='bars'){hi=Math.ceil(hi/100)*100;lo=Math.floor(lo/100)*100;}
   if(keys.includes('t2108')){lo=0;hi=100;}if(keys[0]?.startsWith('rank_')){lo=0;hi=100;}
   const step=(R-L)/Math.max(rows.length,1),x=i=>L+step*(i+.5),y=v=>B-(v-lo)/(hi-lo)*(B-T);
-  let svg=[lo,(hi+lo)/2,hi].map(v=>'<line x1="'+L+'" x2="'+R+'" y1="'+y(v)+'" y2="'+y(v)+'" class="bm-grid"/><text x="'+(R+10)+'" y="'+(y(v)+4)+'">'+(kind==='bars'?(v<0?'↓ ':v>0?'↑ ':'')+fmt(Math.abs(v),0):fmt(v,keys.includes('ratio5')?2:0))+'</text>').join('');
+  let svg=Array.from({length:5},(_,i)=>lo+(hi-lo)*i/4).map(v=>'<line x1="'+L+'" x2="'+R+'" y1="'+y(v)+'" y2="'+y(v)+'" class="bm-grid"/><text x="'+(R+10)+'" y="'+(y(v)+4)+'">'+(kind==='bars'?(v<0?'↓ ':v>0?'↑ ':'')+fmt(Math.abs(v),0):fmt(v,keys.some(k=>k.startsWith('ratio'))?2:0))+'</text>').join('');
+
   if(kind==='bars')svg+='<line x1="'+L+'" x2="'+R+'" y1="'+y(0)+'" y2="'+y(0)+'" class="bm-reference" style="stroke:#8d8b81"/>';
   svg+=references.map((item,index)=>{const ref=typeof item==='object'?item:{value:item},value=Number(ref.value),label=ref.label||'',color=ref.color||'#8d8b81',offset=(index%2)*11,levelY=y(value),labelY=levelY<T+24?levelY+14+offset:levelY-5-offset;return '<line x1="'+L+'" x2="'+R+'" y1="'+levelY+'" y2="'+levelY+'" class="bm-reference" style="stroke:'+color+'"/>'+(label?'<text x="'+(L+5)+'" y="'+labelY+'" fill="'+color+'" class="bm-level-label">'+escapeHTML(label)+'</text>':'');}).join('');
   keys.forEach((key,j)=>{
     if(kind==='bars'){
-      svg+=rows.map((r,i)=>{if(!finite(r[key]))return '';const v=Number(r[key])*(j?-1:1);return '<rect x="'+(x(i)-step*.28)+'" y="'+Math.min(y(v),y(0))+'" width="'+step*.56+'" height="'+Math.max(1,Math.abs(y(v)-y(0)))+'" fill="'+colors[j]+'"/>';}).join('');
+      svg+=rows.map((r,i)=>{if(!finite(r[key]))return '';const v=Number(r[key])*(j?-1:1);return '<rect x="'+(x(i)-step*.28)+'" y="'+Math.min(y(v),y(0))+'" width="'+step*.56+'" height="'+Math.max(1,Math.abs(y(v)-y(0)))+'" fill="'+(key.startsWith('down')?'#ff3266':'#85d65d')+'" fill-opacity="1"/>';}).join('');
     }else{
       let pen=false;const d=rows.map((r,i)=>{if(!finite(r[key])){pen=false;return '';}const command=pen?'L':'M';pen=true;return command+x(i)+','+y(Number(r[key]));}).join(' ');
-      svg+='<path d="'+d+'" fill="none" stroke="'+colors[j]+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';
+      if(!(keys.length===1&&['ratio5','ratio10','t2108','sp'].includes(key)))svg+='<path d="'+d+'" fill="none" stroke="'+(keys.length===1?'#f5f2e8':colors[j])+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';
+      if(keys.length===1&&['ratio5','ratio10','t2108','sp'].includes(key)){
+       const condition=r=>breadthInk(r,key);
+       for(let i=1;i<rows.length;i++){if(!finite(rows[i-1][key])||!finite(rows[i][key]))continue;const color=condition(rows[i]);if(color)svg+='<path d="M'+x(i-1)+','+y(Number(rows[i-1][key]))+' L'+x(i)+','+y(Number(rows[i][key]))+'" fill="none" stroke="'+color+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';}
+      }
     }
   });
-  if(keys.length===1&&keys[0]==='t2108'){
- const valid=rows.map((r,i)=>({v:r.t2108,i})).filter(p=>finite(p.v));
- if(valid.length){const low=valid.reduce((a,b)=>Number(a.v)<Number(b.v)?a:b),high=valid.reduce((a,b)=>Number(a.v)>Number(b.v)?a:b);[low,high].forEach((p,j)=>{const label=(j?'Range high ':'Range low ')+fmt(p.v,1)+'%';svg+='<circle cx="'+x(p.i)+'" cy="'+y(p.v)+'" r="4" fill="'+(j?'#e9c46a':'#ff3266')+'"/><text x="'+x(p.i)+'" y="'+Math.max(T+10,Math.min(B-4,y(p.v)+(j?-9:16)))+'" text-anchor="'+(p.i>rows.length*.75?'end':p.i<rows.length*.25?'start':'middle')+'">'+label+'</text>';});}
- }
-  svg+=rows.map((r,i)=>'<g class="bm-hit" data-bm-index="'+i+'"><rect x="'+(L+step*i)+'" y="0" width="'+step+'" height="'+B+'" fill="rgba(0,0,0,.001)"/><line x1="'+x(i)+'" x2="'+x(i)+'" y1="'+T+'" y2="'+B+'"/>'+keys.filter(k=>finite(r[k])).map((k,j)=>'<circle cx="'+x(i)+'" cy="'+y(Number(r[k])*(kind==='bars'&&k==='down4'?-1:1))+'" r="4" fill="'+colors[j]+'"/>').join('')+'<title>'+r.date+' · '+keys.map(k=>k+': '+fmt(r[k],kind==='bars'?0:2)).join(' · ')+'</title></g>').join('');
-  svg+=rows.filter((r,i)=>i===0||i===rows.length-1||i===Math.floor(rows.length/2)).map(r=>'<text x="'+x(rows.indexOf(r))+'" y="140" text-anchor="middle">'+r.date.slice(5)+'</text>').join('');
-  return '<svg class="bm-tape" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+escapeHTML(keys.join(', ')+' through '+rows.at(-1).date)+'">'+svg+'</svg>';
+  svg+=rows.map((r,i)=>'<g class="bm-hit" data-bm-index="'+i+'"><rect x="'+(L+step*i)+'" y="0" width="'+step+'" height="'+B+'" fill="rgba(0,0,0,.001)"/><line x1="'+x(i)+'" x2="'+x(i)+'" y1="'+T+'" y2="'+B+'"/>'+keys.filter(k=>finite(r[k])).map((k,j)=>'<circle cx="'+x(i)+'" cy="'+y(Number(r[k])*(kind==='bars'&&k.startsWith('down')?-1:1))+'" r="4" fill="'+(kind==='bars'?(k.startsWith('down')?'#ff3266':'#85d65d'):breadthInk(r,k))+'"/>').join('')+'<title>'+r.date+' · '+keys.map(k=>k+': '+fmt(r[k],kind==='bars'?0:2)).join(' · ')+'</title></g>').join('');
+  svg+=rows.filter((r,i)=>i===0||i===rows.length-1||i===Math.floor(rows.length/4)||i===Math.floor(rows.length/2)||i===Math.floor(3*rows.length/4)).map(r=>'<text x="'+x(rows.indexOf(r))+'" y="365" text-anchor="middle">'+r.date.slice(5)+'</text>').join('');
+  return '<svg data-low="'+lo+'" data-high="'+hi+'" data-series="'+escapeHTML(JSON.stringify({keys,colors,kind,reference}))+'" class="bm-tape" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+escapeHTML(keys.join(', ')+' through '+rows.at(-1).date)+'">'+svg+'</svg>';
 }
 function legacyEnvironment(){
   const history=breadthRows(),b=history[0],old=history[1];
@@ -381,11 +444,11 @@ function environment(){
  const market=chart('S&P 500',key('sp','Close','#86d65d',2)+'<span data-bm-sp-change></span><span data-bm-off-ath></span>',['sp'],['#86d65d'],'line',[{value:high,label:'Window high',color:'#00bcd4'},{value:low,label:'Window low',color:'#ff3266'}])+
  chart('50D extension',key('spExtension','ATR','#b785ff',2,'×')+key('spOscillator','Score','#b785ff',2),['spOscillator'],['#b785ff'],'line',0)+
  chart('T2108',key('t2108','Above 40D','#86d65d',1,'%')+'<small>Stocks above their 40-day average</small>',['t2108'],['#86d65d'],'line',[{value:20,label:'20%',color:'#aaa89f'},{value:80,label:'80%',color:'#aaa89f'}]);
- const pressure=chart('Daily 4% moves',key('up4','Up','#85d65d')+key('down4','Down','#ff3266')+'<small>Qualifying stocks · daily counts</small>',['up4','down4'],['#85d65d','#ff3266'],'bars')+
+ const pressure=chart('Daily 4% moves',key('up4','Up','#85d65d')+key('down4','Down','#ff3266'),['up4','down4'],['#85d65d','#ff3266'],'bars')+
  chart('Rolling pressure',key('ratio5','5D','#e9c46a',2,'×')+key('ratio10','10D','#6aa9ff',2,'×')+'<small>Upside events ÷ downside events</small>',['ratio5','ratio10'],['#e9c46a','#6aa9ff'],'line',1);
  const measures=[['Quarterly trend','25% from 65-session closing low / high','up25q','down25q'],['34-session trend','13% from 34-session closing low / high','up13d34','down13d34'],['Monthly momentum','25% gain / loss over 20 sessions','up25m','down25m'],['Monthly extremes','50% gain / loss over 20 sessions','up50m','down50m']];
  const trend=measures.map(([title,definition,up,down])=>'<section class="bm-panel bm-trend-card"><h3>'+title+'</h3><small class="note">'+definition+'</small>'+chart('',key(up,'Up','#85d65d')+key(down,'Down','#ff3266')+'<span data-bm-percentile="'+up+'"></span><span data-bm-percentile="'+down+'"></span>',[up,down],['#85d65d','#ff3266'])+'</section>').join('');
- return '<div class="bm-page bm-redesign"><header class="bm-compact-header"><h2>Breadth</h2><span data-bm-date>Close '+b.date+'</span><label>History <input type="date" data-breadth-date value="'+b.date+'" min="'+breadth.map(r=>r.date).sort()[0]+'" max="'+breadth.map(r=>r.date).sort().at(-1)+'"></label><div class="segments">'+[15,30,65,130,252].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></header><div class="bm-main-grid"><section class="bm-panel"><h3>Market & participation</h3>'+market+'</section><section class="bm-panel"><h3>Buying & selling pressure</h3>'+pressure+'<div class="bm-pressure-note">Daily counts show intensity. The 5D and 10D ratios show whether buying or selling is persisting.</div></section></div><div class="bm-trend-head"><h3>Trend participation</h3><small>Historical ranks use all available readings through the inspected date.</small></div><div class="bm-trend-grid">'+trend+'</div><details class="bm-details"><summary>Daily readings</summary><div class="table-box"><table><thead><tr><th>Date</th><th>SPX</th><th>Up 4%</th><th>Down 4%</th><th>5D</th><th>10D</th><th>T2108</th></tr></thead><tbody>'+history.map(r=>'<tr><td>'+r.date+'</td>'+['sp','up4','down4','ratio5','ratio10','t2108'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details></div>';
+ return '<div class="bm-page bm-redesign"><header class="bm-compact-header"><h2>Breadth</h2><span data-bm-date>Close '+b.date+'</span><label>History <input type="date" data-breadth-date value="'+b.date+'" min="'+breadth.map(r=>r.date).sort()[0]+'" max="'+breadth.map(r=>r.date).sort().at(-1)+'"></label><div class="segments">'+[[5,'1W','Fast'],[21,'1M','Swing'],[63,'3M','Trend'],[126,'6M','Cycle'],[252,'1Y','Long'],[756,'3Y','Regime'],[1260,'5Y','Secular'],[100000,'All time','Full history']].map(([n,label,role])=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('')+'</div></header><div class="bm-main-grid"><section class="bm-panel"><h3>Market & participation</h3>'+market+'</section><section class="bm-panel"><h3>Buying & selling pressure</h3>'+pressure+'<div class="bm-pressure-note">Daily counts show intensity. The 5D and 10D ratios show whether buying or selling is persisting.</div></section></div><div class="bm-trend-head"><h3>Trend participation</h3><small>Historical ranks use all available readings through the inspected date.</small></div><div class="bm-trend-grid">'+trend+'</div><details class="bm-details"><summary>Daily readings</summary><div class="table-box"><table><thead><tr><th>Date</th><th>SPX</th><th>Up 4%</th><th>Down 4%</th><th>5D</th><th>10D</th><th>T2108</th></tr></thead><tbody>'+[].map(r=>'<tr><td>'+r.date+'</td>'+['sp','up4','down4','ratio5','ratio10','t2108'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details></div>';
 }
 
 function leadership(){
@@ -424,16 +487,17 @@ function arrangeBreadthDashboard(){
  board.append(row);
  });
  page.querySelector('.bm-compact-header').after(board);
+ let boardDate='';
  const updateBoard=index=>{
- const r=index>=0?breadthHoverRows[index]:breadthHoverLatest;
+ const r=index>=0?breadthHoverRows[index]:breadthHoverLatest;if(boardDate===r.date)return;boardDate=r.date;
  const past=breadth.filter(x=>x.date<=r.date);
  definitions.forEach(([,up,down])=>{
  const u=finite(r[up])?Number(r[up]):null,d=finite(r[down])?Number(r[down]):null;
  const rank=k=>breadthPercentile(past,k,r[k]);
  const ordinal=v=>{if(v===null)return 'Unavailable';const n=Math.round(v),suffix=n%100>=11&&n%100<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th');return n+suffix+' percentile';};
  const el=board.querySelector('[data-board-up="'+up+'"]');
- el.innerHTML=fmt(u,0)+'<small>'+ordinal(rank(up))+'</small>';
- el.nextElementSibling.innerHTML=fmt(d,0)+'<small>'+ordinal(rank(down))+'</small>';
+ el.innerHTML=fmt(u,0);
+ el.nextElementSibling.innerHTML=fmt(d,0);
  const track=el.parentElement.querySelector('.bm-balance-track');
  track.children[0].style.width=(u!==null&&d!==null&&u+d?100*u/(u+d):50)+'%';track.children[1].style.flex='1';
  [up,down].forEach((k,j)=>{const v=rank(k);track.children[j].style.opacity=v===null?.15:.25+.75*v/100;});
@@ -442,11 +506,7 @@ function arrangeBreadthDashboard(){
  };
  page._updateBoard=updateBoard;updateBoard(-1);
  const history=breadth.filter(r=>r.date<=breadthHoverLatest.date).sort((a,b)=>a.date.localeCompare(b.date));
- const rankRows=breadthHoverRows.map(r=>{const earlier=history.filter(x=>x.date<=r.date),result={date:r.date};definitions.forEach(([,u,d])=>[u,d].forEach(k=>result['rank_'+k]=breadthPercentile(earlier,k,r[k])));result.rank_t2108=breadthPercentile(earlier,'t2108',r.t2108);return result;});
- const addRank=(row,keys)=>{const wrap=document.createElement('div');wrap.className='bm-rank-history';wrap.innerHTML='<small>Historical percentile · 0–100</small>'+breadthTape(rankRows,keys.map(k=>'rank_'+k),keys.map((k,i)=>i?'#ff3266':'#85d65d'),'line',[{value:10,label:'10th'},{value:90,label:'90th'}]);row.append(wrap);};
- addRank(rows[3],['up4','down4']);addRank(rows[2],['t2108']);
- stack.querySelectorAll('.bm-trend-card').forEach((card,i)=>addRank(card.querySelector('.bm-chart-row'),definitions[i+1].slice(1)));
- const tips=['S&P 500 daily close; change compares with the previous available session.','ATR distance from the 50-day average. Score is its historical normalized value from −1 to +1.','Stocks rising or falling at least 4% in one session. Counts are breadth events, not confirmed chart breakouts.','Upside events divided by downside events over five and ten sessions. Above 1 means upside events dominate.','T2108: percentage of stocks above their 40-day moving average.'];
+ const tips=['S&P 500 daily close; change compares with the previous available session.','ATR distance from the 50-day average. Score is its historical normalized value from −1 to +1.','Stocks rising or falling at least 4% in one session.','Upside events divided by downside events over five and ten sessions. Above 1 means upside events dominate.','T2108: percentage of stocks above their 40-day moving average.'];
  [rows[0],rows[1],rows[3],rows[4],rows[2]].forEach((row,i)=>{const info=document.createElement('button');info.className='bm-info';info.textContent='Definition ⓘ';info.setAttribute('aria-expanded','false');const copy=document.createElement('p');copy.className='bm-definition';copy.hidden=true;copy.textContent=tips[i];info.onclick=()=>{copy.hidden=!copy.hidden;info.setAttribute('aria-expanded',String(!copy.hidden));};row.querySelector('.bm-chart-label').append(info,copy);});
  const details=page.querySelector('.bm-details');
  const tools=document.createElement('div');tools.className='bm-reading-tools';tools.innerHTML='<input type="search" placeholder="Filter readings by date" aria-label="Filter readings by date"><button>Export CSV</button>';
@@ -456,7 +516,7 @@ function arrangeBreadthDashboard(){
 
  const legend=document.createElement('p');legend.className='bm-board-legend';legend.textContent='Bar length: share of qualifying upside/downside moves. Brightness: historical rarity of each count. These are not percentages of all stocks.';board.append(legend);
  const unpin=document.createElement('button');unpin.dataset.bmUnpin='';unpin.textContent='Unpin';unpin.hidden=true;unpin.onclick=()=>{breadthPinned=-1;setBreadthHover(-1);};page.querySelector('[data-bm-date]').after(unpin);
- const freshness=document.createElement('small');freshness.className='bm-data-dates';const spDate=spxHistory.filter(r=>finite(r.close)).map(r=>r.date).sort().at(-1);freshness.textContent='Latest available · Breadth '+breadth.map(r=>r.date).sort().at(-1)+' · SPX '+(spDate||'unavailable');page.querySelector('.bm-compact-header').after(freshness);
+ const freshness=document.createElement('small');freshness.className='bm-data-dates';freshness.textContent='Latest available · Breadth '+breadth.map(r=>r.date).sort().at(-1);page.querySelector('.bm-compact-header').after(freshness);
  const dates=breadth.map(r=>r.date).sort();
  const controls=document.createElement('span');controls.className='bm-date-controls';
  controls.innerHTML='<button aria-label="Previous session">←</button><button aria-label="Next session">→</button><button>Latest</button>';
@@ -470,19 +530,68 @@ function arrangeBreadthDashboard(){
  legend.textContent='Width = upside/downside balance · brightness = historical rarity';
  const layout=document.createElement('div');layout.className='bm-console-layout';board.before(layout);layout.append(board);
  const workspace=document.createElement('section');workspace.className='bm-explorer';layout.append(workspace);
- const nav=document.createElement('div');nav.className='bm-explorer-nav';nav.setAttribute('aria-label','Historical measure');workspace.append(nav);
+ const nav=document.createElement('div');nav.className='bm-explorer-nav';nav.setAttribute('aria-label','Historical measure');
  const canvas=document.createElement('div');canvas.className='bm-explorer-canvas';workspace.append(canvas);
- const entries=[['Daily 4% moves',rows[3]],['Pressure',rows[4]],['T2108',rows[2]],['SPX',rows[0]],['SPX extension',rows[1]],...Array.from(stack.querySelectorAll('.bm-trend-card')).map((card,i)=>[definitions[i+1][0],card])];
- const show=name=>{breadthSelected=name;entries.forEach(([label,node])=>{node.hidden=label!==name;});nav.querySelectorAll('button').forEach(button=>{const active=button.textContent===name;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});board.querySelectorAll('.bm-balance-row').forEach((row,i)=>row.classList.toggle('selected',definitions[i][0]===name));requestAnimationFrame(()=>resizeCharts());};
- entries.forEach(([name,node])=>{canvas.append(node);const button=document.createElement('button');button.textContent=name;button.onclick=()=>show(name);nav.append(button);});
- stack.remove();board.querySelectorAll('.bm-balance-row').forEach((row,i)=>row.onclick=()=>show(definitions[i][0]));
+ const entries=[['Daily 4% moves',rows[3]],...Array.from(stack.querySelectorAll('.bm-trend-card')).map((card,i)=>[definitions[i+1][0],card])];
+ const descriptions={'Daily 4% moves':'Stocks rising or falling at least 4% in one session.','Quarterly 25%':'Stocks at least 25% above their lowest close or below their highest close over 65 sessions.','34-session 13%':'Stocks at least 13% above their lowest close or below their highest close over 34 sessions.','Monthly 25%':'Stocks gaining or losing at least 25% over 20 sessions.','Monthly 50%':'Stocks gaining or losing at least 50% over 20 sessions.','5D ratio':'Upside 4% events divided by downside 4% events over five sessions. Above 1 means more upside events.','10D ratio':'Upside 4% events divided by downside 4% events over ten sessions. Above 1 means more upside events.','Above 40D':'Percentage of stocks above their 40-day moving average.','SPX':'S&P 500 daily close. Balance shows its 50-day ATR-extension index using all available prior SPX history: −1 is the deeply negative tail, 0 is the 50-day average, +1 is the strongly positive tail.','Universe':'Number of stocks tracked in the breadth universe for the selected session.'};
+ const explanation=document.createElement('p');explanation.className='bm-active-description';board.append(explanation);
+ const show=name=>{if(page.dataset.activeMeasure===name)return;page.dataset.activeMeasure=name;breadthSelected=name;explanation.textContent=descriptions[name]||'';entries.forEach(([label,node])=>{node.hidden=label!==name;if(label===name){const controls=workspace.querySelector('.bm-chart-ranges');if(controls)node.querySelector('.bm-chart-label')?.append(controls);}});nav.querySelectorAll('button').forEach(button=>{const active=button.textContent===name;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});board.querySelectorAll('.bm-balance-row').forEach((row,i)=>{const active=(row.dataset.measure||definitions[i]?.[0])===name;row.classList.toggle('selected',active);if(active)row.after(explanation);});page._refreshActiveChart?.();requestAnimationFrame(()=>resizeCharts());};
+ entries.forEach(([name,node])=>{const measure=definitions.find(([label])=>label===name);if(measure&&name!=='Daily 4% moves'){const svg=node.querySelector('.bm-tape');if(svg)svg.outerHTML=breadthTape(breadthHoverRows,measure.slice(1),['#85d65d','#ff3266'],'bars');}node.querySelectorAll('.bm-rank-history').forEach(strip=>strip.remove());canvas.append(node);const button=document.createElement('button');button.textContent=name;button.onclick=()=>show(name);nav.append(button);});
+ const singles=[['5D ratio','ratio5',2,'×','#e9c46a'],['10D ratio','ratio10',2,'×','#6aa9ff'],['Above 40D','t2108',1,'%','#86d65d'],['SPX','sp',2,'','#f5f2e8']];
+ singles.forEach(([name,key,decimals,suffix,color])=>{
+ const row=document.createElement('button');row.className='bm-balance-row bm-single-row';row.dataset.measure=name;row.innerHTML='<b>'+name+'</b><span class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'" style="color:'+color+'"></span><span class="bm-range-balance" data-range-key="'+key+'"><span class="bm-range-rail"><i></i><em></em></span><span class="bm-range-ends"><small></small><small></small></span></span>';board.insertBefore(row,legend);
+ const node=document.createElement('div');node.className='bm-chart-row';node.innerHTML='<div class="bm-chart-label"><b>'+name+'</b><span class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'" style="color:'+color+'"></span></div>'+breadthTape(breadthHoverRows,[key],['#f5f2e8'],'line',key.startsWith('ratio')?1:key==='t2108'?[{value:20,label:'20%'},{value:80,label:'80%'}]:null);if(key==='sp'){const perf=document.createElement('span');perf.dataset.spxPerformance='';perf.className='bm-spx-performance';node.querySelector('.bm-chart-label').append(perf);}canvas.append(node);entries.push([name,node]);
+ });
+ entries.forEach(([name,node])=>{node.querySelectorAll(':scope > h3').forEach(heading=>heading.remove());const label=node.querySelector('.bm-chart-label');let heading=label.querySelector(':scope > b');if(!heading){heading=document.createElement('b');label.prepend(heading);}heading.textContent=name;});
+ stack.remove();board.querySelectorAll('.bm-balance-row').forEach((row,i)=>row.onclick=()=>show(row.dataset.measure||definitions[i][0]));
  const quick=document.createElement('div');quick.className='bm-quick-readings';
- [['sp','SPX',2,''],['ratio5','5D pressure',2,'×'],['ratio10','10D pressure',2,'×'],['t2108','Above 40D',1,'%']].forEach(([key,label,decimals,suffix])=>{const box=document.createElement('div');box.innerHTML='<span class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="'+label+'" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'"></span>';quick.append(box);});layout.before(quick);
- const openTable=document.createElement('button');openTable.textContent='Historical readings / CSV';openTable.className='bm-table-open';openTable.onclick=()=>{details.open=!details.open;if(details.open)details.scrollIntoView({behavior:'smooth',block:'start'});};page.querySelector('.bm-compact-header').append(openTable);
+ [['ratio5','5D pressure',2,'×'],['ratio10','10D pressure',2,'×'],['t2108','Above 40D',1,'%']].forEach(([key,label,decimals,suffix])=>{const box=document.createElement('div');box.innerHTML='<span class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="'+label+'" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'"></span>';box.tabIndex=0;box.setAttribute('role','button');box.setAttribute('aria-label','View '+label+' history');const choose=()=>show(key==='t2108'?'T2108':'Pressure');box.onclick=choose;box.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();choose();}};quick.append(box);});
+ const columns=[['date','Date'],['up4','Up'],['down4','Down'],['ratio5','5D'],['ratio10','10D'],['up25q','Up'],['down25q','Down'],['up25m','Up'],['down25m','Down'],['up50m','Up'],['down50m','Down'],['up13d34','Up'],['down13d34','Down'],['t2108','T2108'],['sp','SPX']];
+ details.open=true;details.classList.add('bm-stockbee-table');details.querySelector('summary').remove();
+ const table=details.querySelector('table');
+ table.innerHTML='<thead><tr class="bm-table-groups"><th rowspan="2">Date</th><th colspan="2">Daily ±4%</th><th colspan="2">Up / down ratio</th><th colspan="2">Quarter ±25%</th><th colspan="2">Month ±25%</th><th colspan="2">Month ±50%</th><th colspan="2">34D ±13%</th><th rowspan="2">Above 40D</th><th rowspan="2">SPX</th></tr><tr>'+columns.slice(1,13).map(([,label])=>'<th>'+label+'</th>').join('')+'</tr></thead>';
+ const body=document.createElement('tbody');table.append(body);
+ let tableVisibleCount=120;
+ const drawTable=(query,append=false)=>{const all=history.filter(r=>r.date.includes(query)).toReversed(),selected=all.slice(append?tableVisibleCount-120:0,tableVisibleCount);const html=selected.map(r=>'<tr>'+columns.map(([key])=>{if(key==='date')return '<td><button class="bm-table-date" data-table-date="'+r.date+'">'+r.date+'</button></td>';const value=r[key],cls=key==='sp'?'':stockbeeColor(r,key),reason='Stockbee sheet color convention';const daily=key==='sp'?breadthSPXChange(r.date):null;const spStyle=key==='sp'&&daily!==null&&daily!==0?' style="color:'+(daily>0?'#85d65d':'#ff3266')+';background:rgba('+(daily>0?'133,214,93':'255,50,102')+','+(0.06+0.44*Math.min(1,Math.abs(daily)/3)).toFixed(3)+')"':'';return '<td tabindex="0" role="button" data-reading-date="'+r.date+'" data-reading-key="'+key+'" class="'+cls+'"'+spStyle+' aria-label="Select '+r.date+' '+key+'">'+fmt(value,key.startsWith('ratio')?2:key==='t2108'?1:key==='sp'?2:0)+(key==='t2108'&&finite(value)?'%':'')+(key==='sp'&&finite(value)?breadthSPXChangeLabel(r.date):'')+'</td>';}).join('')+'</tr>').join('');if(append)body.insertAdjacentHTML('beforeend',html);else body.innerHTML=html;};
+ drawTable('');tools.querySelector('input').oninput=event=>{tableVisibleCount=120;drawTable(event.target.value);};const tableViewport=details.querySelector('.table-box');tableViewport.addEventListener('scroll',()=>{if(tableViewport.scrollTop+tableViewport.clientHeight>=tableViewport.scrollHeight-250&&tableVisibleCount<history.length){tableVisibleCount+=120;drawTable('',true);}},{passive:true});
+ const title=document.createElement('div');title.className='bm-table-title';title.innerHTML='<h3>Stockbee Market Monitor</h3><small>Counts: highlight at historical percentile ≥90 · ratios: green above 1, pink below 1 · T2108: 20 / 80 zones. Colors are dashboard rules, not copied sheet formatting.</small>';const permanent=document.createElement('section');permanent.className=details.className;details.querySelectorAll('.bm-table-title,.bm-reading-tools').forEach(node=>node.remove());tools.remove();while(details.firstChild)permanent.append(details.firstChild);details.replaceWith(permanent);page.append(permanent);
  show(entries.some(([name])=>name===breadthSelected)?breadthSelected:'Daily 4% moves');
- const resizeCharts=()=>page.querySelectorAll('.bm-tape').forEach(svg=>{const box=svg.getBoundingClientRect();if(!box.width||!box.height)return;svg.querySelectorAll('text').forEach(text=>{text.style.transformBox='fill-box';text.style.transformOrigin='center';text.style.transform='scale('+(1000/box.width)+','+(145/box.height)+')';});});
+ const keyMeasures={up4:'Daily 4% moves',down4:'Daily 4% moves',up25q:'Quarterly 25%',down25q:'Quarterly 25%',up13d34:'34-session 13%',down13d34:'34-session 13%',up25m:'Monthly 25%',down25m:'Monthly 25%',up50m:'Monthly 50%',down50m:'Monthly 50%',ratio5:'5D ratio',ratio10:'10D ratio',t2108:'Above 40D',sp:'SPX'};
+ page._selectReading=(date,key)=>{
+ const reading=history.find(r=>r.date===date);if(!reading)return;
+ breadthDate=date;breadthHoverLatest=reading;breadthPinned=-1;
+ document.querySelector('[data-breadth-date]').value=date;
+ show(keyMeasures[key]||breadthSelected);
+ page._setWindow(breadthWindow);
+ body.querySelectorAll('.bm-selected-date,.bm-selected-cell').forEach(cell=>cell.classList.remove('bm-selected-date','bm-selected-cell'));
+ body.querySelectorAll('[data-reading-date="'+date+'"]').forEach(cell=>{cell.parentElement.classList.add('bm-selected-date');if(cell.dataset.readingKey===key||(keyMeasures[key]&&keyMeasures[cell.dataset.readingKey]===keyMeasures[key]))cell.classList.add('bm-selected-cell');});
+ layout.scrollIntoView({behavior:'smooth',block:'start'});
+ };
+ const previewPair=cell=>{body.querySelectorAll('.bm-pair-hover').forEach(node=>node.classList.remove('bm-pair-hover'));if(!cell)return;const measure=keyMeasures[cell.dataset.readingKey];[...cell.parentElement.querySelectorAll('[data-reading-key]')].filter(node=>keyMeasures[node.dataset.readingKey]===measure).forEach(node=>node.classList.add('bm-pair-hover'));};
+ body.addEventListener('pointerover',event=>previewPair(event.target.closest('[data-reading-key]')));
+ body.addEventListener('pointerleave',()=>previewPair(null));
+ body.addEventListener('focusin',event=>previewPair(event.target.closest('[data-reading-key]')));
+ body.addEventListener('click',event=>{const dateButton=event.target.closest('[data-table-date]');if(dateButton){page._selectReading(dateButton.dataset.tableDate);return;}const cell=event.target.closest('[data-reading-key]');if(cell)page._selectReading(cell.dataset.readingDate,cell.dataset.readingKey);});
+ body.addEventListener('keydown',event=>{const cell=event.target.closest('[data-reading-key]');if(cell&&(event.key==='Enter'||event.key===' ')){event.preventDefault();page._selectReading(cell.dataset.readingDate,cell.dataset.readingKey);}});
+ const resizeCharts=()=>page.querySelectorAll('.bm-tape').forEach(svg=>{const box=svg.getBoundingClientRect();if(!box.width||!box.height)return;svg.querySelectorAll('text').forEach(text=>{text.style.transformBox='fill-box';text.style.transformOrigin='center';const transform='scale('+(1000/box.width)+','+(svg.viewBox.baseVal.height/box.height)+')';if(text.style.transform!==transform)text.style.transform=transform;});});
+ entries.forEach(([,node])=>{node.dataset.chartStamp=breadthHoverLatest.date+':'+breadthWindow;node._chartCache=new Map();const svg=node.querySelector('svg.bm-tape');if(svg)node._chartCache.set(node.dataset.chartStamp,svg.outerHTML);});
+ page._refreshActiveChart=()=>{
+ const active=entries.find(([name])=>name===breadthSelected)?.[1];if(!active)return;
+ const stamp=breadthHoverLatest.date+':'+breadthWindow;if(active.dataset.chartStamp===stamp)return;
+ const svg=active.querySelector('svg.bm-tape');if(!svg)return;
+ const spec=JSON.parse(svg.dataset.series);const cache=active._chartCache||(active._chartCache=new Map());if(!cache.has(stamp)){cache.set(stamp,breadthTape(breadthHoverRows,spec.keys,spec.colors,spec.kind,spec.reference));if(cache.size>12)cache.delete(cache.keys().next().value);}svg.outerHTML=cache.get(stamp).replace(/ data-hover-bound="[^"]*"/g,'');active.dataset.chartStamp=stamp;bindBreadthHover();
+ };
+ page._setWindow=n=>{
+ if(n===breadthWindow&&breadthHoverRows.at(-1)?.date===breadthHoverLatest.date)return;
+ breadthPinned=-1;breadthWindow=n;breadthHoverRows=history.filter(r=>r.date<=breadthHoverLatest.date).slice(-n);
+ page._refreshActiveChart();
+ page.querySelectorAll('[data-action="breadth-window"]').forEach(button=>button.classList.toggle('active',Number(button.dataset.window)===n));
+
+ setBreadthHover(-1);bindBreadthHover();requestAnimationFrame(resizeCharts);
+ };
  requestAnimationFrame(resizeCharts);const observer=new ResizeObserver(resizeCharts);observer.observe(page);page._chartObserver=observer;
- const label=document.createElement('span');label.textContent='Chart range';label.className='bm-range-label';page.querySelector('.segments').prepend(label);
+ page.querySelectorAll('[data-bm-percentile],.bm-info,.bm-definition').forEach(node=>node.remove());
+ const range=page.querySelector('.bm-compact-header .segments');range.classList.add('bm-chart-ranges');range.setAttribute('aria-label','Chart range');(entries.find(([name])=>name===breadthSelected)?.[1].querySelector('.bm-chart-label')||workspace).append(range);
 }
 
 function positioning(){
@@ -685,8 +794,20 @@ function method(){
  return card('How to use this workspace','<p>Start with Environment, inspect Leadership, then use the Screener to prepare a chart-review list. Positioning is a separate weekly context layer. Debrief automatically compares the completed session with the information available at the prior close.</p><details open><summary>Dates and data freshness</summary><p>Stock lists are named for the next trading session. ETF and breadth readings use the actual close date. The briefing and debrief select only ETF/breadth records at or before the stock snapshot’s close. COT always shows its report date and is not represented as daily or historical point-in-time data.</p></details><details open><summary>Relative strength, themes, and odds</summary><p>Performance versus SPY is a return difference in percentage points. Theme strength scores rank ETF performance. “Bought” and “sold” describe close-to-close price response, not reported fund flows. None of these measures is a probability of a profitable trade. Chart review still determines whether a setup is usable.</p><p>Your uploaded group definitions are available when editing a stock. Three owner-supplied Crypto overrides seed the mapping. Remaining stocks use explicitly labelled vendor groups until reviewed. New mappings apply from their effective snapshot date. Local edits affect this workspace and can be exported; they do not silently rewrite historical CSVs or sync between devices.</p></details><details open><summary>COT methodology</summary><p>CFTC Legacy futures-only reports; commercials, noncommercials, and nonreportables. Five-year min/max normalization of net long minus short. Thresholds 5 and 95 flag range extremes. CMR’s proprietary index is not reproduced, and the uploaded crypto direction reversal is not assumed to be a validated strategy. Commercial net positioning balances speculative net positioning; the three readings are not independent confirmations.</p></details><details><summary>What still requires verification</summary><p>The four INDEX 20-day breadth feeds did not return data through the available scanner endpoint. Their source links and your alert levels are shown rather than substituted values. Jeff’s exact RS Thrust formula was not provided or verified. Current group rankings use the existing documented score.</p></details><p class="source-list"><a href="https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm">CFTC official report definitions</a> · <a href="https://www.crowdedmarketreport.com/wp-content/uploads/2023/04/CMR-New-Member-Guide-2023.pdf">CMR methodology guide</a> · <a href="https://stockbee.blogspot.com/p/mm.html">Stockbee Market Monitor</a></p>');
 }
 function render(){
+ document.querySelector('.bm-workstation')?._chartObserver?.disconnect();
   route=location.hash.slice(1)||'briefing';if(!titles[route])route='briefing';
   $('#page-title').textContent=titles[route];
+  const menuButton=document.querySelector('#page-menu-button'),menu=document.querySelector('#page-menu-options');
+  menuButton.querySelector('span').textContent=menu.querySelector('[data-page="'+route+'"]')?.textContent||titles[route];
+  const closeMenu=()=>{menu.hidden=true;menuButton.setAttribute('aria-expanded','false');};closeMenu();
+  const options=[...menu.querySelectorAll('[data-page]')];options.forEach(button=>{button.classList.toggle('active',button.dataset.page===route);button.onclick=()=>{closeMenu();location.hash=button.dataset.page;menuButton.focus();};});
+  const openMenu=()=>{menu.hidden=false;menuButton.setAttribute('aria-expanded','true');(options.find(button=>button.dataset.page===route)||options[0]).focus();};
+  menuButton.onclick=()=>menu.hidden?openMenu():closeMenu();
+  menuButton.onkeydown=event=>{if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();openMenu();}};
+  menu.onkeydown=event=>{const index=options.indexOf(document.activeElement);if(event.key==='Escape'){event.stopPropagation();closeMenu();menuButton.focus();}else if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();options[event.key==='Home'?0:event.key==='End'?options.length-1:(index+(event.key==='ArrowDown'?1:-1)+options.length)%options.length].focus();}};
+  document.querySelector('.page-menu').onfocusout=event=>{if(!event.currentTarget.contains(event.relatedTarget))closeMenu();};
+  if(!window.pageMenuOutsideBound){document.addEventListener('click',event=>{if(!event.target.closest('.page-menu')){document.querySelector('#page-menu-options').hidden=true;document.querySelector('#page-menu-button').setAttribute('aria-expanded','false');}});window.pageMenuOutsideBound=true;}
+  const savedSession=document.querySelector('#header-date-controls .session');if(savedSession)document.querySelector('.workspace-top').append(savedSession);document.querySelector('#header-date-controls').replaceChildren();
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
   document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=['positioning','environment'].includes(route)?'none':'';});
@@ -695,7 +816,9 @@ function render(){
   const b=breadthRows()[0],e=latestETF(themes);
   $('#freshness').textContent='Stock close '+asof()+' → plan '+session().date+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
   $('#view').innerHTML=({briefing,environment,leadership,positioning,screener,review,method})[route]();
-  if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();}
+  if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
+  else if(route!=='positioning'){document.querySelector('#header-date-controls').append(document.querySelector('.session'));}
+
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
@@ -726,7 +849,7 @@ document.addEventListener('click',async event=>{
  const action=node.dataset.action;
  if(action==='breadth-metric'){breadthMetric=node.dataset.metric;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-range'){breadthRange=node.dataset.range;render();document.querySelector('.bm-details').open=true;return;}
- if(action==='breadth-window'){breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();return;}
+ if(action==='breadth-window'){const page=document.querySelector('.bm-console');if(page?._setWindow){page._setWindow(Number(node.dataset.window));}else{breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();}return;}
  if(action==='select-screen'){screenerView=node.dataset.screen;render();return;}
  if(action==='screener-view'){screenerDisplay=node.dataset.view;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
