@@ -397,6 +397,23 @@ function leadership(){
   const pageCopy=extensionMode?'Raw ETF extension distribution. This is a separate technical-state view, not a performance timeframe.':'Strongest '+(leadershipKind==='themes'?'theme':'sector')+' in the selected map view.';
   return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(pageTitle)+'</h2><p>'+pageCopy+'</p></div></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+flowHorizon+'</div><section class="flow-stage">'+body+'</section>';
 }
+function arrangeBreadthDashboard(){
+ const page=document.querySelector('.bm-redesign');if(!page)return;
+ page.classList.add('bm-terminal');
+ const original=page.querySelector('.bm-main-grid'),rows=[...original.querySelectorAll('.bm-chart-row')];
+ const panel=(title,subtitle,items,cls)=>{const section=document.createElement('section');section.className='bm-panel '+cls;section.innerHTML='<header class="bm-visual-heading"><h3>'+title+'</h3><small>'+subtitle+'</small></header>';items.forEach(row=>section.appendChild(row));return section;};
+ const stage=document.createElement('div');stage.className='bm-stage';
+ const market=panel('S&P 500','Price & distance from the 50-day average',[rows[0],rows[1]],'bm-market-stage');
+ const pulse=panel('The daily tape','Stocks making qualifying 4% moves',[rows[3]],'bm-pulse-stage');
+ const persistence=panel('Pressure','Rolling upside / downside events',[rows[4]],'bm-pressure-stage');
+ const participation=panel('Participation','Share of stocks above their 40-day average',[rows[2]],'bm-participation-stage');
+ stage.append(market,pulse,persistence,participation);original.replaceWith(stage);
+ const strip=document.createElement('div');strip.className='bm-value-strip';
+ const latest=breadthHoverLatest;
+ [['sp','S&P 500',2,''],['up4','↑ Up 4%',0,''],['down4','↓ Down 4%',0,''],['ratio10','10D pressure',2,'×'],['t2108','Above 40D',1,'%']].forEach(([key,label,decimals,suffix])=>{strip.innerHTML+='<div class="bm-strip-item '+(key==='up4'?'positive':key==='down4'?'negative':'')+'"><span>'+label+'</span><div class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'"><b>'+fmt(latest[key],decimals)+suffix+'</b><small>Latest close</small></div></div>';});
+ page.querySelector('.bm-compact-header').after(strip);
+ page.querySelectorAll('.bm-trend-card').forEach(card=>{card.classList.add('bm-trend-tile');});
+}
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">CFTC positioning is unavailable.</p>';
   const participants=[['large','Large specs','#00bcd4'],['small','Small specs','#ff9800'],['commercials','Commercials','#e040fb']];
@@ -607,7 +624,7 @@ function render(){
   const b=breadthRows()[0],e=latestETF(themes);
   $('#freshness').textContent='Stock close '+asof()+' → plan '+session().date+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
   $('#view').innerHTML=({briefing,environment,leadership,positioning,screener,review,method})[route]();
-  if(route==='environment'){setBreadthHover(-1);bindBreadthHover();}
+  if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();}
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
