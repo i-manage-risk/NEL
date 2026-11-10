@@ -237,10 +237,15 @@ function briefing(){
   const leader=themesNow[0], breadthShift=old&&finite(b?.t2108)&&finite(old?.t2108)?b.t2108-old.t2108:null;
   return '<section class="command-hero '+read.tone+'"><div><span class="eyebrow">MORNING PLAN · '+escapeHTML(session().date)+'</span><h2>'+read.title+'</h2><p>'+read.plan+'</p><div class="command-tags"><span>Close: '+escapeHTML(asof())+'</span><span>'+frameNames[frame]+' leadership</span><span>Chart review required</span></div></div><aside><span>Risk posture</span><b class="'+read.tone+'">'+(read.tone==='positive'?'Press valid setups':read.tone==='negative'?'Protect capital':'Stay selective')+'</b><small>'+read.reason+'</small></aside></section><div class="toolbar">'+frameControls('Planning horizon')+'</div><section class="decision-strip">'+miniStat('◉','Breadth pressure',fmt(b?.ratio10,2),'10D · above 1 favors upside',b?.ratio10>=1?'positive':'negative')+miniStat('↕','Participation',pct(b?.t2108),'Above 40-day average',b?.t2108>=50?'positive':'gold')+miniStat('◆','Leading theme',escapeHTML(leader?.group||'—'),leader?pct(leader.median_performance)+' median':'No ETF reading','cyan')+miniStat('⚡','Tight candidates',tight,frameNames[frame]+' NEL candidates','orange')+'</section><section class="plan-grid"><div class="plan-main"><div class="section-kicker"><span>WHAT TO DO</span><small>Let the environment dictate how selective you are.</small></div><div class="action-stack">'+actionTile('⌕','Build the chart queue',tight+' tight, non-extended candidates are ready for review.','#screener','Screen','cyan')+actionTile('◆','Trade with leadership',leader?escapeHTML(leader.group)+' is the top '+frameNames[frame].toLowerCase()+' theme.':'Check the current leadership table.','#leadership','Flow','violet')+actionTile('↺','Know what changed',breadthShift===null?'Prior-close comparison is not available.':('T2108 '+signed(breadthShift)+' pp since the prior close.'),'#review','Replay',breadthShift>=0?'positive':'gold')+'</div></div><div class="plan-side"><div class="section-kicker"><span>MARKET CHECK</span><small>Not predictions—just the conditions you are trading in.</small></div><div class="stance-grid"><div><span>Up / down 4%</span><b class="'+(net>=0?'positive':'negative')+'">'+fmt(b?.up4,0)+' / '+fmt(b?.down4,0)+'</b><small>Net '+signed(net)+'</small></div><div><span>COT extremes</span><b>'+extremes+'</b><small>Weekly context only</small></div><div><span>Prior-close breadth</span><b class="'+(breadthShift>=0?'positive':'negative')+'">'+(breadthShift===null?'—':signed(breadthShift)+' pp')+'</b><small>T2108 change</small></div></div></div></section><details class="evidence-drawer"><summary>Why this plan?</summary><p>'+read.reason+' These are decision aids, not calibrated probabilities or trade instructions. Open Pulse for breadth detail, Flow for leadership detail, and Crowding for COT context.</p></details>';
 }
-let breadthWindow=15,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
+let breadthDate='',breadthWindow=65,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
 function setBreadthHover(index){
   const row=index>=0?breadthHoverRows[index]:breadthHoverLatest,latest=breadthHoverLatest;
   if(!row)return;
+  document.querySelectorAll('.bm-hit').forEach(node=>node.classList.toggle('bm-linked-active',index>=0&&Number(node.dataset.bmIndex)===index));
+  const prior=breadth.filter(r=>r.date<row.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const available=breadth.filter(r=>r.date<=row.date);
+  document.querySelectorAll('[data-bm-percentile]').forEach(node=>{const k=node.dataset.bmPercentile,rank=breadthPercentile(available,k,row[k]);node.textContent=(k.startsWith('up')?'Upside':'Downside')+' historical rank: '+(rank===null?'—':fmt(rank,0)+'th percentile');node.style.color=k.startsWith('up')?'#85d65d':'#ff3266';});
+  document.querySelectorAll('[data-bm-sp-change]').forEach(node=>{node.textContent=finite(prior?.sp)&&finite(row.sp)?'Session '+signed(row.sp-prior.sp,2)+' ('+signed(100*(row.sp/prior.sp-1),2)+'%)':'Session change unavailable';});
   const date=document.querySelector('[data-bm-date]');
   if(date)date.textContent=index>=0?'Viewing '+row.date+' · change vs latest':'Latest close · hover any chart to inspect a session';
   document.querySelectorAll('[data-bm-key]').forEach(el=>{
@@ -252,8 +257,10 @@ function setBreadthHover(index){
         :signed(Number(row[key])-Number(latest[key]),decimals)+suffix+' vs latest')
       :'Latest close';
     el.innerHTML='<b>'+escapeHTML(el.dataset.bmLabel||key)+' '+value+'</b><small>'+change+'</small>';
+    if(document.body.classList.contains('breadth-page'))el.querySelector('small').textContent=finite(row[key])&&finite(prior?.[key])?signed(Number(row[key])-Number(prior[key]),decimals)+suffix+' vs prior session':'Prior session unavailable';
   });
-  const offAth=finite(row.sp)&&finite(breadthAth)?100*(Number(row.sp)/Number(breadthAth)-1):null;
+  const ath=Math.max(...spxHistory.filter(r=>r.date<=row.date&&finite(r.close)).map(r=>Number(r.close)),...available.filter(r=>finite(r.sp)).map(r=>Number(r.sp)));
+  const offAth=finite(row.sp)&&finite(ath)?100*(Number(row.sp)/ath-1):null;
   document.querySelectorAll('[data-bm-off-ath]').forEach(el=>el.textContent=offAth===null?'ATH unavailable':Math.abs(offAth)<.005?'At all-time high':fmt(Math.abs(offAth),2)+'% off ATH');
 }
 function bindBreadthHover(){
@@ -301,7 +308,7 @@ function breadthTape(rows,keys,colors,kind='line',reference=null){
   svg+=rows.filter((r,i)=>i===0||i===rows.length-1||i===Math.floor(rows.length/2)).map(r=>'<text x="'+x(rows.indexOf(r))+'" y="140" text-anchor="middle">'+r.date.slice(5)+'</text>').join('');
   return '<svg class="bm-tape" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+escapeHTML(keys.join(', ')+' through '+rows.at(-1).date)+'">'+svg+'</svg>';
 }
-function environment(){
+function legacyEnvironment(){
   const history=breadthRows(),b=history[0],old=history[1];
   if(!b)return '<p class="empty">No breadth data available for this close.</p>';
   const rows=history.slice(0,breadthWindow).reverse();
@@ -353,6 +360,26 @@ function environment(){
     '<details class="bm-details"><summary>Daily readings · '+rows.length+' sessions</summary><div class="bm-table-wrap"><table><thead><tr><th>Close</th><th>Up 4%</th><th>Down 4%</th><th>5D ratio</th><th>10D ratio</th><th>T2108</th><th>SPX</th></tr></thead><tbody>'+[...rows].reverse().map(r=>'<tr><td>'+r.date+'</td>'+['up4','down4','ratio5','ratio10','t2108','sp'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>'+
     '<details class="bm-details"><summary>Definitions, sources & calculation notes</summary><div class="bm-method"><p><b>Daily 4% moves:</b> Stockbee’s published scan counts close-to-close moves of at least 4%, with volume of at least 100,000 shares and greater than the previous session. These are breadth events, not individually confirmed chart breakouts.</p><p><b>5D / 10D:</b> Rolling totals of upside events divided by downside events. Above 1 means more upside events. The sequence over roughly 10–15 sessions matters; 300+ days are historical reference levels, not a mechanical bullish signal.</p><p><b>Quarter / 34D:</b> Upside is measured from the lowest closing price over 65 / 34 sessions; downside from the highest closing price. A stock can meet both conditions. Monthly measures use returns over 20 sessions. Stockbee applies additional price/liquidity requirements to these scans.</p><p><b>Percentiles are our context layer, not Stockbee’s official signal.</b> Each series uses all non-missing saved readings through the selected close, with ties assigned their midpoint rank. Missing readings are excluded. Coverage starts as early as '+history.at(-1).date+' but differs by measure. These are raw counts: changes in the stock universe affect comparisons across years.</p><p><a href="https://stockbee.blogspot.com/2014/08/how-i-get-market-monitor-numbers.html?m=0" target="_blank" rel="noopener">Stockbee’s scan definitions ↗</a> · <a href="https://stockbee.blogspot.com/2010/05/if-you-want-to-avoid-market-surprises.html" target="_blank" rel="noopener">Reading the sequence ↗</a></p></div></details></div>';
 }
+
+function environment(){
+ const history=breadth.filter(r=>!breadthDate||r.date<=breadthDate).sort((a,b)=>b.date.localeCompare(a.date)),b=history[0];
+ if(!b)return '<p class="empty">Breadth data unavailable.</p>';
+ const rows=history.slice(0,breadthWindow).reverse();
+ breadthHoverRows=rows;breadthHoverLatest=b;
+ breadthAth=Math.max(...spxHistory.filter(r=>r.date<=b.date&&finite(r.close)).map(r=>Number(r.close)),...history.filter(r=>finite(r.sp)).map(r=>Number(r.sp)));
+ const key=(k,label,color,d=0,suffix='')=>'<span class="bm-hover-key" data-bm-key="'+k+'" data-bm-label="'+label+'" data-bm-decimals="'+d+'" data-bm-suffix="'+suffix+'" style="color:'+color+'"><b>'+label+' '+fmt(b[k],d)+suffix+'</b><small>Latest selected close</small></span>';
+ const chart=(title,readings,keys,colors,kind='line',levels=null)=>'<div class="bm-chart-row"><div class="bm-chart-label"><b>'+title+'</b>'+readings+'</div>'+breadthTape(rows,keys,colors,kind,levels)+'</div>';
+ const spRows=spxHistory.filter(r=>r.date<=b.date&&finite(r.close)),high=Math.max(...rows.filter(r=>finite(r.sp)).map(r=>r.sp)),low=Math.min(...rows.filter(r=>finite(r.sp)).map(r=>r.sp));
+ const market=chart('S&P 500',key('sp','Close','#86d65d',2)+'<span data-bm-sp-change></span><span data-bm-off-ath></span>',['sp'],['#86d65d'],'line',[{value:high,label:'Window high',color:'#00bcd4'},{value:low,label:'Window low',color:'#ff3266'}])+
+ chart('50D extension',key('spExtension','ATR','#b785ff',2,'×')+key('spOscillator','Score','#b785ff',2),['spOscillator'],['#b785ff'],'line',0)+
+ chart('T2108',key('t2108','Above 40D','#86d65d',1,'%')+'<small>Stocks above their 40-day average</small>',['t2108'],['#86d65d'],'line',[{value:20,label:'20%',color:'#aaa89f'},{value:80,label:'80%',color:'#aaa89f'}]);
+ const pressure=chart('Daily 4% moves',key('up4','Up','#85d65d')+key('down4','Down','#ff3266')+'<small>Qualifying stocks · daily counts</small>',['up4','down4'],['#85d65d','#ff3266'],'bars')+
+ chart('Rolling pressure',key('ratio5','5D','#e9c46a',2,'×')+key('ratio10','10D','#6aa9ff',2,'×')+'<small>Upside events ÷ downside events</small>',['ratio5','ratio10'],['#e9c46a','#6aa9ff'],'line',1);
+ const measures=[['Quarterly trend','25% from 65-session closing low / high','up25q','down25q'],['34-session trend','13% from 34-session closing low / high','up13d34','down13d34'],['Monthly momentum','25% gain / loss over 20 sessions','up25m','down25m'],['Monthly extremes','50% gain / loss over 20 sessions','up50m','down50m']];
+ const trend=measures.map(([title,definition,up,down])=>'<section class="bm-panel bm-trend-card"><h3>'+title+'</h3><small class="note">'+definition+'</small>'+chart('',key(up,'Up','#85d65d')+key(down,'Down','#ff3266')+'<span data-bm-percentile="'+up+'"></span><span data-bm-percentile="'+down+'"></span>',[up,down],['#85d65d','#ff3266'])+'</section>').join('');
+ return '<div class="bm-page bm-redesign"><header class="bm-compact-header"><h2>Breadth</h2><span data-bm-date>Close '+b.date+'</span><label>History <input type="date" data-breadth-date value="'+b.date+'" min="'+breadth.at(-1)?.date+'" max="'+breadth.map(r=>r.date).sort().at(-1)+'"></label><div class="segments">'+[15,30,65,130,252].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></header><div class="bm-main-grid"><section class="bm-panel"><h3>Market & participation</h3>'+market+'</section><section class="bm-panel"><h3>Buying & selling pressure</h3>'+pressure+'<div class="bm-pressure-note">Daily counts show intensity. The 5D and 10D ratios show whether buying or selling is persisting.</div></section></div><div class="bm-trend-head"><h3>Trend participation</h3><small>Historical ranks use all available readings through the inspected date.</small></div><div class="bm-trend-grid">'+trend+'</div><details class="bm-details"><summary>Daily readings</summary><div class="table-box"><table><thead><tr><th>Date</th><th>SPX</th><th>Up 4%</th><th>Down 4%</th><th>5D</th><th>10D</th><th>T2108</th></tr></thead><tbody>'+rows.toReversed().map(r=>'<tr><td>'+r.date+'</td>'+['sp','up4','down4','ratio5','ratio10','t2108'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details></div>';
+}
+
 function leadership(){
   const payload=leadershipKind==='sectors'?sectors:themes;
   const etf=etfSnapshot(payload), key=flowFrameKey[flowFrame], groups=buildFlowGroups(payload,etf,key);
@@ -573,7 +600,8 @@ function render(){
   route=location.hash.slice(1)||'briefing';if(!titles[route])route='briefing';
   $('#page-title').textContent=titles[route];
   document.body.classList.toggle('positioning-page',route==='positioning');
-  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=route==='positioning'?'none':'';});
+  document.body.classList.toggle('breadth-page',route==='environment');
+  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=['positioning','environment'].includes(route)?'none':'';});
   $('#session-label').textContent=route==='review'?'Debrief snapshot':'Plan for session';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);
@@ -624,6 +652,7 @@ document.addEventListener('click',async event=>{
  if(node.classList.contains('dialog-close'))$('#stock-dialog').close();
 });
 document.addEventListener('change',event=>{
+ if(event.target.matches('[data-breadth-date]')){breadthDate=event.target.value;render();return;}
  const key=event.target.dataset.filter;if(key){filters[key]=event.target.value;render();}
  const obcKey=event.target.dataset.obcFilter;if(obcKey){obcFilters[obcKey]=event.target.value;render();}
 });
