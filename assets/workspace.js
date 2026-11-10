@@ -237,8 +237,9 @@ function briefing(){
   const leader=themesNow[0], breadthShift=old&&finite(b?.t2108)&&finite(old?.t2108)?b.t2108-old.t2108:null;
   return '<section class="command-hero '+read.tone+'"><div><span class="eyebrow">MORNING PLAN · '+escapeHTML(session().date)+'</span><h2>'+read.title+'</h2><p>'+read.plan+'</p><div class="command-tags"><span>Close: '+escapeHTML(asof())+'</span><span>'+frameNames[frame]+' leadership</span><span>Chart review required</span></div></div><aside><span>Risk posture</span><b class="'+read.tone+'">'+(read.tone==='positive'?'Press valid setups':read.tone==='negative'?'Protect capital':'Stay selective')+'</b><small>'+read.reason+'</small></aside></section><div class="toolbar">'+frameControls('Planning horizon')+'</div><section class="decision-strip">'+miniStat('◉','Breadth pressure',fmt(b?.ratio10,2),'10D · above 1 favors upside',b?.ratio10>=1?'positive':'negative')+miniStat('↕','Participation',pct(b?.t2108),'Above 40-day average',b?.t2108>=50?'positive':'gold')+miniStat('◆','Leading theme',escapeHTML(leader?.group||'—'),leader?pct(leader.median_performance)+' median':'No ETF reading','cyan')+miniStat('⚡','Tight candidates',tight,frameNames[frame]+' NEL candidates','orange')+'</section><section class="plan-grid"><div class="plan-main"><div class="section-kicker"><span>WHAT TO DO</span><small>Let the environment dictate how selective you are.</small></div><div class="action-stack">'+actionTile('⌕','Build the chart queue',tight+' tight, non-extended candidates are ready for review.','#screener','Screen','cyan')+actionTile('◆','Trade with leadership',leader?escapeHTML(leader.group)+' is the top '+frameNames[frame].toLowerCase()+' theme.':'Check the current leadership table.','#leadership','Flow','violet')+actionTile('↺','Know what changed',breadthShift===null?'Prior-close comparison is not available.':('T2108 '+signed(breadthShift)+' pp since the prior close.'),'#review','Replay',breadthShift>=0?'positive':'gold')+'</div></div><div class="plan-side"><div class="section-kicker"><span>MARKET CHECK</span><small>Not predictions—just the conditions you are trading in.</small></div><div class="stance-grid"><div><span>Up / down 4%</span><b class="'+(net>=0?'positive':'negative')+'">'+fmt(b?.up4,0)+' / '+fmt(b?.down4,0)+'</b><small>Net '+signed(net)+'</small></div><div><span>COT extremes</span><b>'+extremes+'</b><small>Weekly context only</small></div><div><span>Prior-close breadth</span><b class="'+(breadthShift>=0?'positive':'negative')+'">'+(breadthShift===null?'—':signed(breadthShift)+' pp')+'</b><small>T2108 change</small></div></div></div></section><details class="evidence-drawer"><summary>Why this plan?</summary><p>'+read.reason+' These are decision aids, not calibrated probabilities or trade instructions. Open Pulse for breadth detail, Flow for leadership detail, and Crowding for COT context.</p></details>';
 }
-let breadthDate='',breadthWindow=65,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
+let breadthPinned=-1;let breadthDate='',breadthWindow=65,breadthHoverRows=[],breadthHoverLatest=null,breadthAth=null;
 function setBreadthHover(index){
+ document.querySelector('.bm-workstation')?._updateBoard?.(index);
   const row=index>=0?breadthHoverRows[index]:breadthHoverLatest,latest=breadthHoverLatest;
   if(!row)return;
   document.querySelectorAll('.bm-hit').forEach(node=>node.classList.toggle('bm-linked-active',index>=0&&Number(node.dataset.bmIndex)===index));
@@ -270,11 +271,12 @@ function bindBreadthHover(){
       point.x=event.clientX;point.y=event.clientY;
       const local=point.matrixTransform(tape.getScreenCTM().inverse());
       const index=Math.max(0,Math.min(breadthHoverRows.length-1,Math.floor((local.x-8)/(912/Math.max(breadthHoverRows.length,1)))));
-      setBreadthHover(index);
+      tape.dataset.inspectedIndex=index;setBreadthHover(index);
     };
     tape.addEventListener('pointermove',setFromPointer);
     tape.addEventListener('pointerenter',setFromPointer);
-    tape.addEventListener('pointerleave',()=>setBreadthHover(-1));
+    tape.addEventListener('click',()=>{breadthPinned=Number(tape.dataset.inspectedIndex??-1);});
+    tape.addEventListener('pointerleave',()=>setBreadthHover(breadthPinned));
   });
 }
 function breadthPercentile(rows,key,value){
@@ -377,7 +379,7 @@ function environment(){
  chart('Rolling pressure',key('ratio5','5D','#e9c46a',2,'×')+key('ratio10','10D','#6aa9ff',2,'×')+'<small>Upside events ÷ downside events</small>',['ratio5','ratio10'],['#e9c46a','#6aa9ff'],'line',1);
  const measures=[['Quarterly trend','25% from 65-session closing low / high','up25q','down25q'],['34-session trend','13% from 34-session closing low / high','up13d34','down13d34'],['Monthly momentum','25% gain / loss over 20 sessions','up25m','down25m'],['Monthly extremes','50% gain / loss over 20 sessions','up50m','down50m']];
  const trend=measures.map(([title,definition,up,down])=>'<section class="bm-panel bm-trend-card"><h3>'+title+'</h3><small class="note">'+definition+'</small>'+chart('',key(up,'Up','#85d65d')+key(down,'Down','#ff3266')+'<span data-bm-percentile="'+up+'"></span><span data-bm-percentile="'+down+'"></span>',[up,down],['#85d65d','#ff3266'])+'</section>').join('');
- return '<div class="bm-page bm-redesign"><header class="bm-compact-header"><h2>Breadth</h2><span data-bm-date>Close '+b.date+'</span><label>History <input type="date" data-breadth-date value="'+b.date+'" min="'+breadth.at(-1)?.date+'" max="'+breadth.map(r=>r.date).sort().at(-1)+'"></label><div class="segments">'+[15,30,65,130,252].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></header><div class="bm-main-grid"><section class="bm-panel"><h3>Market & participation</h3>'+market+'</section><section class="bm-panel"><h3>Buying & selling pressure</h3>'+pressure+'<div class="bm-pressure-note">Daily counts show intensity. The 5D and 10D ratios show whether buying or selling is persisting.</div></section></div><div class="bm-trend-head"><h3>Trend participation</h3><small>Historical ranks use all available readings through the inspected date.</small></div><div class="bm-trend-grid">'+trend+'</div><details class="bm-details"><summary>Daily readings</summary><div class="table-box"><table><thead><tr><th>Date</th><th>SPX</th><th>Up 4%</th><th>Down 4%</th><th>5D</th><th>10D</th><th>T2108</th></tr></thead><tbody>'+rows.toReversed().map(r=>'<tr><td>'+r.date+'</td>'+['sp','up4','down4','ratio5','ratio10','t2108'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details></div>';
+ return '<div class="bm-page bm-redesign"><header class="bm-compact-header"><h2>Breadth</h2><span data-bm-date>Close '+b.date+'</span><label>History <input type="date" data-breadth-date value="'+b.date+'" min="'+breadth.map(r=>r.date).sort()[0]+'" max="'+breadth.map(r=>r.date).sort().at(-1)+'"></label><div class="segments">'+[15,30,65,130,252].map(n=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'">'+n+' sessions</button>').join('')+'</div></header><div class="bm-main-grid"><section class="bm-panel"><h3>Market & participation</h3>'+market+'</section><section class="bm-panel"><h3>Buying & selling pressure</h3>'+pressure+'<div class="bm-pressure-note">Daily counts show intensity. The 5D and 10D ratios show whether buying or selling is persisting.</div></section></div><div class="bm-trend-head"><h3>Trend participation</h3><small>Historical ranks use all available readings through the inspected date.</small></div><div class="bm-trend-grid">'+trend+'</div><details class="bm-details"><summary>Daily readings</summary><div class="table-box"><table><thead><tr><th>Date</th><th>SPX</th><th>Up 4%</th><th>Down 4%</th><th>5D</th><th>10D</th><th>T2108</th></tr></thead><tbody>'+rows.toReversed().map(r=>'<tr><td>'+r.date+'</td>'+['sp','up4','down4','ratio5','ratio10','t2108'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details></div>';
 }
 
 function leadership(){
@@ -399,21 +401,45 @@ function leadership(){
 }
 function arrangeBreadthDashboard(){
  const page=document.querySelector('.bm-redesign');if(!page)return;
- page.classList.add('bm-terminal');
+ page.classList.add('bm-workstation');
  const original=page.querySelector('.bm-main-grid'),rows=[...original.querySelectorAll('.bm-chart-row')];
- const panel=(title,subtitle,items,cls)=>{const section=document.createElement('section');section.className='bm-panel '+cls;section.innerHTML='<header class="bm-visual-heading"><h3>'+title+'</h3><small>'+subtitle+'</small></header>';items.forEach(row=>section.appendChild(row));return section;};
- const stage=document.createElement('div');stage.className='bm-stage';
- const market=panel('S&P 500','Price & distance from the 50-day average',[rows[0],rows[1]],'bm-market-stage');
- const pulse=panel('The daily tape','Stocks making qualifying 4% moves',[rows[3]],'bm-pulse-stage');
- const persistence=panel('Pressure','Rolling upside / downside events',[rows[4]],'bm-pressure-stage');
- const participation=panel('Participation','Share of stocks above their 40-day average',[rows[2]],'bm-participation-stage');
- stage.append(market,pulse,persistence,participation);original.replaceWith(stage);
- const strip=document.createElement('div');strip.className='bm-value-strip';
- const latest=breadthHoverLatest;
- [['sp','S&P 500',2,''],['up4','↑ Up 4%',0,''],['down4','↓ Down 4%',0,''],['ratio10','10D pressure',2,'×'],['t2108','Above 40D',1,'%']].forEach(([key,label,decimals,suffix])=>{strip.innerHTML+='<div class="bm-strip-item '+(key==='up4'?'positive':key==='down4'?'negative':'')+'"><span>'+label+'</span><div class="bm-hover-key" data-bm-key="'+key+'" data-bm-label="" data-bm-decimals="'+decimals+'" data-bm-suffix="'+suffix+'"><b>'+fmt(latest[key],decimals)+suffix+'</b><small>Latest close</small></div></div>';});
- page.querySelector('.bm-compact-header').after(strip);
- page.querySelectorAll('.bm-trend-card').forEach(card=>{card.classList.add('bm-trend-tile');});
+ const stack=document.createElement('section');stack.className='bm-history-stack';
+ [rows[0],rows[1],rows[3],rows[4],rows[2]].forEach(row=>stack.append(row));
+ original.replaceWith(stack);
+ const trend=page.querySelector('.bm-trend-grid');trend.querySelectorAll('.bm-trend-card').forEach(card=>stack.append(card));
+ trend.remove();page.querySelector('.bm-trend-head').remove();
+ const definitions=[['Daily 4% moves','up4','down4'],['Quarterly 25%','up25q','down25q'],['34-session 13%','up13d34','down13d34'],['Monthly 25%','up25m','down25m'],['Monthly 50%','up50m','down50m']];
+ const board=document.createElement('section');board.className='bm-comparison';
+ board.innerHTML='<div class="bm-board-head"><b>Participation balance</b><small>Counts · historical rank · share of qualifying moves</small></div><div class="bm-board-columns"><span>Measure</span><span>Upside</span><span>Downside</span><span>Balance</span><span>Recent history</span></div>';
+ definitions.forEach(([label,up,down],i)=>{
+ const row=document.createElement('button');row.className='bm-balance-row';
+ row.innerHTML='<b>'+label+'</b><span class="positive" data-board-up="'+up+'"></span><span class="negative" data-board-down="'+down+'"></span><span class="bm-balance-track"><i></i><em></em></span><span>'+breadthTape(breadthHoverRows,[up,down],['#85d65d','#ff3266'])+'</span>';
+ row.onclick=()=> (i===0?rows[3]:stack.querySelectorAll('.bm-trend-card')[i-1]).scrollIntoView({behavior:'smooth',block:'center'});
+ board.append(row);
+ });
+ page.querySelector('.bm-compact-header').after(board);
+ const updateBoard=index=>{
+ const r=index>=0?breadthHoverRows[index]:breadthHoverLatest;
+ const past=breadth.filter(x=>x.date<=r.date);
+ definitions.forEach(([,up,down])=>{
+ const u=Number(r[up]),d=Number(r[down]);
+ const rank=k=>{const v=past.filter(x=>finite(x[k]));return v.length?Math.round(100*v.filter(x=>Number(x[k])<=Number(r[k])).length/v.length):null;};
+ const el=board.querySelector('[data-board-up="'+up+'"]');
+ el.innerHTML=fmt(u,0)+'<small>'+rank(up)+'th percentile</small>';
+ el.nextElementSibling.innerHTML=fmt(d,0)+'<small>'+rank(down)+'th percentile</small>';
+ const track=el.parentElement.querySelector('.bm-balance-track');track.children[0].style.width=(u+d?100*u/(u+d):50)+'%';track.children[1].style.flex='1';
+ });
+ };
+ page._updateBoard=updateBoard;updateBoard(-1);
+ const dates=breadth.map(r=>r.date).sort();
+ const controls=document.createElement('span');controls.className='bm-date-controls';
+ controls.innerHTML='<button aria-label="Previous session">←</button><button aria-label="Next session">→</button><button>Latest</button>';
+ controls.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>{breadthPinned=-1;const at=dates.indexOf(breadthHoverLatest.date);breadthDate=i===2?'':dates[Math.max(0,Math.min(dates.length-1,at+(i===0?-1:1)))];render();});
+ page.querySelector('[data-breadth-date]').parentElement.after(controls);
+ const reset=event=>{if(event.key==='Escape'){breadthPinned=-1;setBreadthHover(-1);}};page.tabIndex=-1;page.onkeydown=reset;
+ const label=document.createElement('span');label.textContent='Chart range';label.className='bm-range-label';page.querySelector('.segments').prepend(label);
 }
+
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">CFTC positioning is unavailable.</p>';
   const participants=[['large','Large specs','#00bcd4'],['small','Small specs','#ff9800'],['commercials','Commercials','#e040fb']];
