@@ -248,7 +248,7 @@ function setBreadthHover(index){
   document.querySelectorAll('[data-bm-percentile]').forEach(node=>{const k=node.dataset.bmPercentile,rank=breadthPercentile(available,k,row[k]);node.textContent=(k.startsWith('up')?'Upside':'Downside')+' historical rank: '+(rank===null?'—':fmt(rank,0)+'th percentile');node.style.color=k.startsWith('up')?'#85d65d':'#ff3266';});
   document.querySelectorAll('[data-bm-sp-change]').forEach(node=>{node.textContent=finite(prior?.sp)&&finite(row.sp)?'Session '+signed(row.sp-prior.sp,2)+' ('+signed(100*(row.sp/prior.sp-1),2)+'%)':'Session change unavailable';});
   const date=document.querySelector('[data-bm-date]');
-  if(date)date.textContent=index>=0?'Viewing '+row.date+' · change vs latest':'Latest close · hover any chart to inspect a session';
+  if(date)date.textContent=(index>=0?'Inspecting ':'Close ')+row.date;
   document.querySelectorAll('[data-bm-key]').forEach(el=>{
     const key=el.dataset.bmKey,decimals=Number(el.dataset.bmDecimals||0),suffix=el.dataset.bmSuffix||'';
     const value=finite(row[key])?fmt(row[key],decimals)+suffix:'—';
@@ -294,6 +294,7 @@ function breadthTape(rows,keys,colors,kind='line',reference=null){
   if(referenceValues.length){lo=Math.min(lo,...referenceValues);hi=Math.max(hi,...referenceValues);}
   const pad=Math.max((hi-lo)*.12,kind==='bars'?1:.01);lo-=pad;hi+=pad;
   if(kind==='bars'){hi=Math.ceil(Math.max(Math.abs(lo),Math.abs(hi))/100)*100;lo=-hi;}
+  if(keys.includes('t2108')){lo=0;hi=100;}if(keys[0]?.startsWith('rank_')){lo=0;hi=100;}
   const step=(R-L)/Math.max(rows.length,1),x=i=>L+step*(i+.5),y=v=>B-(v-lo)/(hi-lo)*(B-T);
   let svg=[lo,(hi+lo)/2,hi].map(v=>'<line x1="'+L+'" x2="'+R+'" y1="'+y(v)+'" y2="'+y(v)+'" class="bm-grid"/><text x="'+(R+10)+'" y="'+(y(v)+4)+'">'+(kind==='bars'?(v<0?'↓ ':v>0?'↑ ':'')+fmt(Math.abs(v),0):fmt(v,keys.includes('ratio5')?2:0))+'</text>').join('');
   if(kind==='bars')svg+='<line x1="'+L+'" x2="'+R+'" y1="'+y(0)+'" y2="'+y(0)+'" class="bm-reference" style="stroke:#8d8b81"/>';
@@ -308,7 +309,7 @@ function breadthTape(rows,keys,colors,kind='line',reference=null){
   });
   svg+=rows.map((r,i)=>'<g class="bm-hit" data-bm-index="'+i+'"><rect x="'+(L+step*i)+'" y="0" width="'+step+'" height="'+B+'" fill="rgba(0,0,0,.001)"/><line x1="'+x(i)+'" x2="'+x(i)+'" y1="'+T+'" y2="'+B+'"/>'+keys.filter(k=>finite(r[k])).map((k,j)=>'<circle cx="'+x(i)+'" cy="'+y(Number(r[k])*(kind==='bars'&&k==='down4'?-1:1))+'" r="4" fill="'+colors[j]+'"/>').join('')+'<title>'+r.date+' · '+keys.map(k=>k+': '+fmt(r[k],kind==='bars'?0:2)).join(' · ')+'</title></g>').join('');
   svg+=rows.filter((r,i)=>i===0||i===rows.length-1||i===Math.floor(rows.length/2)).map(r=>'<text x="'+x(rows.indexOf(r))+'" y="140" text-anchor="middle">'+r.date.slice(5)+'</text>').join('');
-  return '<svg class="bm-tape" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+escapeHTML(keys.join(', ')+' through '+rows.at(-1).date)+'">'+svg+'</svg>';
+  return '<svg class="bm-tape" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+escapeHTML(keys.join(', ')+' through '+rows.at(-1).date)+'">'+svg+'</svg>';
 }
 function legacyEnvironment(){
   const history=breadthRows(),b=history[0],old=history[1];
@@ -422,21 +423,38 @@ function arrangeBreadthDashboard(){
  const r=index>=0?breadthHoverRows[index]:breadthHoverLatest;
  const past=breadth.filter(x=>x.date<=r.date);
  definitions.forEach(([,up,down])=>{
- const u=Number(r[up]),d=Number(r[down]);
- const rank=k=>{const v=past.filter(x=>finite(x[k]));return v.length?Math.round(100*v.filter(x=>Number(x[k])<=Number(r[k])).length/v.length):null;};
+ const u=finite(r[up])?Number(r[up]):null,d=finite(r[down])?Number(r[down]):null;
+ const rank=k=>breadthPercentile(past,k,r[k]);
+ const ordinal=v=>{if(v===null)return 'Unavailable';const n=Math.round(v),suffix=n%100>=11&&n%100<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th');return n+suffix+' percentile';};
  const el=board.querySelector('[data-board-up="'+up+'"]');
- el.innerHTML=fmt(u,0)+'<small>'+rank(up)+'th percentile</small>';
- el.nextElementSibling.innerHTML=fmt(d,0)+'<small>'+rank(down)+'th percentile</small>';
- const track=el.parentElement.querySelector('.bm-balance-track');track.children[0].style.width=(u+d?100*u/(u+d):50)+'%';track.children[1].style.flex='1';
+ el.innerHTML=fmt(u,0)+'<small>'+ordinal(rank(up))+'</small>';
+ el.nextElementSibling.innerHTML=fmt(d,0)+'<small>'+ordinal(rank(down))+'</small>';
+ const track=el.parentElement.querySelector('.bm-balance-track');
+ track.children[0].style.width=(u!==null&&d!==null&&u+d?100*u/(u+d):50)+'%';track.children[1].style.flex='1';
+ [up,down].forEach((k,j)=>{const v=rank(k);track.children[j].style.opacity=v===null?.15:.25+.75*v/100;});
+ track.title=u===null||d===null?'Missing reading':Math.round(100*u/(u+d||1))+'% upside share of qualifying moves';
  });
  };
  page._updateBoard=updateBoard;updateBoard(-1);
+ const history=breadth.filter(r=>r.date<=breadthHoverLatest.date).sort((a,b)=>a.date.localeCompare(b.date));
+ const rankRows=breadthHoverRows.map(r=>{const earlier=history.filter(x=>x.date<=r.date),result={date:r.date};definitions.forEach(([,u,d])=>[u,d].forEach(k=>result['rank_'+k]=breadthPercentile(earlier,k,r[k])));result.rank_t2108=breadthPercentile(earlier,'t2108',r.t2108);return result;});
+ const addRank=(row,keys)=>{const wrap=document.createElement('div');wrap.className='bm-rank-history';wrap.innerHTML='<small>Historical percentile · 0–100</small>'+breadthTape(rankRows,keys.map(k=>'rank_'+k),keys.map((k,i)=>i?'#ff3266':'#85d65d'),'line',[{value:10,label:'10th'},{value:90,label:'90th'}]);row.append(wrap);};
+ addRank(rows[3],['up4','down4']);addRank(rows[2],['t2108']);
+ stack.querySelectorAll('.bm-trend-card').forEach((card,i)=>addRank(card.querySelector('.bm-chart-row'),definitions[i+1].slice(1)));
+ const tips=['S&P 500 daily close; change compares with the previous available session.','ATR distance from the 50-day average. Score is its historical normalized value from −1 to +1.','Stocks rising or falling at least 4% in one session. Counts are breadth events, not confirmed chart breakouts.','Upside events divided by downside events over five and ten sessions. Above 1 means upside events dominate.','T2108: percentage of stocks above their 40-day moving average.'];
+ [rows[0],rows[1],rows[3],rows[4],rows[2]].forEach((row,i)=>{const info=document.createElement('button');info.className='bm-info';info.textContent='ⓘ';info.title=tips[i];info.setAttribute('aria-label',tips[i]);row.querySelector('.bm-chart-label').append(info);});
+ const details=page.querySelector('.bm-details');
+ const tools=document.createElement('div');tools.className='bm-reading-tools';tools.innerHTML='<input type="search" placeholder="Filter readings by date" aria-label="Filter readings by date"><button>Export CSV</button>';
+ details.querySelector('.table-box').before(tools);
+ tools.querySelector('input').oninput=event=>details.querySelectorAll('tbody tr').forEach(tr=>tr.hidden=!tr.cells[0].textContent.includes(event.target.value));
+ tools.querySelector('button').onclick=()=>{const table=details.querySelector('table');const csv=[...table.rows].filter(r=>!r.hidden).map(r=>[...r.cells].map(c=>'"'+c.textContent.replaceAll('"','""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='breadth-'+breadthHoverLatest.date+'.csv';a.click();URL.revokeObjectURL(a.href);};
+
  const dates=breadth.map(r=>r.date).sort();
  const controls=document.createElement('span');controls.className='bm-date-controls';
  controls.innerHTML='<button aria-label="Previous session">←</button><button aria-label="Next session">→</button><button>Latest</button>';
  controls.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>{breadthPinned=-1;const at=dates.indexOf(breadthHoverLatest.date);breadthDate=i===2?'':dates[Math.max(0,Math.min(dates.length-1,at+(i===0?-1:1)))];render();});
  page.querySelector('[data-breadth-date]').parentElement.after(controls);
- const reset=event=>{if(event.key==='Escape'){breadthPinned=-1;setBreadthHover(-1);}};page.tabIndex=-1;page.onkeydown=reset;
+ document.onkeydown=event=>{if(event.key==='Escape'&&document.querySelector('.bm-workstation')){breadthPinned=-1;setBreadthHover(-1);}};
  const label=document.createElement('span');label.textContent='Chart range';label.className='bm-range-label';page.querySelector('.segments').prepend(label);
 }
 
@@ -681,7 +699,7 @@ document.addEventListener('click',async event=>{
  const action=node.dataset.action;
  if(action==='breadth-metric'){breadthMetric=node.dataset.metric;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-range'){breadthRange=node.dataset.range;render();document.querySelector('.bm-details').open=true;return;}
- if(action==='breadth-window'){breadthWindow=Number(node.dataset.window);render();return;}
+ if(action==='breadth-window'){breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();return;}
  if(action==='select-screen'){screenerView=node.dataset.screen;render();return;}
  if(action==='screener-view'){screenerDisplay=node.dataset.view;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
@@ -695,7 +713,7 @@ document.addEventListener('click',async event=>{
  if(node.classList.contains('dialog-close'))$('#stock-dialog').close();
 });
 document.addEventListener('change',event=>{
- if(event.target.matches('[data-breadth-date]')){breadthDate=event.target.value;render();return;}
+ if(event.target.matches('[data-breadth-date]')){breadthPinned=-1;breadthDate=event.target.value;render();return;}
  const key=event.target.dataset.filter;if(key){filters[key]=event.target.value;render();}
  const obcKey=event.target.dataset.obcFilter;if(obcKey){obcFilters[obcKey]=event.target.value;render();}
 });
