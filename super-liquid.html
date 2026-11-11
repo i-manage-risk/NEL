@@ -218,5 +218,5 @@ async function downloadPageImage() {
 if (!history.length) { document.querySelector('main').innerHTML = '<p class="empty">Run the scanner once to create a momentum-leader snapshot.</p>'; } else { updateDates(); dateSelect.addEventListener('change', render); downloadButton.addEventListener('click', downloadPageImage); downloadLiquidButton.addEventListener('click', () => downloadSymbols('liquid', 'super_liquid_leaders')); downloadNelButton.addEventListener('click', () => downloadSymbols('nel', 'super_liquid_nel')); downloadTightButton.addEventListener('click', () => downloadSymbols('tight', 'super_liquid_tight_nel')); copyLiquidButton.addEventListener('click', () => copySymbols('liquid', copyLiquidButton)); copyNelButton.addEventListener('click', () => copySymbols('nel', copyNelButton)); copyTightButton.addEventListener('click', () => copySymbols('tight', copyTightButton)); window.addEventListener('resize', render); render(); }
 </script>
 <script src="assets/date-select.js?v=2"></script>
-<script src="assets/detail-shell.js?v=2" data-page="super"></script></body>
+<script src="assets/detail-shell.js?v=3" data-page="super"></script></body>
 </html>

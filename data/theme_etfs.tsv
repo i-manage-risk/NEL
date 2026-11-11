@@ -136,10 +136,9 @@ SLV	Silver	Holds physical silver bullion for direct silver-price exposure
 SLX	Steel	Global steel producers and related mining companies
 SMH	Semiconductors	Concentrated in approximately 25 dominant global chip companies
 SOCL	Social media	Global social networks, messaging and content platforms
-SOLZ	Cryptocurrency	One-times Solana exposure through futures—not spot SOL
+BSOL	Cryptocurrency	Bitwise Solana Staking ETF; spot Solana exposure with staking
 SOXX	Semiconductors	Approximately 30 large U.S.-listed chipmakers and equipment suppliers
 SPMO	Momentum	The 100 S&P 500 stocks with the strongest price momentum
-SUPL	Logistics	Global logistics, freight and supply-chain technology companies
 SVIX	Volatility	Targets the inverse daily performance of short-term VIX futures
 TAN	Solar	Global solar manufacturers, installers and technology suppliers
 TLT	Treasury bonds	U.S. Treasury bonds with maturities longer than 20 years
@@ -172,3 +171,4 @@ XSW	Software	Equal-weight U.S. software with greater small-company exposure
 XTL	Telecom	Equal-weight telecom carriers, equipment makers and satellite companies
 XTN	Transportation	Equal-weight airlines, railroads, trucking and logistics
 ZCSH	Cryptocurrency	Holds ZCASH directly for spot-price exposure
+AIPO	AI & power infrastructure	Defiance AI & Power Infrastructure ETF; AI computing and its power infrastructure

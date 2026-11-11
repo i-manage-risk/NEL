@@ -12,7 +12,7 @@ const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Mon
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
 const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',positioning:'Crowding',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
-let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
+let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, flowMarket={}, cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
 let indexFrame='1y',flowIndexView=null;
 let flowETFState=null, flowWidgetSerial=0;
@@ -131,7 +131,13 @@ function flowPayload(){return leadershipKind==='sectors'?sectors:themes;}
 function flowETFDetails(payload,symbol){
   const snapshot=etfSnapshot(payload), daily=(snapshot?.daily_changes||[]).find(row=>row.symbol===symbol)||{};
   const member=Object.values(snapshot?.windows||{}).flatMap(groups=>groups.flatMap(group=>group.members||[])).find(row=>row.symbol===symbol)||{};
-  return {...member,...daily,symbol,description:member.description||daily.description||'ETF statistics unavailable in this snapshot.',adrp:member.adrp??daily.adrp,average_dollar_volume_30d:member.average_dollar_volume_30d??daily.average_dollar_volume_30d,extension:member.extension??daily.extension};
+  const base={...member,...daily,symbol,description:member.description||daily.description||'',adrp:member.adrp??daily.adrp,average_dollar_volume_30d:member.average_dollar_volume_30d??daily.average_dollar_volume_30d,extension:member.extension??daily.extension};
+  if(!flowETFState?.market||!flowOverviewState?.metrics[symbol]?.available)return base;
+  const m=flowOverviewState.metrics[symbol],h=m.history,result={...base,description:base.description||m.name,extension:m.extension,oscillator:m.oscillator,relative:m.relative,close:m.close,date:m.date,intraday:m.intraday,offHigh:m.offHigh,...(flowOverviewState.rankings?.[flowETFState.category]?.[symbol]||{})};
+  for(const [key,n] of Object.entries({one_day:1,one_week:5,one_month:21,three_months:63,six_months:126,one_year:252})){const back=h.at(-1-n);result[key]=back?100*(m.close/back.close-1):null;}
+  result.adrp=h.length>=14?100*h.slice(-14).reduce((sum,r)=>sum+r.high-r.low,0)/14/m.close:null;
+  const volumeRows=h.slice(-30);if(volumeRows.length===30&&volumeRows.every(r=>finite(r.volume)))result.average_dollar_volume_30d=(volumeRows.reduce((sum,r)=>sum+r.close,0)/30)*(volumeRows.reduce((sum,r)=>sum+r.volume,0)/30);
+  return result;
 }
 function flowHoldingRows(items){
   if(!items?.length)return '<tr><td colspan="11" class="empty">No qualifying common-stock holdings are available for this ETF.</td></tr>';
@@ -141,25 +147,27 @@ function flowPerformanceTiles(detail){
   return '<div><span class="eyebrow">PERFORMANCE</span><div class="flow-stat-grid flow-performance-grid">'+Object.entries(flowKeys).map(([key,label])=>'<div><span>'+escapeHTML(flowLabels[key])+'</span><b class="'+returnTone(detail[key])+'">'+pct(detail[key])+'</b></div>').join('')+'</div></div>';
 }
 function flowEvidenceTiles(detail){
+  const extras=flowETFState?.market?'<div><span>1M RS score</span><b>'+pct(detail.rsMonth)+'</b></div><div><span>RS Thrust</span><b>'+pct(detail.thrust)+'</b></div><div><span>Intraday</span><b class="'+returnTone(detail.intraday)+'">'+pct(detail.intraday)+'</b></div><div><span>50D ATR index</span><b class="'+returnTone(detail.oscillator)+'">'+(finite(detail.oscillator)?signed(detail.oscillator,2):'—')+'</b></div><div><span>1M vs RSP</span><b class="'+returnTone(detail.relative)+'">'+pct(detail.relative)+'</b></div><div><span>Off 52W high</span><b class="'+returnTone(detail.offHigh)+'">'+pct(detail.offHigh)+'</b></div>':'';
   return '<div><span class="eyebrow">ETF STATS</span><div class="flow-stat-grid">'+
     '<div><span>ADR</span><b>'+pct(detail.adrp)+'</b></div><div><span>Avg $ vol</span><b>'+money(detail.average_dollar_volume_30d)+'</b></div><div><span>50D ATR ext</span><b class="'+extensionTone(detail.extension)+'">'+(finite(detail.extension)?fmt(detail.extension,2)+'×':'—')+'</b></div>'+
-  '</div></div>';
+  extras+'</div></div>';
 }
 function flowETFDialog(){
   const state=flowETFState;if(!state)return;
-  const dialog=$('#flow-etf-dialog'), detail=flowETFDetails(state.payload,state.etf), holdings=state.payload.holdings?.[state.etf]||[];
+  const dialog=$('#flow-etf-dialog'), detail=flowETFDetails(state.payload,state.etf), holdings=(state.market&&flowMarket.holdings?.[state.etf])||state.payload.holdings?.[state.etf]||[];
   const selected=state.chartSymbol===state.etf?'ETF chart':'Holding chart · '+state.chartSymbol;
   const chartId='flow-detail-chart-'+(++flowWidgetSerial);
   const members=state.members||[], switcher=members.length>1?'<div class="flow-group-etfs" aria-label="Choose ETF expression">'+members.map(row=>'<button class="'+(row.symbol===state.etf?'active':'')+'" data-flow-etf="'+escapeHTML(row.symbol)+'" data-flow-group="'+escapeHTML(state.group)+'">'+escapeHTML(row.symbol)+'</button>').join('')+'</div>':'';
-  $('#flow-etf-content').innerHTML='<div class="flow-dialog-head"><div><span class="eyebrow">'+escapeHTML(state.group)+' · ETF DETAIL</span><h2>'+escapeHTML(state.etf)+' <small>'+escapeHTML(detail.description)+'</small></h2>'+switcher+'</div><button data-action="flow-dialog-close" class="flow-dialog-close" aria-label="Close ETF details">×</button></div><div class="flow-dialog-grid"><section class="flow-dialog-data">'+flowPerformanceTiles(detail)+flowEvidenceTiles(detail)+'<div class="flow-holdings-head"><div><span class="eyebrow">TOP STOCK HOLDINGS</span><h3>'+holdings.length+' disclosed stocks</h3></div><button class="flow-chart-reset '+(state.chartSymbol===state.etf?'active':'')+'" data-flow-etf="'+escapeHTML(state.etf)+'" data-flow-group="'+escapeHTML(state.group)+'">Show '+escapeHTML(state.etf)+'</button></div><div class="table-box flow-holdings"><table><thead><tr><th>Ticker</th><th>Company</th><th class="num">Weight</th><th class="num">1D</th><th class="num">1W</th><th class="num">1M</th><th class="num">3M</th><th class="num">6M</th><th class="num">1Y</th><th class="num">Avg $ vol</th><th class="num">Extension</th></tr></thead><tbody>'+flowHoldingRows(holdings)+'</tbody></table></div><p class="note">Holdings exclude cash, bonds, swaps, futures, options, collateral, commodities, crypto assets, and fund holdings. Holdings disclosure: '+escapeHTML(state.payload.holdings_as_of||'unavailable')+'.</p></section><section class="flow-dialog-chart"><div><span class="eyebrow">'+escapeHTML(selected)+'</span><h3>'+escapeHTML(state.chartSymbol)+'</h3></div><div id="'+chartId+'" class="flow-tv-chart" data-flow-tv-symbol="'+escapeHTML(state.chartSymbol)+'"><span>Loading chart…</span></div><a class="lead-link" target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(state.chartSymbol)+'">Open in TradingView <b>↗</b></a></section></div>';
+  $('#flow-etf-content').innerHTML='<div class="flow-dialog-head"><div><span class="eyebrow">'+escapeHTML(state.group)+' · ETF DETAIL</span><h2>'+escapeHTML(state.etf)+' <small>'+escapeHTML(detail.description)+'</small></h2>'+switcher+'</div><button type="button" data-action="flow-dialog-close" class="flow-dialog-close" aria-label="Close ETF details"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div><div class="flow-dialog-grid"><section class="flow-dialog-data">'+(state.market?'<div class="flow-popup-quote"><b>$'+fmt(detail.close,2)+'</b><span class="'+returnTone(detail.one_day)+'">'+signed(detail.one_day,2)+'%</span><small>Close '+detail.date+'</small></div>':'')+flowPerformanceTiles(detail)+flowEvidenceTiles(detail)+'<div class="flow-holdings-head"><div><span class="eyebrow">TOP STOCK HOLDINGS</span><h3>'+holdings.length+' disclosed stocks</h3></div><button class="flow-chart-reset '+(state.chartSymbol===state.etf?'active':'')+'" data-flow-etf="'+escapeHTML(state.etf)+'" data-flow-group="'+escapeHTML(state.group)+'">Show '+escapeHTML(state.etf)+'</button></div><div class="table-box flow-holdings"><table><thead><tr><th>Ticker</th><th>Company</th><th class="num">Weight</th><th class="num">1D</th><th class="num">1W</th><th class="num">1M</th><th class="num">3M</th><th class="num">6M</th><th class="num">1Y</th><th class="num">Avg $ vol</th><th class="num">Extension</th></tr></thead><tbody>'+flowHoldingRows(holdings)+'</tbody></table></div><p class="note">Holdings exclude cash, bonds, swaps, futures, options, collateral, commodities, crypto assets, and fund holdings. Holdings checked: '+escapeHTML(state.market&&flowMarket.holdings?.[state.etf]?flowMarket.holdings_checked_at:state.payload.holdings_as_of||'unavailable')+'.</p></section><section class="flow-dialog-chart"><div><span class="eyebrow">'+escapeHTML(selected)+'</span><h3>'+escapeHTML(state.chartSymbol)+'</h3></div><div id="'+chartId+'" class="flow-tv-chart" data-flow-tv-symbol="'+escapeHTML(state.chartSymbol)+'"><span>Loading chart…</span></div><a class="lead-link" target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(state.chartSymbol)+'">Open in TradingView <b>↗</b></a></section></div>';
   if(!dialog.open)dialog.showModal();
   mountFlowTradingView(chartId,state.chartSymbol);
 }
-async function mountFlowTradingView(id,symbol){
+async function mountFlowTradingView(id,symbol,options={}){
   const node=$('#'+id);if(!node)return;
-  try{await loadTradingView();if(!node.isConnected)return;node.textContent='';new TradingView.widget({container_id:id,symbol,interval:'D',timezone:'America/New_York',theme:'dark',style:'1',locale:'en',toolbar_bg:'#202020',backgroundColor:'#202020',gridColor:'#343434',hide_top_toolbar:true,hide_side_toolbar:true,hide_legend:true,hide_volume:true,disabled_features:['create_volume_indicator_by_default','create_volume_indicator_by_default_once'],allow_symbol_change:false,enable_publishing:false,save_image:false,withdateranges:true,autosize:true,studies:['STD;EMA'],studies_overrides:{'moving average exponential.ma.color':'#FFFFFF','moving average exponential.ma.linewidth':2,'volume.volume.transparency':100,'volume.volume ma.transparency':100,'moving average exponential.length':9,'moving average exponential.plot.color':'#FFFFFF','moving average exponential.plot.linewidth':2},overrides:{'scalesProperties.showStudyLastValue':false,'paneProperties.backgroundType':'solid','paneProperties.background':'#202020','paneProperties.legendProperties.showLegend':false,'paneProperties.legendProperties.showVolume':false,'paneProperties.legendProperties.showSeriesOHLC':false,'paneProperties.legendProperties.showStudyTitles':false,'paneProperties.legendProperties.showStudyValues':false,'mainSeriesProperties.priceAxisProperties.log':true,'mainSeriesProperties.priceAxisProperties.percentage':false,'mainSeriesProperties.candleStyle.upColor':'#85d65d','mainSeriesProperties.candleStyle.downColor':'#ff3266','mainSeriesProperties.candleStyle.borderUpColor':'#85d65d','mainSeriesProperties.candleStyle.borderDownColor':'#ff3266','mainSeriesProperties.candleStyle.wickUpColor':'#85d65d','mainSeriesProperties.candleStyle.wickDownColor':'#ff3266'}});}catch(error){node.innerHTML='<span class="chart-unavailable">Chart unavailable · <a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(symbol)+'">open in TradingView ↗</a></span>';}
+  try{await loadTradingView();if(!node.isConnected)return;node.textContent='';new TradingView.widget({container_id:id,symbol,interval:'D',timeframe:options.range||undefined,extended_hours:false,timezone:'America/New_York',theme:'dark',style:'1',locale:'en',toolbar_bg:'#202020',backgroundColor:'#202020',gridColor:'#343434',hide_top_toolbar:true,hide_side_toolbar:true,hide_legend:true,hide_volume:true,disabled_features:['create_volume_indicator_by_default','create_volume_indicator_by_default_once'],allow_symbol_change:false,enable_publishing:false,save_image:false,withdateranges:!options.range,autosize:true,studies:['STD;EMA'],studies_overrides:{'moving average exponential.ma.color':'#FFFFFF','moving average exponential.ma.linewidth':2,'volume.volume.transparency':100,'volume.volume ma.transparency':100,'moving average exponential.length':9,'moving average exponential.plot.color':'#FFFFFF','moving average exponential.plot.linewidth':2},overrides:{'scalesProperties.showStudyLastValue':false,'paneProperties.backgroundType':'solid','paneProperties.background':'#202020','paneProperties.legendProperties.showLegend':false,'paneProperties.legendProperties.showVolume':false,'paneProperties.legendProperties.showSeriesOHLC':false,'paneProperties.legendProperties.showStudyTitles':false,'paneProperties.legendProperties.showStudyValues':false,'mainSeriesProperties.priceAxisProperties.log':true,'mainSeriesProperties.priceAxisProperties.percentage':false,'mainSeriesProperties.candleStyle.upColor':'#85d65d','mainSeriesProperties.candleStyle.downColor':'#ff3266','mainSeriesProperties.candleStyle.borderUpColor':'#85d65d','mainSeriesProperties.candleStyle.borderDownColor':'#ff3266','mainSeriesProperties.candleStyle.wickUpColor':'#85d65d','mainSeriesProperties.candleStyle.wickDownColor':'#ff3266'}});}catch(error){node.innerHTML='<span class="chart-unavailable">Chart unavailable · <a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(symbol)+'">open in TradingView ↗</a></span>';}
 }
 function openFlowETF(symbol,groupName){
+  if(flowETFState?.market&&flowOverviewState?.metrics[symbol]?.available){openMarketDetail(symbol);return;}
   const payload=flowPayload(), snapshot=etfSnapshot(payload), group=groupName||flowGroupName(payload,(snapshot?.daily_changes||[]).find(row=>row.symbol===symbol)||{}), key=flowFrameKey[flowFrame], members=buildFlowGroups(payload,snapshot,key).find(item=>item.group===group)?.members||[];
   flowETFState={payload,etf:symbol,group,members,chartSymbol:symbol};flowETFDialog();
 }
@@ -497,7 +505,73 @@ function mountIndexInspection(){
  svg.addEventListener('pointermove',event=>{if(frame)cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{frame=0;inspect(event);});},{passive:true});svg.addEventListener('click',()=>{pinned=Number(svg.dataset.index??-1);});svg.addEventListener('pointerleave',()=>{cancelAnimationFrame(frame);frame=0;overlay.hidden=true;update(pinned);});
  const size=()=>{const box=svg.getBoundingClientRect();svg.querySelectorAll('text').forEach(text=>{text.style.transformBox='fill-box';text.style.transformOrigin='center';text.style.transform='scale('+1000/box.width+','+380/box.height+')';});};requestAnimationFrame(size);update(-1);
 }
+let flowOverviewState=null,flowOverviewSort={market:'default',segments:'default',equal_weight:'default',sectors:'default',industries:'default'};
+function flowMarketOverview(){
+ if(!flowMarket.series?.RSP)return '<p class="empty">Market overview data is not available. Run the daily market-data refresh.</p>';
+ const dates=flowMarket.series.RSP.history.filter(r=>r.date<=asof()),date=dates.at(-1)?.date;if(!date)return '<p>No completed session available.</p>';
+ const metric=(symbol)=>{const source=flowMarket.series[symbol],history=(source?.history||[]).filter(r=>r.date<=date),last=history.at(-1),prior=history.at(-2);if(!last||last.date!==date)return {symbol,name:source?.name||symbol,available:false};
+ const back=history.at(-22),month=back?100*(last.close/back.close-1):null,day=prior?100*(last.close/prior.close-1):null,intraday=100*(last.close/last.open-1),offHigh=100*(last.close/Math.max(...history.slice(-252).map(r=>r.high))-1);
+ return {...last,symbol,name:source.name,available:true,history,month,day,intraday,offHigh,historyStart:source.history_start};};
+ const benchmark=metric('RSP'),metrics=Object.fromEntries(Object.keys(flowMarket.series).map(symbol=>[symbol,metric(symbol)]));
+ Object.values(metrics).forEach(m=>{if(!m.available)return;m.relative=finite(m.month)&&finite(benchmark.month)?100*((1+m.month/100)/(1+benchmark.month/100)-1):null;
+ const rspByDate=new Map(benchmark.history.map(r=>[r.date,r.close]));let wins=0,total=0;const h=m.history;for(let i=Math.max(1,h.length-21);i<h.length;i++){const prev=h[i-1],now=h[i],rspPrev=rspByDate.get(prev.date),rspNow=rspByDate.get(now.date);if(rspPrev&&rspNow){total++;if(now.close/prev.close>rspNow/rspPrev)wins++;}}m.rsDays=total?100*wins/total:null;});
+ flowOverviewState={date,metrics,benchmark,rankings:{}};
+ const value=(v,d=1)=>finite(v)?signed(v,d)+'%':'—';
+ const marketChartOrder=['SPY','QQQ','IWM','DIA','RSP','QQQE','SPMO','TLT'];
+ const cards=marketChartOrder.map(symbol=>flowMarket.groups.market.find(entry=>entry.symbol===symbol)).filter(Boolean).map(({symbol,name})=>{const m=metrics[symbol],score=m?.oscillator;return '<article class="market-index-card"><header><div><b>'+symbol+'</b><span>'+escapeHTML(name)+'</span></div><strong class="'+returnTone(m?.day)+'">'+(m?.available?fmt(m.close,2)+' <small>('+value(m.day,2)+')</small>':'Unavailable')+'</strong></header><div class="market-tv" id="market-tv-'+symbol+'" data-market-chart="'+symbol+'"><span>Loading daily chart…</span></div><footer><div class="market-gauge-title"><span>50D ATR index</span><b class="'+returnTone(score)+'">'+(finite(score)?signed(score,2):'—')+'</b><small>'+(finite(m?.extension)?fmt(m.extension,2)+'×':'—')+'</small></div><div class="market-extension-gauge"><em></em><i style="left:'+(finite(score)?50+50*score:50)+'%;background:'+(score<0?'#ff3266':'#85d65d')+'"></i></div><div class="market-card-context"><small>−1</small><span>'+(symbol==='RSP'?'RSP · benchmark':'1M vs RSP <b class="'+returnTone(m?.relative)+'">'+value(m?.relative)+'</b>')+'</span><small>+1</small></div></footer></article>';}).join('');
+ const spark=(values,relative=false)=>{
+ const good=values.filter(finite);if(good.length<2)return '—';
+ const high=Math.max(...good),low=Math.min(...good),highIndex=good.indexOf(high),lowIndex=good.indexOf(low),darkGreen='#348747',pink='#ff3266';
+ if(relative){
+  const returns=good.map(v=>100*(v/good[0]-1)),lo=Math.min(0,...returns),hi=Math.max(0,...returns),span=hi-lo||1,y=v=>30-(v-lo)/span*26,zero=y(0),step=92/good.length;
+  const bars=returns.map((v,i)=>{const top=Math.min(zero,y(v)),height=Math.max(.65,Math.abs(y(v)-zero)),color=i===lowIndex&&low!==high?pink:i===highIndex&&low!==high?darkGreen:v<0?pink:'#85d65d';return '<rect x="'+(4+i*step).toFixed(2)+'" y="'+top.toFixed(2)+'" width="'+Math.max(.6,step-.9).toFixed(2)+'" height="'+height.toFixed(2)+'" fill="'+color+'"'+([highIndex,lowIndex].includes(i)&&low!==high?' stroke="#f5f2e8" stroke-width=".65"':'')+'/>';}).join('');
+  return '<svg class="market-spark market-rs-columns" viewBox="0 0 100 34" preserveAspectRatio="none" role="img" aria-label="One-month cumulative relative return versus RSP; highest and lowest readings highlighted"><line x1="3" x2="97" y1="'+zero+'" y2="'+zero+'" stroke="#666" stroke-width=".5"/>'+bars+'</svg>';
+ }
+ const span=high-low||1,x=i=>4+i*92/(good.length-1),y=v=>30-(v-low)/span*26,path=good.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)).join(' '),color=good.at(-1)>=good[0]?'#85d65d':pink;
+ const dots=high===low?'':[[highIndex,high,darkGreen],[lowIndex,low,pink]].map(([i,v,c])=>'<circle cx="'+x(i).toFixed(1)+'" cy="'+y(v).toFixed(1)+'" r="2.7" fill="'+c+'" stroke="#202020" stroke-width=".8"/>').join('');
+ return '<svg class="market-spark market-price-line" viewBox="0 0 100 34" preserveAspectRatio="none" role="img" aria-label="One-month closing prices; highest close dark green, lowest close pink"><path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="1.6"/>'+dots+'</svg>';
+ };
+ const rspMap=new Map(benchmark.history.map(r=>[r.date,r.close]));
+ const rel=(m,n,shift=0)=>{const h=m.history||[],end=h.at(-1-shift),start=h.at(-1-shift-n);return end&&start&&rspMap.get(end.date)&&rspMap.get(start.date)?100*((end.close/start.close)/(rspMap.get(end.date)/rspMap.get(start.date))-1):null;};
+ const groupTable=(key,title)=>{let rows=(flowMarket.groups[key]||[]).map(entry=>({...metrics[entry.symbol],symbol:entry.symbol,name:entry.name}));
+ const rank=(m,n,shift=0)=>{const v=rel(m,n,shift),pop=rows.filter(r=>r.available&&r.symbol!=='RSP').map(r=>rel(r,n,shift)).filter(finite);if(!finite(v)||!pop.length||m.symbol==='RSP')return null;return 100*(pop.filter(x=>x<v).length+.5*(pop.filter(x=>x===v).length-1))/Math.max(1,pop.length-1);};
+ rows.forEach(m=>{m.rsMonth=rank(m,21);m.rsWeek=rank(m,5);const old=rank(m,5,3);m.thrust=finite(m.rsMonth)&&finite(m.rsWeek)&&finite(old)?.6*m.rsWeek+.4*m.rsMonth+.1*(m.rsWeek-old):null;});
+ flowOverviewState.rankings[key]=Object.fromEntries(rows.map(m=>[m.symbol,{rsMonth:m.rsMonth,thrust:m.thrust}]));
+ const sort=flowOverviewSort[key];if(sort&&sort!=='default')rows.sort((a,b)=>(finite(b[sort])?b[sort]:-Infinity)-(finite(a[sort])?a[sort]:-Infinity));else if(!['market','segments'].includes(key))rows.sort((a,b)=>(b.rsMonth??-Infinity)-(a.rsMonth??-Infinity)||(b.thrust??-Infinity)-(a.thrust??-Infinity));
+ const top=rows.filter(m=>m.available&&m.symbol!=='RSP').reduce((a,b)=>!a||b.relative>a.relative?b:a,null);
+ const columns=[['RS 1M %','rsMonth'],['RS Thrust %','thrust'],['1M price','priceSpark'],['1M RS','rsSpark'],['50D ATR index','oscillator'],['RS vs RSP','relative'],['Intraday','intraday'],['1D','day'],['1M','month'],['Off 52W H','offHigh']];
+ return '<section class="market-comparison market-comparison-'+key+'"><header><h3>'+title+'</h3><small>'+(key==='segments'?'Small → mid → large cap':top?'<b>'+top.symbol+'</b> strongest 1M return vs RSP':'')+'</small></header><div class="market-table-scroll"><table><thead><tr><th>ETF / market</th>'+columns.map(([label,k])=>'<th>'+(['priceSpark','rsSpark'].includes(k)?label:'<button data-market-sort="'+k+'" data-market-category="'+key+'">'+label+(sort===k?' ↓':'')+'</button>')+'</th>').join('')+'</tr></thead><tbody>'+rows.map(m=>'<tr><td><button data-market-detail="'+m.symbol+'" data-market-category="'+key+'"><b>'+m.symbol+'</b><span>'+escapeHTML(m.name)+'</span></button></td>'+columns.map(([,k])=>{if(k==='priceSpark'||k==='rsSpark')return '<td data-sort-value="'+(finite(k==='priceSpark'?m.month:m.relative)?(k==='priceSpark'?m.month:m.relative):'')+'">'+spark((m.history||[]).slice(-22).map(r=>k==='priceSpark'?r.close:rspMap.get(r.date)?r.close/rspMap.get(r.date):null),k==='rsSpark')+'</td>';const v=m[k];if(k==='oscillator')return '<td><div class="market-table-atr"><b class="'+returnTone(v)+'">'+(finite(v)?signed(v,2):'—')+'</b><div><em></em><i style="left:'+(finite(v)?50+50*v:50)+'%;background:'+(v<0?'#ff3266':'#85d65d')+'"></i></div><small>'+(finite(m.extension)?signed(m.extension,2)+'×':'—')+'</small></div></td>';const scoring=['rsMonth','thrust'].includes(k),positive=scoring?v>=50:v>=0,alpha=finite(v)?Math.min(.3,.04+(scoring?Math.abs(v-50)/200:Math.abs(v)/50)):0;return '<td style="color:'+(positive?'#85d65d':'#ff3266')+';background:rgba('+(positive?'133,214,93,':'255,50,102,')+alpha+')">'+(finite(v)?(scoring?fmt(v,0)+'%':value(v)):'—')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div></section>';};
+ return '<div class="market-flow"><section class="market-chart-grid">'+cards+'</section><div class="market-comparison-grid">'+groupTable('market','Indexes')+groupTable('segments','Market segments')+groupTable('equal_weight','Equal-weight sectors')+groupTable('sectors','SPDR sectors')+groupTable('industries','Industry ETFs')+'</div></div>';
+}
+let flowDailyCharts=[],flowLightweightPromise;
+function loadFlowDailyLibrary(){
+ if(window.LightweightCharts)return Promise.resolve();
+ return flowLightweightPromise??=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='assets/vendor/lightweight-charts-5.0.9.js';script.onload=resolve;script.onerror=reject;document.head.append(script);});
+}
+async function mountFlowOverviewCharts(){
+ flowDailyCharts.forEach(({chart,observer})=>{observer.disconnect();chart.remove();});flowDailyCharts=[];
+ try{await loadFlowDailyLibrary();}catch(error){document.querySelectorAll('[data-market-chart]').forEach(node=>node.textContent='Chart library unavailable');return;}
+ const L=window.LightweightCharts;
+ document.querySelectorAll('[data-market-chart]').forEach(node=>{
+  const m=flowOverviewState?.metrics[node.dataset.marketChart];if(!m?.available){node.textContent='No completed daily bars';return;}
+  node.replaceChildren();node.setAttribute('aria-label',node.dataset.marketChart+' daily candles, one month through '+m.date);
+  const chart=L.createChart(node,{width:node.clientWidth,height:node.clientHeight,layout:{background:{type:'solid',color:'#202020'},textColor:'#aaa89f',fontSize:10,attributionLogo:true},grid:{vertLines:{color:'#2b2b2b'},horzLines:{color:'#2b2b2b'}},rightPriceScale:{mode:L.PriceScaleMode.Logarithmic,borderVisible:false,scaleMargins:{top:.1,bottom:.08}},timeScale:{borderVisible:false,timeVisible:false,rightOffset:1,fixRightEdge:true},crosshair:{mode:L.CrosshairMode.Normal},handleScroll:{mouseWheel:false,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:false},handleScale:{mouseWheel:false,axisPressedMouseMove:true,pinch:true}});
+  const candles=chart.addSeries(L.CandlestickSeries,{upColor:'#85d65d',downColor:'#ff3266',borderVisible:false,wickUpColor:'#85d65d',wickDownColor:'#ff3266',priceLineVisible:false});
+  candles.setData(m.history.map(r=>({time:r.date,open:r.open,high:r.high,low:r.low,close:r.close})));
+  let ema=null;const points=m.history.map(r=>{ema=ema===null?r.close:r.close*.2+ema*.8;return {time:r.date,value:ema};});
+  chart.addSeries(L.LineSeries,{color:'#ffffff',lineWidth:1,lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false}).setData(points);
+  const end=new Date(m.date+'T12:00:00Z'),start=new Date(end);start.setUTCMonth(start.getUTCMonth()-1);const startDate=start.toISOString().slice(0,10),first=m.history.findIndex(r=>r.date>=startDate);
+  const fit=()=>chart.timeScale().setVisibleLogicalRange({from:Math.max(0,first)-.6,to:m.history.length-.2});fit();
+  const observer=new ResizeObserver(()=>{if(!node.isConnected){observer.disconnect();return;}chart.resize(node.clientWidth,node.clientHeight);fit();});observer.observe(node);flowDailyCharts.push({chart,observer});
+ });
+}
+function openMarketDetail(symbol,category){
+ const m=flowOverviewState?.metrics[symbol];if(!m?.available)return;
+ const payload=sectors.holdings?.[symbol]?sectors:themes;
+ flowETFState={payload,etf:symbol,group:m.name,members:[],chartSymbol:symbol,market:true,category:category||flowETFState?.category};flowETFDialog();
+}
 function leadership(){
+ return flowMarketOverview();
  if(leadershipKind==='indexes')return flowIndexPane();
   const payload=leadershipKind==='sectors'?sectors:themes;
   const etf=etfSnapshot(payload), key=flowFrameKey[flowFrame], groups=buildFlowGroups(payload,etf,key);
@@ -865,7 +939,7 @@ function render(){
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
   document.body.classList.toggle('flow-page',route==='leadership');
-  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=['positioning','environment'].includes(route)?'none':'';});
+  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment'].includes(route)||(route==='leadership'&&node.matches('.research-menu')))?'none':'';});
   $('#session-label').textContent=route==='review'?'Debrief snapshot':'Plan for session';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);
@@ -874,7 +948,7 @@ function render(){
   if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
   else if(route!=='positioning'){document.querySelector('#header-date-controls').append(document.querySelector('.session'));}
 
-  if(route==='leadership'&&leadershipKind==='indexes')mountIndexInspection();
+  if(route==='leadership')mountFlowOverviewCharts();
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
@@ -898,6 +972,9 @@ document.addEventListener('click',async event=>{
  if(node.dataset.frame){frame=node.dataset.frame;render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
  if(node.dataset.indexRange){indexFrame=node.dataset.indexRange;render();return;}
+ if(node.dataset.marketDetail){openMarketDetail(node.dataset.marketDetail,node.dataset.marketCategory);return;}
+ if(node.dataset.marketSort){flowOverviewSort[node.dataset.marketCategory]=node.dataset.marketSort;const category=node.dataset.marketCategory,old=document.querySelector('.market-comparison-grid'),holder=document.createElement('div');holder.innerHTML=flowMarketOverview();old.replaceWith(holder.querySelector('.market-comparison-grid'));return;}
+ if(node.dataset.action==='market-definitions'){const guide=document.querySelector('.market-metric-guide');guide.hidden=!guide.hidden;return;}
  if(node.dataset.flowIndex){flowSelection=node.dataset.flowIndex;render();return;}
  if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';if(leadershipKind!=='indexes')flowSelection='';render();return;}
  if(node.dataset.flowMode){flowMode=node.dataset.flowMode;flowSelection='';render();return;}
@@ -970,7 +1047,7 @@ document.addEventListener('pointerout',event=>{const svg=event.target.closest?.(
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
 async function start(){
  try{
- [db,themes,sectors,breadth,spxHistory,cot,context,indexHistory]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/spx_history.json',true),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true),loadJSON('outputs/index_history.json',true)]);
+ [db,themes,sectors,breadth,spxHistory,cot,context,indexHistory,flowMarket]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/spx_history.json',true),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true),loadJSON('outputs/index_history.json',true),loadJSON('outputs/flow_market.json',true)]);
  if(!db.snapshots?.length)throw Error('No saved stock snapshots available.');
  $('#session').innerHTML=db.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+s.date+'</option>').join('');
  $('#session').addEventListener('change',render);render();

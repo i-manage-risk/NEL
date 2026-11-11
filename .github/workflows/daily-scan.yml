@@ -34,6 +34,8 @@ jobs:
         run: python breadth_dashboard.py
       - name: Refresh index histories
         run: python index_history.py
+      - name: Refresh RSP market overview
+        run: python flow_market_data.py
 
       - name: Refresh benchmark context
         continue-on-error: true

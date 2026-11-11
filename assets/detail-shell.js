@@ -1,4 +1,5 @@
 (() => {
+ const tableSortScript=document.createElement('script');tableSortScript.src='assets/table-sort.js?v=1';document.head.append(tableSortScript);
  const page=document.currentScript.dataset.page;
  document.body.classList.add('detail-page');
  const selectedNav=page==='breadth'?'environment':page==='themes'||page==='sectors'?'leadership':'screener';
