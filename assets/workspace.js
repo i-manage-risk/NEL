@@ -756,29 +756,11 @@ function positioning(){
   const card=m=>{
     const p=m.last?.participants||{},crowding=cotCrowding(m.last),label=crowding?m.name+' is '+crowding.label:'',tone=crowding?.tone||'';
     const chartId='cot-tv-'+m.etf.replace(/[^a-z0-9]/gi,'');
-    return '<article id="cot-market-'+escapeHTML(m.code)+'" class="cot-row '+tone+'"><section class="cot-position"><header><div><h3>'+escapeHTML(m.name)+'</h3></div></header>'+(label?'<h4 class="'+tone+'">'+label+'</h4>':'')+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-cot-price="'+escapeHTML(m.code)+'"><span>Loading weekly chart…</span></div>'+cotSpark(m)+'</section></article>';
+    return '<article id="cot-market-'+escapeHTML(m.code)+'" class="cot-row '+tone+'"><section class="cot-position"><header><div><h3>'+escapeHTML(m.name)+'</h3></div></header>'+(label?'<h4 class="'+tone+'">'+label+'</h4>':'')+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-tv-symbol="'+escapeHTML(m.etf)+'" data-tv-interval="W"><span>Loading weekly chart…</span></div>'+cotSpark(m)+'</section></article>';
   };
   const dates=cotDates(),selected=cotDate||dates.at(-1),at=dates.indexOf(selected);
   return '<div class="cot-controls" data-cot-controls><input type="date" aria-label="COT publication week" data-cot-date value="'+selected+'" min="'+dates[0]+'" max="'+dates.at(-1)+'"><button data-action="cot-prev" aria-label="Previous COT report" '+(at<=0?'disabled':'')+'>←</button><button data-action="cot-next" aria-label="Next COT report" '+(at>=dates.length-1?'disabled':'')+'>→</button><button data-action="cot-latest">Latest</button></div><div class="segments cot-lookbacks" data-cot-lookbacks aria-label="Positioning calculation lookback">'+['1y','3y','5y'].map(k=>'<button data-cot-window="'+k+'" aria-pressed="'+(cotWindow===k)+'" class="'+(cotWindow===k?'active':'')+'">'+k.toUpperCase()+'</button>').join('')+'</div><div class="cot-extreme-links cot-header-alerts" data-cot-alerts>'+watches.map(m=>{const c=cotCrowding(m.last);return '<button class="'+c.tone+'" data-cot-jump="'+escapeHTML(m.code)+'">'+escapeHTML(m.name)+' · '+c.label+'</button>';}).join('')+'</div>'+'<section class="cot-rows">'+markets.map(card).join('')+'</section>';
 
-}
-let cotPriceCharts=[];
-async function mountCOTPriceCharts(){
- cotPriceCharts.forEach(({chart,observer})=>{observer.disconnect();chart.remove();});cotPriceCharts=[];
- try{await loadFlowDailyLibrary();}catch(error){return;}
- const L=window.LightweightCharts;
- document.querySelectorAll('[data-cot-price]').forEach(node=>{
-  const market=cot.markets.find(m=>m.code===node.dataset.cotPrice),report=cotHistory(market).at(-1);if(!report)return;
-  const cutoff=cotRelease(report),daily=(market.prices||[]).filter(r=>r.date<=cutoff);
-  if(!daily.length||daily.some(r=>!finite(r.open))){node.textContent='Weekly OHLC history unavailable for this publication week';return;}
-  const buckets=new Map();for(const r of daily){const d=new Date(r.date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);const time=d.toISOString().slice(0,10),bar=buckets.get(time);if(bar){bar.high=Math.max(bar.high,r.high);bar.low=Math.min(bar.low,r.low);bar.close=r.close;}else buckets.set(time,{time,open:r.open,high:r.high,low:r.low,close:r.close});}
-  const weekly=[...buckets.values()];node.replaceChildren();node.setAttribute('aria-label',market.etf+' weekly chart through publication week '+cutoff);
-  const chart=L.createChart(node,{width:node.clientWidth,height:node.clientHeight,layout:{background:{type:'solid',color:'#202020'},textColor:'#aaa89f',fontSize:10,attributionLogo:true},grid:{vertLines:{color:'#2c2c2c'},horzLines:{color:'#2c2c2c'}},rightPriceScale:{mode:L.PriceScaleMode.Logarithmic,borderVisible:false},timeScale:{borderVisible:false,rightOffset:1,fixRightEdge:true},crosshair:{mode:L.CrosshairMode.Normal},handleScroll:{mouseWheel:false,pressedMouseMove:true},handleScale:{mouseWheel:false,pinch:true,axisPressedMouseMove:true}});
-  chart.addSeries(L.CandlestickSeries,{upColor:'#85d65d',downColor:'#ff3266',wickUpColor:'#85d65d',wickDownColor:'#ff3266',borderVisible:false,priceLineVisible:false}).setData(weekly);
-  let ema=null;chart.addSeries(L.LineSeries,{color:'#ffffff',lineWidth:1,lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false}).setData(weekly.map(r=>{ema=ema===null?r.close:.2*r.close+.8*ema;return {time:r.time,value:ema};}));
-  const fit=()=>chart.timeScale().setVisibleLogicalRange({from:Math.max(0,weekly.length-156)-.6,to:weekly.length-.2});fit();
-  const observer=new ResizeObserver(()=>{if(!node.isConnected){observer.disconnect();return;}chart.resize(node.clientWidth,node.clientHeight);fit();});observer.observe(node);cotPriceCharts.push({chart,observer});
- });
 }
 function legacyPositioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -978,7 +960,6 @@ function render(){
 
   if(route==='leadership')mountFlowOverviewCharts();
   mountTradingViewCharts();
-  if(route==='positioning')mountCOTPriceCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
     if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);updateCOTReadings(row.querySelector('[data-cot-chart]'),-1);}
