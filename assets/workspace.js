@@ -840,15 +840,22 @@ function chartGrid(rows,kind){
 }
 // One visual contract for every hosted TradingView chart (cards and popups).
 function createTradingView(options){
- return new TradingView.widget({...options,toolbar_bg:'#202020',backgroundColor:'#202020',
+ // STD;EMA resolves to a hosted Pine study whose defaults ignore these overrides.
+ // The native EMA exposes its plot defaults and supports an explicit 9-bar input.
+ return new TradingView.widget({...options,
+  studies:[{id:'MAExp@tv-basicstudies',inputs:{length:9,source:'close'}}],
+  toolbar_bg:'#202020',backgroundColor:'#202020',
   overrides:{...options.overrides,'paneProperties.backgroundType':'solid','paneProperties.background':'#202020'},
-  studies_overrides:{...options.studies_overrides,
+  studies_overrides:{
+   'moving average exponential.length':9,
    'moving average exponential.plot.color':'#FFFFFF',
    'moving average exponential.plot.linewidth':2,
-   'moving average exponential.0.plot.color':'#FFFFFF',
-   'moving average exponential.0.plot.linewidth':2,
-   'moving average exponential.ma.color':'#FFFFFF',
-   'EMA.plot.color':'#FFFFFF','EMA.ma.color':'#FFFFFF'}
+   'moving average exponential.EMA.color':'#FFFFFF',
+   'moving average exponential.EMA.linewidth':2,
+   'EMA.ma.color':'#FFFFFF','EMA.ma.linewidth':2,
+   'EMA.plot.color':'#FFFFFF','EMA.plot.linewidth':2,
+   'EMA.EMA.color':'#FFFFFF','EMA.EMA.linewidth':2,
+   'volume.volume.transparency':100,'volume.volume ma.transparency':100}
  });
 }
 function loadTradingView(){
