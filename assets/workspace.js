@@ -12,8 +12,9 @@ const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Mon
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
 const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',positioning:'Crowding',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
-let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
+let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
+let indexFrame='1y',flowIndexView=null;
 let flowETFState=null, flowWidgetSerial=0;
 let filters={search:'',group:'',adr:5,extension:4,above9d:false,above9w:false,above9m:false,liquid:false,superLiquid:false,tight:false};
 let obcFilters={search:'',group:'',adr:'',extension:'',liquid:false,superLiquid:false};
@@ -167,11 +168,13 @@ function flowMap(groups,key){
   // A 95th-percentile scale identifies values that would flatten the map.
   // Those values are reported in the outlier panel instead of crowding the scatter field.
   const metrics=flowMapMetrics(groups,key), {x,y,maxX,maxY}=metrics, sessionMap=key==='one_day';
-  const dots=groups.filter(group=>!metrics.clipped(group)).map(group=>{const xValue=x(group),yValue=y(group),left=50+45*Number(xValue)/maxX,topPos=50-42*Number(yValue)/maxY,active=flowSelection===group.group,edge=left>74?' edge-right':'';const tooltip='<span><b>'+escapeHTML(group.group)+'</b></span>';return '<button class="flow-dot '+(active?'active ':'')+(xValue>=0?'positive':'negative')+edge+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+'">'+tooltip+'</button>';}).join('');
+  const scaleX=Math.max(1,median(groups.map(g=>Math.abs(Number(x(g))))))/2,scaleY=Math.max(1,median(groups.map(g=>Math.abs(Number(y(g))))))/2;
+  const limitX=Math.max(1,...groups.map(g=>Math.asinh(Math.abs(Number(x(g)))/scaleX))),limitY=Math.max(1,...groups.map(g=>Math.asinh(Math.abs(Number(y(g)))/scaleY)));
+  const dots=groups.map(group=>{const xValue=x(group),yValue=y(group),left=50+44*Math.asinh(Number(xValue)/scaleX)/limitX,topPos=50-40*Math.asinh(Number(yValue)/scaleY)/limitY,active=flowSelection===group.group,edge=left>74?' edge-right':'';const tooltip='<span><b>'+escapeHTML(group.group)+'</b></span>';return '<button class="flow-dot '+(active?'active ':'')+(xValue>=0?'positive':'negative')+edge+'" data-flow-group="'+escapeHTML(group.group)+'" style="left:'+Math.max(4,Math.min(96,left))+'%;top:'+Math.max(7,Math.min(93,topPos))+'%" aria-label="'+escapeHTML(group.group)+'">'+tooltip+'</button>';}).join('');
   const xTitle=sessionMap?'1D raw return':finite(groups[0].relative)?flowLabels[key]+' return vs SPX':'Median '+flowLabels[key]+' return';
   const yTitle=sessionMap?'1W raw return':flowLabels[groups[0].momentum_key]+' return vs SPX';
-  const outlierNote=metrics.outliers.length?'<span class="flow-outlier-note">'+metrics.outliers.length+' outlier'+(metrics.outliers.length===1?'':'s')+' listed below</span>':'';
-  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Relative strength and near-term momentum</h3><p>Each plotted point is a theme or sector. Hover a point for its readings; extreme values are kept in the outlier panel below.</p></div>'+outlierNote+'</div><div class="flow-map-plot"><div class="flow-y-label">Y · '+escapeHTML(yTitle)+' ↑</div><div class="flow-x-axis">X · '+escapeHTML(xTitle)+' →</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
+  const outlierNote='<span class="flow-outlier-note">'+groups.length+' groups · compressed axes</span>';
+  return '<section class="flow-map"><div class="flow-map-head"><div><span class="eyebrow">STRENGTH MAP</span><h3>Relative strength and near-term momentum</h3><p>Every group is shown. Symmetric compressed axes preserve direction and ordering while fitting extreme readings.</p></div>'+outlierNote+'</div><div class="flow-map-plot"><div class="flow-y-label">Y · '+escapeHTML(yTitle)+' ↑</div><div class="flow-x-axis">X · '+escapeHTML(xTitle)+' →</div><i class="flow-v-axis"></i><i class="flow-h-axis"></i>'+dots+'</div></section>';
 }
 function flowHash(value){return [...String(value)].reduce((hash,char)=>(hash*31+char.charCodeAt(0))>>>0,7);}
 function flowExtensionMap(payload,snapshot){
@@ -349,7 +352,7 @@ function breadthOpacity(r,key){return {'sb-green':.65,'sb-dark-green':1,'sb-red'
 function breadthTape(rows,keys,colors,kind='line',reference=null){
   const W=1000,H=380,L=18,R=910,T=24,B=330;
   const references=reference===null?[]:(Array.isArray(reference)?reference:[{value:reference}]).filter(item=>finite(typeof item==='object'?item.value:item));
-  if(keys.length===1&&keys[0]==='sp'){const sample=rows.filter(r=>finite(r.sp));if(sample.length)references.push({value:sample.reduce((sum,r)=>sum+Number(r.sp),0)/sample.length,label:'Range average',color:'#aaa89f'});}
+  if(keys.length===1&&['sp','indexClose'].includes(keys[0])){const key=keys[0],sample=rows.filter(r=>finite(r[key]));if(sample.length)references.push({value:sample.reduce((sum,r)=>sum+Number(r[key]),0)/sample.length,label:'Range average',color:'#aaa89f'});}
   const referenceValues=references.map(item=>Number(typeof item==='object'?item.value:item));
   const values=rows.flatMap(r=>keys.filter(k=>finite(r[k])).map(k=>Number(r[k])*(kind==='bars'&&k.startsWith('down')?-1:1)));
   if(!values.length)return '<p class="empty">No readings available.</p>';
@@ -368,9 +371,9 @@ function breadthTape(rows,keys,colors,kind='line',reference=null){
       svg+=rows.map((r,i)=>{if(!finite(r[key]))return '';const v=Number(r[key])*(j?-1:1);return '<rect x="'+(x(i)-step*.28)+'" y="'+Math.min(y(v),y(0))+'" width="'+step*.56+'" height="'+Math.max(1,Math.abs(y(v)-y(0)))+'" fill="'+(key.startsWith('down')?'#ff3266':'#85d65d')+'" fill-opacity="1"/>';}).join('');
     }else{
       let pen=false;const d=rows.map((r,i)=>{if(!finite(r[key])){pen=false;return '';}const command=pen?'L':'M';pen=true;return command+x(i)+','+y(Number(r[key]));}).join(' ');
-      if(!(keys.length===1&&['ratio5','ratio10','t2108','sp'].includes(key)))svg+='<path d="'+d+'" fill="none" stroke="'+(keys.length===1?'#f5f2e8':colors[j])+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';
-      if(keys.length===1&&['ratio5','ratio10','t2108','sp'].includes(key)){
-       const condition=r=>breadthInk(r,key);
+      if(!(keys.length===1&&['ratio5','ratio10','t2108','sp','indexClose'].includes(key)))svg+='<path d="'+d+'" fill="none" stroke="'+(keys.length===1?'#f5f2e8':colors[j])+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';
+      if(keys.length===1&&['ratio5','ratio10','t2108','sp','indexClose'].includes(key)){
+       const average=key==='indexClose'?rows.reduce((sum,r)=>sum+Number(r[key]),0)/rows.length:null;const condition=r=>key==='indexClose'?(Number(r[key])>average?'#85d65d':Number(r[key])<average?'#ff3266':'#f5f2e8'):breadthInk(r,key);
        for(let i=1;i<rows.length;i++){if(!finite(rows[i-1][key])||!finite(rows[i][key]))continue;const color=condition(rows[i]);if(color)svg+='<path d="M'+x(i-1)+','+y(Number(rows[i-1][key]))+' L'+x(i)+','+y(Number(rows[i][key]))+'" fill="none" stroke="'+color+'" stroke-width="2.3" vector-effect="non-scaling-stroke"/>';}
       }
     }
@@ -451,22 +454,73 @@ function environment(){
  return '<div class="bm-page bm-redesign"><header class="bm-compact-header"><h2>Breadth</h2><span data-bm-date>Close '+b.date+'</span><label>History <input type="date" data-breadth-date value="'+b.date+'" min="'+breadth.map(r=>r.date).sort()[0]+'" max="'+breadth.map(r=>r.date).sort().at(-1)+'"></label><div class="segments">'+[[5,'1W','Fast'],[21,'1M','Swing'],[63,'3M','Trend'],[126,'6M','Cycle'],[252,'1Y','Long'],[756,'3Y','Regime'],[1260,'5Y','Secular'],[100000,'All time','Full history']].map(([n,label,role])=>'<button data-action="breadth-window" data-window="'+n+'" class="'+(breadthWindow===n?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('')+'</div></header><div class="bm-main-grid"><section class="bm-panel"><h3>Market & participation</h3>'+market+'</section><section class="bm-panel"><h3>Buying & selling pressure</h3>'+pressure+'<div class="bm-pressure-note">Daily counts show intensity. The 5D and 10D ratios show whether buying or selling is persisting.</div></section></div><div class="bm-trend-head"><h3>Trend participation</h3><small>Historical ranks use all available readings through the inspected date.</small></div><div class="bm-trend-grid">'+trend+'</div><details class="bm-details"><summary>Daily readings</summary><div class="table-box"><table><thead><tr><th>Date</th><th>SPX</th><th>Up 4%</th><th>Down 4%</th><th>5D</th><th>10D</th><th>T2108</th></tr></thead><tbody>'+[].map(r=>'<tr><td>'+r.date+'</td>'+['sp','up4','down4','ratio5','ratio10','t2108'].map(k=>'<td>'+fmt(r[k],k.includes('4')?0:2)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details></div>';
 }
 
+function flowIndexPane(){
+ const end=asof(),n=({'1w':5,'1m':21,'3m':63,'6m':126,'1y':252,'3y':756,'5y':1260,'all':100000})[indexFrame]||252;
+ const markets=Object.entries(indexHistory).map(([id,m])=>({...m,id,history:(m.history||[]).filter(r=>r.date<=end)})).filter(m=>m.history.length);
+ const active=markets.find(m=>m.id===flowSelection)||markets[0];
+ const tabs='<div class="segments">'+[['themes','Themes'],['sectors','Sectors'],['indexes','Indexes']].map(([id,label])=>'<button data-leadership="'+id+'" class="'+(id===leadershipKind?'active':'')+'">'+label+'</button>').join('')+'</div>';
+ if(!active)return '<div class="flow-console-tabs">'+tabs+'</div><p>Index history unavailable.</p>';
+ const last=m=>m.history.at(-1),change=(m,count)=>{const h=m.history,prior=h[Math.max(0,h.length-1-count)];return prior?100*(last(m).close/prior.close-1):null;};
+ const gauge=m=>{const score=last(m).oscillator;return '<span data-index-gauge="'+m.id+'" class="flow-index-gauge"><i style="left:'+Math.max(0,Math.min(100,50+50*(Number(score)||0)))+'%;background:'+(score<0?'#ff3266':'#85d65d')+'"></i><em></em></span><span class="flow-index-gauge-label"><small>−1</small><b>'+ (finite(score)?signed(score,2):'—')+'</b><small>+1</small></span>';};
+ const list=markets.map(m=>'<button data-flow-index="'+m.id+'" class="flow-index-row '+(m.id===active.id?'active':'')+'"><b>'+escapeHTML(m.name)+'</b><strong data-index-quote="'+m.id+'" class="'+returnTone(change(m,1))+'">'+fmt(last(m).close,2)+' ('+signed(change(m,1),2)+'%)</strong>'+gauge(m)+'</button>').join('');
+ const rangeOptions=[['1w','1W','Fast'],['1m','1M','Swing'],['3m','3M','Trend'],['6m','6M','Cycle'],['1y','1Y','Long'],['3y','3Y','Regime'],['5y','5Y','Secular'],['all','All time','Full history']];
+ const ranges=rangeOptions.map(([id,label,role])=>'<button data-index-range="'+id+'" class="'+(indexFrame===id?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('');
+ const rows=active.history.slice(-n-1).map(r=>({date:r.date,indexClose:r.close}));
+ flowIndexView={markets,active,rows,n};
+
+ const columns=[['1D',1],['1W',5],['1M',21],['3M',63],['6M',126],['1Y',252]];
+ return '<div class="flow-console flow-index-console"><div class="flow-console-top"><section class="flow-console-leaders"><div class="flow-console-tabs">'+tabs+'</div><div class="flow-index-list">'+list+'</div><p class="flow-index-note">50D ATR-extension index · −1 / 0 / +1<br>History: '+active.history[0].date+' to '+last(active).date+'</p></section><section class="flow-console-chart"><div class="flow-console-chartbar"><b>'+escapeHTML(active.name)+'</b><div class="segments">'+ranges+'</div></div><div class="flow-index-readout"><strong data-index-current class="'+returnTone(change(active,1))+'">'+fmt(last(active).close,2)+' ('+signed(change(active,1),2)+'%)</strong><span data-index-performance></span><small data-index-inspected></small></div>'+breadthTape(rows,['indexClose'],['#f5f2e8'])+'</section></div><section class="flow-ranking"><div class="table-box"><table><thead><tr><th>Index</th><th>Close</th>'+columns.map(([label])=>'<th>'+label+'</th>').join('')+'<th>50D ATR ext</th><th>Extension index</th></tr></thead><tbody>'+markets.map(m=>'<tr data-flow-index="'+m.id+'"><td>'+escapeHTML(m.name)+'</td><td>'+fmt(last(m).close,2)+'</td>'+columns.map(([,days])=>'<td class="'+returnTone(change(m,days))+'">'+signed(change(m,days),2)+'%</td>').join('')+'<td>'+fmt(last(m).extension,2)+'×</td><td>'+signed(last(m).oscillator,2)+'</td></tr>').join('')+'</tbody></table></div></section></div>';
+}
+function mountIndexInspection(){
+ const state=flowIndexView,root=document.querySelector('.flow-index-console'),svg=root?.querySelector('.bm-tape');if(!state||!svg)return;
+ svg.querySelectorAll('title').forEach(node=>node.remove());
+ const barAt=(market,date)=>{let low=0,high=market.history.length;while(low<high){const mid=(low+high)>>1;if(market.history[mid].date<=date)low=mid+1;else high=mid;}return low-1;};
+ const periods={'1w':'1 week','1m':'1 month','3m':'3 month','6m':'6 month','1y':'1 year','3y':'3 year','5y':'5 year',all:'All time'};
+ let previousDate='',pinned=-1,frame=0;
+ const update=index=>{
+ const date=index<0?state.rows.at(-1).date:state.rows[index].date;if(date===previousDate)return;previousDate=date;
+ state.markets.forEach(m=>{const i=barAt(m,date),bar=m.history[i],prior=m.history[i-1];if(!bar)return;
+ const daily=prior?100*(bar.close/prior.close-1):null,color=daily===null||daily===0?'#f5f2e8':daily>0?'#85d65d':'#ff3266';
+ const quote=root.querySelector('[data-index-quote="'+m.id+'"]');if(quote){quote.textContent=fmt(bar.close,2)+(daily===null?'':' ('+signed(daily,2)+'%)');quote.style.color=color;}
+ const gauge=root.querySelector('[data-index-gauge="'+m.id+'"]');if(gauge){const score=bar.oscillator,marker=gauge.querySelector('i');marker.style.left=(50+50*(Number(score)||0))+'%';marker.style.background=score<0?'#ff3266':score>0?'#85d65d':'#f5f2e8';gauge.nextElementSibling.querySelector('b').textContent=finite(score)?signed(score,2):'—';}
+ if(m.id===state.active.id){const current=root.querySelector('[data-index-current]');current.textContent=fmt(bar.close,2)+(daily===null?'':' ('+signed(daily,2)+'%)');current.style.color=color;
+ const performance=100*(bar.close/state.rows[0].indexClose-1),perf=root.querySelector('[data-index-performance]');perf.textContent=periods[indexFrame]+' Performance: '+signed(performance,2)+'%';perf.style.color=performance>0?'#85d65d':performance<0?'#ff3266':'#f5f2e8';
+ root.querySelector('[data-index-inspected]').textContent=(index<0?'Close ':'Inspecting ')+bar.date+' · ATR extension '+fmt(bar.extension,2)+'×';}
+ });
+ svg.querySelectorAll('.bm-hit.bm-linked-active').forEach(node=>node.classList.remove('bm-linked-active'));if(index>=0)svg.querySelector('[data-bm-index="'+index+'"]')?.classList.add('bm-linked-active');
+ };
+ document.onkeydown=event=>{if(event.key==='Escape'&&document.querySelector('.flow-index-console')){pinned=-1;update(-1);}};
+ const panel=root.querySelector('.flow-console-chart');panel.style.position='relative';const overlay=document.createElement('div');overlay.className='bm-axis-crosshair';overlay.hidden=true;overlay.innerHTML='<i></i><span class="bm-axis-value"></span><span class="bm-axis-date"></span>';panel.append(overlay);
+ const inspect=event=>{const point=svg.createSVGPoint();point.x=event.clientX;point.y=event.clientY;const local=point.matrixTransform(svg.getScreenCTM().inverse()),i=Math.max(0,Math.min(state.rows.length-1,Math.floor((local.x-18)/892*state.rows.length)));svg.dataset.index=i;update(i);
+ const box=svg.getBoundingClientRect(),parent=panel.getBoundingClientRect(),y=Math.max(24,Math.min(330,local.y)),top=box.top-parent.top+y/380*box.height,left=box.left-parent.left,value=Number(svg.dataset.high)-(y-24)/306*(Number(svg.dataset.high)-Number(svg.dataset.low));overlay.hidden=false;
+ const line=overlay.querySelector('i');line.style.cssText='top:'+top+'px;left:'+(left+box.width*.018)+'px;width:'+box.width*.892+'px';const valueLabel=overlay.querySelector('.bm-axis-value');valueLabel.textContent=fmt(value,2);valueLabel.style.cssText='top:'+top+'px;left:'+(left+box.width*.91+5)+'px';const dateLabel=overlay.querySelector('.bm-axis-date');dateLabel.textContent=state.rows[i].date;dateLabel.style.cssText='top:'+(box.top-parent.top+box.height*330/380+6)+'px;left:'+(left+box.width*(18+892*(i+.5)/state.rows.length)/1000)+'px';};
+ svg.addEventListener('pointermove',event=>{if(frame)cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{frame=0;inspect(event);});},{passive:true});svg.addEventListener('click',()=>{pinned=Number(svg.dataset.index??-1);});svg.addEventListener('pointerleave',()=>{cancelAnimationFrame(frame);frame=0;overlay.hidden=true;update(pinned);});
+ const size=()=>{const box=svg.getBoundingClientRect();svg.querySelectorAll('text').forEach(text=>{text.style.transformBox='fill-box';text.style.transformOrigin='center';text.style.transform='scale('+1000/box.width+','+380/box.height+')';});};requestAnimationFrame(size);update(-1);
+}
 function leadership(){
+ if(leadershipKind==='indexes')return flowIndexPane();
   const payload=leadershipKind==='sectors'?sectors:themes;
   const etf=etfSnapshot(payload), key=flowFrameKey[flowFrame], groups=buildFlowGroups(payload,etf,key);
   const snapshots=payload.snapshots?.filter(snapshot=>snapshot.date<=etf?.date)||[];
   const previous=snapshots.at(-6), previousRanks=previous?flowRanks(payload,previous,key):new Map();
-  const labels={themes:'Themes',sectors:'Sectors'};
+  const labels={themes:'Themes',sectors:'Sectors',indexes:'Indexes'};
   const top=groups[0];
   if(!flowSelection||!groups.some(group=>group.group===flowSelection))flowSelection=top?.group||'';
   const selectedGroup=groups.find(group=>group.group===flowSelection);
   const extensionMode=flowMode==='extension';
-  const body=extensionMode?flowExtensionMap(payload,etf):flowMap(groups,key)+flowGroupPanel(selectedGroup,groups,key)+flowTable(groups,key,previousRanks);
+
   const flowHorizons=[['1d','1D','Session'],['1w','1W','Fast'],['1m','1M','Swing'],['3m','3M','Trend'],['6m','6M','Cycle'],['1y','1Y','Long']];
   const flowHorizon='<div class="horizon"><span class="horizon-label">Map view</span><div class="segments" aria-label="Map view">'+flowHorizons.map(([id,label,role])=>'<button data-flow-frame="'+id+'" class="'+(!extensionMode&&flowFrame===id?'active':'')+'"><b>'+label+'</b><small>'+role+'</small></button>').join('')+'<span class="flow-mode-divider" aria-hidden="true"></span><button data-flow-mode="extension" class="flow-extension-button '+(extensionMode?'active':'')+'"><b>Extension</b><small>50D SMA</small></button></div></div>';
   const pageTitle=extensionMode?'50D SMA extension':top?.group||'Leadership map';
   const pageCopy=extensionMode?'Raw ETF extension distribution. This is a separate technical-state view, not a performance timeframe.':'Strongest '+(leadershipKind==='themes'?'theme':'sector')+' in the selected map view.';
-  return '<section class="page-lead"><div><span class="eyebrow">CAPITAL FLOW · '+escapeHTML(etf?.date||asof())+'</span><h2>'+escapeHTML(pageTitle)+'</h2><p>'+pageCopy+'</p></div></section><div class="toolbar"><div class="segments leadership-tabs">'+['themes','sectors'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><span class="push"></span>'+flowHorizon+'</div><section class="flow-stage">'+body+'</section>';
+  const leaderLimit=leadershipKind==='sectors'?3:5;
+  const leaders=groups.slice(0,leaderLimit);
+  const ranking=leaders.map(group=>'<button class="flow-rank-item '+(group.group===flowSelection?'active':'')+'" data-flow-group="'+escapeHTML(group.group)+'"><span class="flow-rank-number">'+group.rank+'</span><b>'+escapeHTML(group.group)+'</b><strong class="'+returnTone(group.performance)+'">'+pct(group.performance)+'</strong><span class="flow-rank-bar"><i style="width:'+Math.min(100,Math.abs(group.performance)/Math.max(...groups.map(g=>Math.abs(g.performance)),1)*100)+'%;background:'+(group.performance>=0?'#85d65d':'#ff3266')+'"></i></span></button>').join('');
+  const selected=selectedGroup?'<div class="flow-selected-summary"><div><b>'+escapeHTML(selectedGroup.group)+'</b><span class="'+returnTone(selectedGroup.performance)+'">'+pct(selectedGroup.performance)+'</span></div><div class="flow-etf-chips">'+selectedGroup.members.map(row=>'<button data-flow-etf="'+escapeHTML(row.symbol)+'" data-flow-group="'+escapeHTML(selectedGroup.group)+'">'+escapeHTML(row.symbol)+' <span class="'+returnTone(row[key])+'">'+pct(row[key])+'</span></button>').join('')+'</div></div>':'';
+  const metrics=flowMapMetrics(groups,key);
+  const extremes='';
+  return '<div class="flow-console"><div class="flow-console-top"><section class="flow-console-leaders"><div class="flow-console-tabs"><div class="segments">'+['themes','sectors','indexes'].map(k=>'<button data-leadership="'+k+'" class="'+(leadershipKind===k?'active':'')+'">'+labels[k]+'</button>').join('')+'</div><small>Top '+leaderLimit+' · '+flowLabels[key]+'</small></div><div class="flow-leader-list">'+ranking+'</div>'+selected+extremes+'</section><section class="flow-console-chart"><div class="flow-console-chartbar">'+flowHorizon+'</div>'+(extensionMode?flowExtensionMap(payload,etf):flowMap(groups,key))+'</section></div>'+flowTable(groups,key,previousRanks)+'</div>';
+
 }
 function arrangeBreadthDashboard(){
  const page=document.querySelector('.bm-redesign');if(!page)return;
@@ -810,6 +864,7 @@ function render(){
   const savedSession=document.querySelector('#header-date-controls .session');if(savedSession)document.querySelector('.workspace-top').append(savedSession);document.querySelector('#header-date-controls').replaceChildren();
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
+  document.body.classList.toggle('flow-page',route==='leadership');
   document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=['positioning','environment'].includes(route)?'none':'';});
   $('#session-label').textContent=route==='review'?'Debrief snapshot':'Plan for session';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
@@ -819,6 +874,7 @@ function render(){
   if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
   else if(route!=='positioning'){document.querySelector('#header-date-controls').append(document.querySelector('.session'));}
 
+  if(route==='leadership'&&leadershipKind==='indexes')mountIndexInspection();
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
@@ -835,13 +891,15 @@ function showStock(symbol,kind){
   $('#stock-dialog').showModal();
 }
 document.addEventListener('click',async event=>{
- const node=event.target.closest('button,[data-filter-group],[data-flow-group]');if(!node)return;
+ const node=event.target.closest('button,[data-filter-group],[data-flow-group],[data-flow-index]');if(!node)return;
  if(node.dataset.cotJump){document.getElementById('cot-market-'+node.dataset.cotJump)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
  if(node.dataset.flowHolding&&flowETFState){flowETFState.chartSymbol=node.dataset.flowHolding;flowETFDialog();return;}
  if(node.dataset.flowEtf){openFlowETF(node.dataset.flowEtf,node.dataset.flowGroup);return;}
  if(node.dataset.frame){frame=node.dataset.frame;render();}
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
- if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';flowSelection='';render();return;}
+ if(node.dataset.indexRange){indexFrame=node.dataset.indexRange;render();return;}
+ if(node.dataset.flowIndex){flowSelection=node.dataset.flowIndex;render();return;}
+ if(node.dataset.flowFrame){flowFrame=node.dataset.flowFrame;flowMode='strength';if(leadershipKind!=='indexes')flowSelection='';render();return;}
  if(node.dataset.flowMode){flowMode=node.dataset.flowMode;flowSelection='';render();return;}
  if(node.dataset.flowGroup){flowSelection=node.dataset.flowGroup;render();return;}
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
@@ -912,7 +970,7 @@ document.addEventListener('pointerout',event=>{const svg=event.target.closest?.(
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
 async function start(){
  try{
- [db,themes,sectors,breadth,spxHistory,cot,context]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/spx_history.json',true),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true)]);
+ [db,themes,sectors,breadth,spxHistory,cot,context,indexHistory]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/spx_history.json',true),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true),loadJSON('outputs/index_history.json',true)]);
  if(!db.snapshots?.length)throw Error('No saved stock snapshots available.');
  $('#session').innerHTML=db.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+s.date+'</option>').join('');
  $('#session').addEventListener('change',render);render();

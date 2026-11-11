@@ -32,6 +32,8 @@ jobs:
 
       - name: Refresh daily breadth monitor
         run: python breadth_dashboard.py
+      - name: Refresh index histories
+        run: python index_history.py
 
       - name: Refresh benchmark context
         continue-on-error: true
