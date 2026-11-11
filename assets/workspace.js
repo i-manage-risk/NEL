@@ -10,7 +10,7 @@ const money = v => finite(v) ? '$'+fmt(v/(v>=1e9?1e9:1e6),1)+(v>=1e9?'B':'M') : 
 const frames = { '1w':'1W', '1m':'1M', '3m':'3M', '6m':'6M', '1y':'1Y' };
 const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Months', '1y':'1 Year' };
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
-const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',positioning:'Crowding',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
+const titles = {briefing:'Now',environment:'Breadth',leadership:'Capital flow',positioning:'Positioning',screener:'Stock radar',review:'Session replay',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, flowMarket={}, cot={}, context={}, route='briefing', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
@@ -22,7 +22,11 @@ let overrides=store.get('themes',{}), selected=null, screenerView='kk';
 let kkSort={key:'strength',direction:'desc'};
 let screenerDisplay='list', tvObserver=null, tvScriptPromise=null;
 let breadthMetric='daily', breadthRange='3m';
-const cotWindow='5y';
+let cotWindow='5y',cotDate='';
+const cotPeriods={'1y':52,'3y':156,'5y':260};
+const cotRelease=r=>{if(r.release_date)return r.release_date;const d=new Date(r.date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+(5-d.getUTCDay()+7)%7);return d.toISOString().slice(0,10);};
+const cotDates=()=>[...new Set((cot.markets||[]).flatMap(m=>m.history.map(cotRelease)))].sort();
+const cotHistory=m=>m.history.filter(r=>(!cotDate||cotRelease(r)<=cotDate)&&finite(r.participants.large?.net));
 const cotParticipant='all';const cotRanges={"5y":true};
 const session = () => db.snapshots?.find(s=>s.date===$('#session').value) || db.snapshots?.at(-1);
 const asof = () => session()?.closeDate || session()?.date;
@@ -722,20 +726,27 @@ function arrangeBreadthDashboard(){
  const range=page.querySelector('.bm-compact-header .segments');range.classList.add('bm-chart-ranges');range.setAttribute('aria-label','Chart range');(entries.find(([name])=>name===breadthSelected)?.[1].querySelector('.bm-chart-label')||workspace).append(range);
 }
 
+function cotCrowding(row,window=cotWindow){
+ const large=row?.participants?.large?.indices?.[window],commercials=row?.participants?.commercials?.indices?.[window];
+ if(!finite(large)||!finite(commercials))return null;
+ if(large>90&&commercials<5)return {label:'Crowded Long',tone:'negative'};
+ if(large<10&&commercials>95)return {label:'Crowded Short',tone:'positive'};
+ return null;
+}
 function positioning(){
   if(!cot.markets?.length)return '<p class="empty">CFTC positioning is unavailable.</p>';
   const participants=[['large','Large specs','#00bcd4'],['small','Small specs','#ff9800'],['commercials','Commercials','#e040fb']];
   const labels={"1y":"1 year","3y":"3 years","5y":"5 years"};
   const index=(key,row)=>row?.participants?.[key]?.indices?.[cotWindow]??null;
   const extreme=v=>finite(v)&&(Number(v)<=5||Number(v)>=95);
-  const markets=cot.markets.map(m=>({...m,last:m.history.at(-1),prior:m.history.at(-2)})).sort((a,b)=>{
+  const markets=cot.markets.map(m=>{const history=cotHistory(m);return {...m,history,last:history.at(-1),prior:history.at(-2)};}).filter(m=>m.last).sort((a,b)=>{
     const score=m=>{const v=index('large',m.last);return finite(v)?Number(v):-1;};
     const groupOrder={'Equity index':0,'Crypto':1,'Metals':2,'Energy':3};
     return (groupOrder[a.group]??3)-(groupOrder[b.group]??3)||score(b)-score(a)||a.name.localeCompare(b.name);
   });
   // The framework is deliberately based on large-spec extremes. Small specs and
   // commercials remain context, rather than independent directional signals.
-  const watches=markets.filter(m=>extreme(index('large',m.last)));
+  const watches=markets.filter(m=>cotCrowding(m.last));
   const latest=markets.map(m=>m.last?.date).filter(Boolean).sort().at(-1);
   const meter=(m,k,label,color)=>{
     const v=index(k,m.last),prev=index(k,m.prior),valid=finite(v),delta=valid&&finite(prev)?Number(v)-Number(prev):null;
@@ -743,15 +754,31 @@ function positioning(){
     return '<div class="cot-participant" style="--party-color:'+color+'"><div><b>'+label+'</b><strong style="color:'+color+'">'+(valid?fmt(v,1):'—')+'</strong></div><div class="cot-track"><i class="cot-zone low"></i><i class="cot-zone high"></i>'+(valid?'<b style="left:'+Math.max(0,Math.min(100,v))+'%;background:'+color+'"></b>':'')+'</div><div><small>'+state+'</small><small>'+(delta===null?'':signed(delta,1)+' pts this week')+'</small></div></div>';
   };
   const card=m=>{
-    const p=m.last?.participants||{},largeIndex=index('large',m.last),crypto=m.group==='Crypto';
-    const low=finite(largeIndex)&&largeIndex<=5,high=finite(largeIndex)&&largeIndex>=95;
-    const label=!finite(largeIndex)?'Insufficient history':!low&&!high?'No large-spec extreme':crypto?(low?'Bearish trend-follow watch':'Bullish trend-follow watch'):(low?'Bullish fade watch':'Bearish fade watch');
-    const tone=(!low&&!high)?'':(crypto?(low?'negative':'positive'):(low?'positive':'negative'));
-    const confirmation=!finite(largeIndex)?'Not enough history for this comparison.':!low&&!high?'Large specs are within their selected historical range. Small specs and commercials are context only.':crypto?(low?'Large specs are near their range low. Crypto uses a trend-following interpretation.':'Large specs are near their range high. Crypto uses a trend-following interpretation.'):(low?'Large specs are near their range low. Non-crypto markets use a contrarian fade interpretation.':'Large specs are near their range high. Non-crypto markets use a contrarian fade interpretation.');
+    const p=m.last?.participants||{},crowding=cotCrowding(m.last),label=crowding?m.name+' is '+crowding.label:'',tone=crowding?.tone||'';
     const chartId='cot-tv-'+m.etf.replace(/[^a-z0-9]/gi,'');
-    return '<article id="cot-market-'+escapeHTML(m.code)+'" class="cot-row '+tone+'"><section class="cot-position"><header><div><h3>'+escapeHTML(m.name)+'</h3></div></header><h4 class="'+tone+'">'+label+'</h4>'+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-tv-symbol="'+escapeHTML(m.etf)+'" data-tv-interval="W"><span>Loading weekly chart…</span></div>'+cotSpark(m)+'</section></article>';
+    return '<article id="cot-market-'+escapeHTML(m.code)+'" class="cot-row '+tone+'"><section class="cot-position"><header><div><h3>'+escapeHTML(m.name)+'</h3></div></header>'+(label?'<h4 class="'+tone+'">'+label+'</h4>':'')+participants.map(([k,l,c])=>meter(m,k,l,c)).join('')+'<div class="cot-actuals">'+participants.map(([k,l])=>'<span>'+l+' <b>'+signed(p[k]?.net,0)+'</b><small>'+signed(p[k]?.netPctOI)+'% OI</small></span>').join('')+'</div></section><section class="cot-visual"><div id="'+chartId+'" class="tv-chart cot-tv-chart" data-cot-price="'+escapeHTML(m.code)+'"><span>Loading weekly chart…</span></div>'+cotSpark(m)+'</section></article>';
   };
-  return '<section class="cot-page-header"><div><h2>Positioning</h2><small>5-year range · CFTC · '+escapeHTML(latest||'Unavailable')+'</small></div><div class="cot-extreme-links"><span>'+watches.length+' large-spec extreme'+(watches.length===1?'':'s')+'</span>'+watches.map(m=>'<button data-cot-jump="'+escapeHTML(m.code)+'">'+escapeHTML(m.name)+' · '+fmt(index('large',m.last),1)+'</button>').join('')+'</div></section><section class="cot-rows">'+markets.map(card).join('')+'</section><details class="evidence-drawer"><summary>How to read this · methodology & sources</summary><p>Each reading is a range location for net position: 100 × (current net − selected-period minimum) / (maximum − minimum). It is not the percentage of traders on either side, a probability, or a trade instruction.</p><p>Large-spec extremes drive the displayed watch. Non-crypto markets use a contrarian fade interpretation; Crypto uses a trend-following interpretation. Commercial and small-spec positions are context, not independent votes. ETF weekly candles may contain price action after the Tuesday COT observation.</p></details>';
+  const dates=cotDates(),selected=cotDate||dates.at(-1),at=dates.indexOf(selected);
+  return '<div class="cot-controls" data-cot-controls><input type="date" aria-label="COT publication week" data-cot-date value="'+selected+'" min="'+dates[0]+'" max="'+dates.at(-1)+'"><button data-action="cot-prev" aria-label="Previous COT report" '+(at<=0?'disabled':'')+'>←</button><button data-action="cot-next" aria-label="Next COT report" '+(at>=dates.length-1?'disabled':'')+'>→</button><button data-action="cot-latest">Latest</button></div><div class="segments cot-lookbacks" data-cot-lookbacks aria-label="Positioning calculation lookback">'+['1y','3y','5y'].map(k=>'<button data-cot-window="'+k+'" aria-pressed="'+(cotWindow===k)+'" class="'+(cotWindow===k?'active':'')+'">'+k.toUpperCase()+'</button>').join('')+'</div><div class="cot-extreme-links cot-header-alerts" data-cot-alerts>'+watches.map(m=>{const c=cotCrowding(m.last);return '<button class="'+c.tone+'" data-cot-jump="'+escapeHTML(m.code)+'">'+escapeHTML(m.name)+' · '+c.label+'</button>';}).join('')+'</div>'+'<section class="cot-rows">'+markets.map(card).join('')+'</section>';
+
+}
+let cotPriceCharts=[];
+async function mountCOTPriceCharts(){
+ cotPriceCharts.forEach(({chart,observer})=>{observer.disconnect();chart.remove();});cotPriceCharts=[];
+ try{await loadFlowDailyLibrary();}catch(error){return;}
+ const L=window.LightweightCharts;
+ document.querySelectorAll('[data-cot-price]').forEach(node=>{
+  const market=cot.markets.find(m=>m.code===node.dataset.cotPrice),report=cotHistory(market).at(-1);if(!report)return;
+  const cutoff=cotRelease(report),daily=(market.prices||[]).filter(r=>r.date<=cutoff);
+  if(!daily.length||daily.some(r=>!finite(r.open))){node.textContent='Weekly OHLC history unavailable for this publication week';return;}
+  const buckets=new Map();for(const r of daily){const d=new Date(r.date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);const time=d.toISOString().slice(0,10),bar=buckets.get(time);if(bar){bar.high=Math.max(bar.high,r.high);bar.low=Math.min(bar.low,r.low);bar.close=r.close;}else buckets.set(time,{time,open:r.open,high:r.high,low:r.low,close:r.close});}
+  const weekly=[...buckets.values()];node.replaceChildren();node.setAttribute('aria-label',market.etf+' weekly chart through publication week '+cutoff);
+  const chart=L.createChart(node,{width:node.clientWidth,height:node.clientHeight,layout:{background:{type:'solid',color:'#202020'},textColor:'#aaa89f',fontSize:10,attributionLogo:true},grid:{vertLines:{color:'#2c2c2c'},horzLines:{color:'#2c2c2c'}},rightPriceScale:{mode:L.PriceScaleMode.Logarithmic,borderVisible:false},timeScale:{borderVisible:false,rightOffset:1,fixRightEdge:true},crosshair:{mode:L.CrosshairMode.Normal},handleScroll:{mouseWheel:false,pressedMouseMove:true},handleScale:{mouseWheel:false,pinch:true,axisPressedMouseMove:true}});
+  chart.addSeries(L.CandlestickSeries,{upColor:'#85d65d',downColor:'#ff3266',wickUpColor:'#85d65d',wickDownColor:'#ff3266',borderVisible:false,priceLineVisible:false}).setData(weekly);
+  let ema=null;chart.addSeries(L.LineSeries,{color:'#ffffff',lineWidth:1,lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false}).setData(weekly.map(r=>{ema=ema===null?r.close:.2*r.close+.8*ema;return {time:r.time,value:ema};}));
+  const fit=()=>chart.timeScale().setVisibleLogicalRange({from:Math.max(0,weekly.length-156)-.6,to:weekly.length-.2});fit();
+  const observer=new ResizeObserver(()=>{if(!node.isConnected){observer.disconnect();return;}chart.resize(node.clientWidth,node.clientHeight);fit();});observer.observe(node);cotPriceCharts.push({chart,observer});
+ });
 }
 function legacyPositioning(){
   if(!cot.markets?.length)return '<p class="empty">The official CFTC dataset is unavailable. No positioning signal has been inferred.</p>';
@@ -767,12 +794,12 @@ function legacyPositioning(){
 }
 function cotSpark(m){
   const keys=[['large','Large specs','#00bcd4'],['commercials','Commercials','#e040fb'],['small','Small specs','#ff9800']];
-  const fullHistory=m.history.filter(r=>finite(r.participants.large?.net));
+  const fullHistory=cotHistory(m);
   const history=fullHistory.slice(-52);
   const left=32,right=748,top=2,bottom=213,plot=right-left,step=plot/Math.max(1,history.length-1),bar=Math.max(.6,Math.min(3,step*.23));
   const selected=keys.find(([key])=>key===cotParticipant)||keys[0];
   const start=fullHistory.length-history.length;
-  const windows=[['5y',260]];
+  const windows=[[cotWindow,cotPeriods[cotWindow]]];
   const rangeAt=(i,key,length)=>{if(i+1<length)return null;const values=fullHistory.slice(i+1-length,i+1).map(r=>r.participants[key]?.net);if(values.some(v=>!finite(v)))return null;return {low:Math.min(...values),high:Math.max(...values)};};
   const displayed=history.flatMap(row=>keys.map(([key])=>Number(row.participants[key]?.net)));
   windows.filter(([name])=>cotRanges[name]).forEach(([,length])=>history.forEach((row,j)=>{const range=rangeAt(start+j,selected[0],length);if(range)displayed.push(range.low,range.high); }));
@@ -784,7 +811,7 @@ function cotSpark(m){
   const participantButtons='<button type="button" data-cot-participant="all" class="'+(cotParticipant==='all'?'active':'')+'">All</button>'+keys.map(([key,label,color])=>'<button type="button" data-cot-participant="'+key+'" class="'+(key===cotParticipant?'active':'')+'" style="--participant-color:'+color+'">'+label+'</button>').join('');
   const rangeButtons=windows.map(([name])=>'<button type="button" data-cot-range="'+name+'" class="'+(cotRanges[name]?'active':'')+'">'+name.toUpperCase()+' range</button>').join('');
   const latest=history.at(-1),latestNet=latest?.participants[selected[0]]?.net;
-  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>Last year displayed · 5-year calculation lookback</small></div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" preserveAspectRatio="none" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
+  return '<section class="cot-bars"><div class="cot-bars-head"><div><b>Net positioning</b><small>Last year displayed · '+cotWindow.toUpperCase()+' calculation lookback</small></div></div><div class="cot-hover-read" data-cot-read="'+escapeHTML(m.code)+'">'+escapeHTML(latest?.date||'')+' · '+selected[1]+' '+signed(latestNet,0)+' contracts</div><svg viewBox="0 0 780 215" preserveAspectRatio="none" role="img" aria-label="Weekly net positions and rolling five-year boundaries" data-cot-chart="'+escapeHTML(m.code)+'"><path d="M'+left+' '+top+'H'+right+' M'+left+' '+zero+'H'+right+' M'+left+' '+bottom+'H'+right+'" stroke="#383838"/>'+overlays+'<path d="M'+left+' '+zero+'H'+right+'" stroke="#aaa89f"/>'+bars+'<line class="cot-hover-line" x1="0" x2="0" y1="'+top+'" y2="'+bottom+'" stroke="#f5f2e8" opacity="0"/><rect x="'+left+'" y="'+top+'" width="'+plot+'" height="'+(bottom-top)+'" fill="transparent" pointer-events="all"/></svg><div class="cot-chart-dates"><span>'+escapeHTML(history[0]?.date||'')+'</span><span>'+escapeHTML(latest?.date||'')+'</span></div></section>';
 }
 function filteredKKStocks(){
   const rows=stocks('kk').filter(r=>
@@ -845,7 +872,7 @@ function mountTradingViewCharts(){
       await loadTradingView();
       if(!document.body.contains(node))return;
       node.textContent='';
-      new TradingView.widget({container_id:node.id,symbol:node.dataset.tvSymbol,interval:node.dataset.tvInterval||'D',timezone:'America/New_York',theme:'dark',style:'1',locale:'en',toolbar_bg:'#141414',hide_top_toolbar:true,hide_side_toolbar:true,allow_symbol_change:false,enable_publishing:false,save_image:false,withdateranges:false,autosize:true,studies:['STD;EMA'],studies_overrides:{'moving average exponential.ma.color':'#FFFFFF','moving average exponential.ma.linewidth':2,'volume.volume.transparency':100,'volume.volume ma.transparency':100,'moving average exponential.length':9,'moving average exponential.plot.color':'#FFFFFF','moving average exponential.plot.linewidth':2},overrides:{'scalesProperties.showStudyLastValue':false,'mainSeriesProperties.priceAxisProperties.log':true,'mainSeriesProperties.priceAxisProperties.percentage':false,'mainSeriesProperties.candleStyle.upColor':'#85d65d','mainSeriesProperties.candleStyle.downColor':'#ff3266','mainSeriesProperties.candleStyle.borderUpColor':'#85d65d','mainSeriesProperties.candleStyle.borderDownColor':'#ff3266','mainSeriesProperties.candleStyle.wickUpColor':'#85d65d','mainSeriesProperties.candleStyle.wickDownColor':'#ff3266'}});
+      new TradingView.widget({container_id:node.id,symbol:node.dataset.tvSymbol,interval:node.dataset.tvInterval||'D',timezone:'America/New_York',theme:'dark',style:'1',locale:'en',toolbar_bg:'#202020',backgroundColor:'#202020',gridColor:'#343434',hide_top_toolbar:true,hide_side_toolbar:true,allow_symbol_change:false,enable_publishing:false,save_image:false,withdateranges:false,autosize:true,studies:['STD;EMA'],studies_overrides:{'moving average exponential.ma.color':'#FFFFFF','moving average exponential.ma.linewidth':2,'volume.volume.transparency':100,'volume.volume ma.transparency':100,'moving average exponential.length':9,'moving average exponential.plot.color':'#FFFFFF','moving average exponential.plot.linewidth':2},overrides:{'paneProperties.backgroundType':'solid','paneProperties.background':'#202020','scalesProperties.showStudyLastValue':false,'mainSeriesProperties.priceAxisProperties.log':true,'mainSeriesProperties.priceAxisProperties.percentage':false,'mainSeriesProperties.candleStyle.upColor':'#85d65d','mainSeriesProperties.candleStyle.downColor':'#ff3266','mainSeriesProperties.candleStyle.borderUpColor':'#85d65d','mainSeriesProperties.candleStyle.borderDownColor':'#ff3266','mainSeriesProperties.candleStyle.wickUpColor':'#85d65d','mainSeriesProperties.candleStyle.wickDownColor':'#ff3266'}});
     }catch(error){node.innerHTML='<span class="chart-unavailable">Chart unavailable · <a target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(node.dataset.tvSymbol)+'">open in TradingView ↗</a></span>';}
   };
   if(!('IntersectionObserver' in window)){nodes.forEach(mount);return;}
@@ -946,10 +973,12 @@ function render(){
   $('#freshness').textContent='Stock close '+asof()+' → plan '+session().date+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
   $('#view').innerHTML=({briefing,environment,leadership,positioning,screener,review,method})[route]();
   if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
-  else if(route!=='positioning'){document.querySelector('#header-date-controls').append(document.querySelector('.session'));}
+  else if(route==='positioning'){const slot=document.querySelector('#header-date-controls');slot.append(document.querySelector('[data-cot-controls]'),document.querySelector('[data-cot-alerts]'),document.querySelector('[data-cot-lookbacks]'));}
+  else{document.querySelector('#header-date-controls').append(document.querySelector('.session'));}
 
   if(route==='leadership')mountFlowOverviewCharts();
   mountTradingViewCharts();
+  if(route==='positioning')mountCOTPriceCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
     if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);updateCOTReadings(row.querySelector('[data-cot-chart]'),-1);}
@@ -966,6 +995,9 @@ function showStock(symbol,kind){
 }
 document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group],[data-flow-group],[data-flow-index]');if(!node)return;
+ if(node.dataset.cotWindow){cotWindow=node.dataset.cotWindow;render();return;}
+ const cotAction=node.dataset.action;
+ if(cotAction==='cot-prev'||cotAction==='cot-next'||cotAction==='cot-latest'){const dates=cotDates(),current=cotDate||dates.at(-1),at=dates.findLastIndex(d=>d<=current);cotDate=cotAction==='cot-latest'?'':dates[Math.max(0,Math.min(dates.length-1,at+(cotAction==='cot-prev'?-1:1)))];render();return;}
  if(node.dataset.cotJump){document.getElementById('cot-market-'+node.dataset.cotJump)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
  if(node.dataset.flowHolding&&flowETFState){flowETFState.chartSymbol=node.dataset.flowHolding;flowETFDialog();return;}
  if(node.dataset.flowEtf){openFlowETF(node.dataset.flowEtf,node.dataset.flowGroup);return;}
@@ -998,6 +1030,7 @@ document.addEventListener('click',async event=>{
  if(node.classList.contains('dialog-close'))$('#stock-dialog').close();
 });
 document.addEventListener('change',event=>{
+ if(event.target.matches('[data-cot-date]')){const dates=cotDates();cotDate=dates.filter(d=>d<=event.target.value).at(-1)||dates[0];render();return;}
  if(event.target.matches('[data-breadth-date]')){breadthPinned=-1;breadthDate=event.target.value;render();return;}
  const key=event.target.dataset.filter;if(key){filters[key]=event.target.value;render();}
  const obcKey=event.target.dataset.obcFilter;if(obcKey){obcFilters[obcKey]=event.target.value;render();}
@@ -1005,20 +1038,20 @@ document.addEventListener('change',event=>{
 window.addEventListener('hashchange',()=>{if(session())render();});
 function updateCOTReadings(svg,j){
  const market=cot.markets?.find(m=>m.code===svg.dataset.cotChart);if(!market)return;
- const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-52);
+ const history=cotHistory(market).slice(-52);
  if(j<0)j=history.length-1;
  const row=history[j],previous=history[j-1],read=svg.closest('.cot-row').querySelector('.cot-hover-read');
  const card=svg.closest('.cot-row'),latestView=j===history.length-1;
- const price=market.prices?.filter(p=>latestView||p.date<=row.date).at(-1);
+ const price=market.prices?.filter(p=>p.date<=cotRelease(row)).at(-1);
  let quote=card.querySelector('.cot-etf-quote');
  if(!quote){quote=document.createElement('div');quote.className='cot-etf-quote';card.querySelector('.cot-position header').appendChild(quote);}
  const previousDate=price?new Date(price.date+'T00:00:00Z'):null;
  if(previousDate)previousDate.setUTCDate(previousDate.getUTCDate()-7);
  const previousPrice=previousDate?market.prices?.filter(p=>p.date<=previousDate.toISOString().slice(0,10)).at(-1):null;
  const change=price&&previousPrice?100*(price.close/previousPrice.close-1):null;
- quote.innerHTML='<div><b>'+escapeHTML(market.etf)+'</b><strong>'+(price?'$'+fmt(price.close,2):'—')+'</strong><span class="'+(change>=0?'positive':'negative')+'" title="Close-to-close return versus '+escapeHTML(previousPrice?.date||'unavailable')+'">'+(finite(change)?'('+signed(change,2)+'%)':'')+'</span></div><small>Close '+escapeHTML(price?.date||'unavailable')+'</small>';
+ quote.innerHTML='<div><b>'+escapeHTML(market.etf)+'</b><strong>'+(price?'$'+fmt(price.close,2):'—')+'</strong><span class="'+(change>=0?'positive':'negative')+'" title="Close-to-close return versus '+escapeHTML(previousPrice?.date||'unavailable')+'">'+(finite(change)?'('+signed(change,2)+'%)':'')+'</span></div>';
  card.querySelectorAll('.cot-participant').forEach((node,i)=>{
-   const key=['large','small','commercials'][i],value=row.participants[key]?.indices?.['5y'],prior=previous?.participants[key]?.indices?.['5y'];
+   const key=['large','small','commercials'][i],value=row.participants[key]?.indices?.[cotWindow],prior=previous?.participants[key]?.indices?.[cotWindow];
    node.querySelector('strong').textContent=fmt(value,1);
    const marker=node.querySelector('.cot-track>b');if(marker){marker.style.left=(finite(value)?value:0)+'%';marker.style.display=finite(value)?'':'none';}
    const notes=node.querySelectorAll('small');notes[0].textContent=!finite(value)?'Insufficient history':value<=5?'Near range low':value>=95?'Near range high':'Within range';
@@ -1026,18 +1059,18 @@ function updateCOTReadings(svg,j){
  });
  const readKeys=cotParticipant==='all'?['large','commercials','small']:[cotParticipant];
  const names={large:'Large speculators',small:'Small speculators',commercials:'Commercials'};
- const all=market.history.filter(r=>finite(r.participants.large?.net)),endIndex=all.findIndex(r=>r.date===row.date);
+ const all=cotHistory(market),length=cotPeriods[cotWindow],endIndex=all.findIndex(r=>r.date===row.date);
  read.innerHTML='<span class="cot-read-date">Report · '+escapeHTML(row.date)+'</span><div class="cot-read-grid">'+readKeys.map(key=>{
  const net=row.participants[key]?.net,delta=net-previous?.participants[key]?.net;
- const values=endIndex+1>=260?all.slice(endIndex-259,endIndex+1).map(r=>r.participants[key]?.net).filter(finite):[];
- return '<div data-cot-party="'+key+'"><b>'+names[key]+'</b><span>Net '+(net>=0?'long ':'short ')+'<strong>'+fmt(Math.abs(net),0)+'</strong></span><span>Weekly change <strong>'+signed(delta,0)+'</strong></span><small>5Y range · '+(values.length===260?signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0):'Insufficient history')+' contracts</small></div>';
+ const values=endIndex+1>=length?all.slice(endIndex+1-length,endIndex+1).map(r=>r.participants[key]?.net).filter(finite):[];
+ return '<div data-cot-party="'+key+'"><b>'+names[key]+'</b><span>Net '+(net>=0?'long ':'short ')+'<strong>'+fmt(Math.abs(net),0)+'</strong></span><span>Weekly change <strong>'+signed(delta,0)+'</strong></span><small>'+cotWindow.toUpperCase()+' range · '+(values.length===length?signed(Math.min(...values),0)+' to '+signed(Math.max(...values),0):'Insufficient history')+' contracts</small></div>';
  }).join('')+'</div>';
 
 }
 document.addEventListener('pointermove',event=>{
  const svg=event.target.closest?.('[data-cot-chart]');if(!svg)return;
  const market=cot.markets?.find(m=>m.code===svg.dataset.cotChart);if(!market)return;
- const history=market.history.filter(r=>finite(r.participants.large?.net)).slice(-52);
+ const history=cotHistory(market).slice(-52);
  const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)*780/rect.width;
  const j=Math.max(0,Math.min(history.length-1,Math.round((x-32)/716*(history.length-1))));
  updateCOTReadings(svg,j);
