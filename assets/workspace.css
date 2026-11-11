@@ -297,3 +297,5 @@ html:has(body.flow-page){overflow:auto}body.flow-page{height:auto;min-height:100
 /* Keep every Top D metric visible without a horizontal table scrollbar. */
 .screener-page .topd-table table{min-width:0!important;width:100%}.screener-page .topd-table th{padding:9px 15px 9px 6px;overflow-wrap:anywhere}.screener-page .topd-table td{padding:10px 6px;white-space:normal}.screener-page .topd-table th.nel-sortable::after{right:2px;width:10px}.screener-page .topd-table td small{line-height:1.25;margin-top:4px}
 @media(max-width:1200px){.screener-page .topd-table td{font-size:10px;padding:9px 5px}.screener-page .topd-table th{font-size:9px;padding:8px 12px 8px 4px}}
+
+.screener-page .chart-grid{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:900px){.screener-page .chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.screener-page .chart-grid{grid-template-columns:1fr}}
