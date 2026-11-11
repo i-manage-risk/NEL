@@ -1,0 +1,12 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const source=fs.readFileSync('assets/workspace.js','utf8');
+const fn=source.slice(source.indexOf('function filteredTopDStocks(){'),source.indexOf('function topDScreener(){'));
+const base={description:'',adr:6,dollarVolume:300e6,shareVolume:2e6,extension:2,upBeatRate:60,upWeeks:12,character:'Smooth trender',tight:true};
+const rows=Array.from({length:40},(_,i)=>({...base,symbol:'S'+String(i).padStart(2,'0'),score:i}));
+rows.push({...base,symbol:'LOW_WIN',score:100,upBeatRate:59.9},{...base,symbol:'SHORT',score:100,upWeeks:11},{...base,symbol:'THIN',score:100,dollarVolume:249e6},{...base,symbol:'MISSING',score:null});
+const ctx={stocks:()=>rows,tag:()=>'',finite:v=>v!==null&&v!==undefined&&Number.isFinite(Number(v)),topDFilters:{search:'',group:'',adr:5,dollarVolume:250,shareVolume:1,extension:'',tight:false,character:''}};
+vm.createContext(ctx);vm.runInContext(fn,ctx);
+let result=ctx.filteredTopDStocks();assert.equal(result.length,25);assert.equal(result[0].symbol,'S39');assert.equal(result.at(-1).symbol,'S15');assert(!result.some(r=>['LOW_WIN','SHORT','THIN','MISSING'].includes(r.symbol)));
+ctx.topDFilters.search='S00';result=ctx.filteredTopDStocks();assert.equal(result.length,1);assert.equal(result[0].symbol,'S00');
+ctx.topDFilters.search='';ctx.topDFilters.extension=1;assert.equal(ctx.filteredTopDStocks().length,0);
+console.log('Top D: qualification boundaries, top-25 cap, ranking and optional filters passed.');

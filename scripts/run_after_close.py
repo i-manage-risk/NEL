@@ -136,6 +136,13 @@ def main() -> int:
                     check=False,
                 )
             if result.returncode == 0:
+                top_d_result = subprocess.run(
+                    [str(scanner_python), "top_d.py", "--snapshot-date", next_session_date(now).isoformat()],
+                    cwd=PROJECT_DIR, stdout=log, stderr=subprocess.STDOUT, text=True, check=False,
+                )
+                if top_d_result.returncode:
+                    log.write("Top D refresh failed; existing history retained.\n")
+            if result.returncode == 0:
                 result = subprocess.run(
                     [str(scanner_python), "super_liquid.py", "--snapshot-date", next_session_date(now).isoformat()],
                     cwd=PROJECT_DIR,

@@ -94,7 +94,11 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     args = parser.parse_args()
     settings = OBCSettings()
-    universe, leaders, candidates = calculate_obc(fetch_kk_universe(), settings)
+    raw = fetch_kk_universe()
+    # Preserve the raw common stock scan before any screen-specific selection.
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    raw.to_csv(args.output_dir / f"stock_universe_{args.snapshot_date.isoformat()}.csv", index=False)
+    universe, leaders, candidates = calculate_obc(raw, settings)
     tight, errors = find_tight_nel(candidates)
     candidates["is_tight"] = candidates["name"].isin(set(tight["name"]))
     paths = write_outputs(universe, leaders, candidates, settings, args.output_dir, args.snapshot_date)

@@ -92,3 +92,24 @@ Every run also refreshes `industry_flow_dashboard.html`. Open it in a browser to
 `index.html` and `super-liquid.html` are refreshed for GitHub Pages. The GitHub Actions workflow in `.github/workflows/daily-scan.yml` schedules both stock scanners after the US close, commits the refreshed CSVs and dashboards, and works without your Mac being awake. GitHub Pages must be enabled for the repository with the `main` branch and `/ (root)` folder selected as its source.
 
 The Breadth page has a separate after-close watcher because Stockbee publishes its Market Monitor at variable times. GitHub checks hourly through late evening in New York, rebuilds the full historical Time Machine, and commits only when the published sheet actually changes.
+
+## Top D
+
+Top D is a separate Screener tab. It uses a broad saved stock universe, not KK/OSB leader membership. The collection floor is $30M average dollar volume and 350K average daily shares; the UI defaults to $250M, 1M shares and ADR14 ≥5%. Dollar volume remains SMA30(price) × average30(volume), and share volume is the existing 10-day average. Extension has no default maximum; tightness is optional.
+
+A stock must demonstrate a ≥30% rolling 20-session close-to-close advance ending within the last 252 sessions. Historical character uses Yahoo adjusted daily OHLC through the selected close (minimum 61 sessions). The default rank blends percentile ranks: 30% best 20-session advance, 30% upward-path efficiency, 15% 10/20-day SMA respect, and 25% positive-RSP-week response (half mean return, half frequency of beating RSP). Missing weekly evidence is left unranked, not treated as zero.
+
+Efficiency is the median net advance divided by total absolute daily price travel for advancing 20/60-session windows (minimum gains 10%/20%). MA respect measures closes above rising 10/20-session SMAs during those advancing periods. Smooth trender means efficiency ≥35% and MA respect ≥75%; the remaining proven movers are labeled explosive/choppy. These are transparent starting heuristics, not verified proprietary rules or trade probabilities. Weekly comparisons use completed Friday-ending periods, with at least six positive RSP weeks. New listings are marked when fewer than 200 sessions are available.
+
+The daily runner executes `top_d.py` after the raw stock universe is captured. Results are archived as `outputs/top_d_<snapshot-date>.json` and attached to the existing workspace snapshot; the UI shows its actual close date. Existing histories are not fabricated or backfilled. For the initial archive, the pre-leadership OBC liquidity universe is used when a raw stock scan was not preserved; future runs save `stock_universe_<snapshot-date>.csv` before OBC-specific filtering.
+
+To refresh an archived close explicitly:
+
+```sh
+.venv/bin/python top_d.py --snapshot-date 2026-11-11 --close-date 2026-11-10
+.venv/bin/python workspace_data.py
+```
+
+Exports contain only the symbols matching the current Top D filters. All table columns support the shared descending/ascending/default sort cycle, and List/Charts views use the same filtered records.
+
+Top D additionally requires outperforming RSP in at least 60% of positive RSP weeks, with at least 12 such weeks observed and a complete ranking score. After current filters are applied, results are ordered by Top D score and capped at 25. List, Charts and export use this same capped set.

@@ -78,10 +78,12 @@ def build():
                 'performance': {frame: number(row.get(column)) for frame, column in PERF.items()},
                 'leaders': ['1y'],
             })
+        top_d_path = ROOT / 'outputs' / f'top_d_{stamp}.json'
+        top_d = json.loads(top_d_path.read_text()) if top_d_path.exists() else {}
         close = date.fromisoformat(stamp) - timedelta(days=1)
         while close.weekday() >= 5 or close in nyse_holidays(close.year):
             close -= timedelta(days=1)
-        snapshots.append({'date': stamp, 'closeDate': close.isoformat(), 'stocks': records, 'kk': kk_records, 'obc': obc_records})
+        snapshots.append({'date': stamp, 'closeDate': close.isoformat(), 'stocks': records, 'kk': kk_records, 'obc': obc_records, 'topd': top_d.get('rows', []), 'topdMeta': {k:v for k,v in top_d.items() if k != 'rows'}})
     profiles = json.loads((ROOT / 'data' / 'theme_overrides.json').read_text())
     definitions_path = ROOT / 'data' / 'stock_groups.txt'
     definitions = definitions_path.read_text() if definitions_path.exists() else ''
