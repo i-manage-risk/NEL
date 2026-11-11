@@ -39,6 +39,18 @@ def main():
     if symbol in old.get('series',{}):series[symbol]=old['series'][symbol]
     errors[symbol]=str(error);print(symbol,'FAILED',error)
  if 'RSP' not in series:raise RuntimeError('RSP benchmark unavailable')
+ # Intraday is stored independently so historical close views keep their own trace.
+ from debrief_intraday import fetch_intraday
+ intraday_errors={}
+ cutoff=series['RSP']['history'][-1]['date']
+ with ThreadPoolExecutor(max_workers=4) as pool:
+  tasks={symbol:pool.submit(fetch_intraday,symbol,old.get('series',{}).get(symbol,{}).get('intraday'),cutoff) for symbol in market}
+  for symbol,task in tasks.items():
+   try:series[symbol]['intraday']=task.result()
+   except Exception as error:
+    intraday_errors[symbol]=str(error)
+    prior=old.get('series',{}).get(symbol,{}).get('intraday')
+    if prior:series[symbol]['intraday']=prior
  # Existing industry/sector holdings remain in their original payloads. Add
  # holdings for the newly introduced market and segment ETFs here.
  from etf_strength import fetch_fund_holdings, enrich_holdings
@@ -49,6 +61,6 @@ def main():
  with ThreadPoolExecutor(max_workers=4) as pool:
   funds=dict(zip(sorted(target),pool.map(lambda symbol:fetch_fund_holdings(symbol,set(symbols)),sorted(target))))
  holdings=enrich_holdings({'funds':funds},date.fromisoformat(series['RSP']['history'][-1]['date']),target)
- payload=dict(holdings=holdings,holdings_checked_at=datetime.now(ZoneInfo('UTC')).date().isoformat(),benchmark='RSP',generated_at=datetime.now(ZoneInfo('UTC')).isoformat(),groups={k:[dict(symbol=s,name=n) for s,n in v] for k,v in GROUPS.items()},series=series,errors=errors)
+ payload=dict(intraday_errors=intraday_errors,holdings=holdings,holdings_checked_at=datetime.now(ZoneInfo('UTC')).date().isoformat(),benchmark='RSP',generated_at=datetime.now(ZoneInfo('UTC')).isoformat(),groups={k:[dict(symbol=s,name=n) for s,n in v] for k,v in GROUPS.items()},series=series,errors=errors)
  path.write_text(json.dumps(payload,separators=(',',':'),allow_nan=False)+'\n')
 if __name__=='__main__':main()

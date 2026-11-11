@@ -4,7 +4,7 @@
  document.body.classList.add('detail-page');
  const selectedNav=page==='breadth'?'environment':page==='themes'||page==='sectors'?'leadership':'screener';
  const rail=document.createElement('aside');rail.className='rail';
- const nav=[['briefing','◉','Now'],['environment','◌','Breadth'],['leadership','◆','Flow'],['positioning','◎','Positioning'],['screener','⌕','Stocks'],['review','↺','Replay']];
+ const nav=[['debrief','◉','Debrief'],['environment','◌','Breadth'],['leadership','◆','Flow'],['positioning','◎','Positioning'],['screener','⌕','Screener']];
  rail.innerHTML='<a class="brand" href="index.html"><img src="assets/nel-favicon.png" alt="">NEL<span>MARKET CONSOLE</span></a><nav aria-label="Workspace">'+nav.map(([key,icon,label])=>'<a class="'+(key===selectedNav?'active':'')+'" href="index.html#'+key+'"><i>'+icon+'</i><span>'+label+'</span></a>').join('')+'</nav><div class="rail-bottom"><details class="research-menu"><summary>Research ▾</summary><div><a href="industry_flow_dashboard.html">Liquid stocks</a><a href="super-liquid.html">Super Liquid</a><a href="themes.html">Themes</a><a href="sectors.html">Sectors</a><a href="breadth.html">Breadth / Time Machine</a></div></details></div>';
  document.body.prepend(rail);
  const main=document.querySelector('main'), heading=document.createElement('div');heading.className='detail-heading';
