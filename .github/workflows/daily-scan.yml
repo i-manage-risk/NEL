@@ -6,7 +6,7 @@ on:
     - cron: "25,55 20-23 * * 1-5"
     - cron: "25,55 0-3 * * 2-6"
     # Overnight/morning catch-up; the guard blocks intraday stock scans.
-    - cron: "15 12,13 * * 1-5"
+    - cron: "15 12,13 * * 1-6"
   workflow_dispatch:
     inputs:
       force:
