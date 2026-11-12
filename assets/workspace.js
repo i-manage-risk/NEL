@@ -999,6 +999,7 @@ function render(){
   // Let its click complete; outside pointer events still dismiss the menu.
   document.querySelector('.page-menu').onfocusout=event=>{if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget))closeMenu();};
   if(!window.pageMenuOutsideBound){const dismissOutside=event=>{if(!event.target.closest('.page-menu')){document.querySelector('#page-menu-options').hidden=true;document.querySelector('#page-menu-button').setAttribute('aria-expanded','false');}};document.addEventListener('pointerdown',dismissOutside,{passive:true});document.addEventListener('click',dismissOutside);window.pageMenuOutsideBound=true;}
+  if(!routeDataReady(route)){loadRouteData(route);return;}
   const savedSession=document.querySelector('#header-date-controls .session');if(savedSession)document.querySelector('.workspace-top').append(savedSession);document.querySelector('#header-date-controls').replaceChildren();
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
@@ -1132,9 +1133,35 @@ document.addEventListener('pointermove',event=>{
 });
 document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget)){svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');updateCOTReadings(svg,-1);}});
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
+const loadedPageData=new Set(), pendingPageData=new Map();
+const pageDataSpecs={
+ stocks:['outputs/workspace.json',v=>db=v],
+ themes:['outputs/etf/themes_snapshots.json',v=>themes=v],
+ sectors:['outputs/etf/sectors_snapshots.json',v=>sectors=v],
+ breadth:['outputs/breadth_market_monitor.json',v=>breadth=v],
+ spx:['outputs/spx_history.json',v=>spxHistory=v],
+ cot:['outputs/positioning.json',v=>cot=v],
+ context:['outputs/market_context.json',v=>context=v],
+ indexes:['outputs/index_history.json',v=>indexHistory=v],
+ flow:['outputs/flow_market.json',v=>flowMarket=v]
+};
+const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
+function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
+function loadPageDataset(key){
+ if(loadedPageData.has(key))return Promise.resolve();
+ if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,loadJSON(path).then(value=>{assign(value);loadedPageData.add(key);}).finally(()=>pendingPageData.delete(key)));}
+ return pendingPageData.get(key);
+}
+let pageLoadRequest=0;
+async function loadRouteData(page){
+ const request=++pageLoadRequest;
+ $('#view').innerHTML='<p class="note" role="status">Loading '+escapeHTML(titles[page])+'…</p>';
+ try{await Promise.all((pageDataNeeds[page]||[]).map(loadPageDataset));if(request===pageLoadRequest)render();}
+ catch(error){if(request===pageLoadRequest)$('#view').innerHTML='<p class="alert">'+escapeHTML(error.message)+'</p><button onclick="location.reload()">Retry</button>';}
+}
 async function start(){
  try{
- [db,themes,sectors,breadth,spxHistory,cot,context,indexHistory,flowMarket]=await Promise.all([loadJSON('outputs/workspace.json'),loadJSON('outputs/etf/themes_snapshots.json'),loadJSON('outputs/etf/sectors_snapshots.json'),loadJSON('outputs/breadth_market_monitor.json'),loadJSON('outputs/spx_history.json',true),loadJSON('outputs/positioning.json',true),loadJSON('outputs/market_context.json',true),loadJSON('outputs/index_history.json',true),loadJSON('outputs/flow_market.json',true)]);
+ db=await loadJSON('outputs/workspace_calendar.json');
  if(!db.snapshots?.length)throw Error('No saved stock snapshots available.');
  $('#session').innerHTML=db.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+(s.closeDate||s.date)+'</option>').join('');
  $('#session').addEventListener('change',render);render();

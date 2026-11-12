@@ -90,6 +90,8 @@ def build():
     groups = [{'name': match[0].strip(), 'description': match[1].strip()} for match in re.findall(r'Group: ([^\n]+)\s+Meaning: ([^\n]+)', definitions)]
     target = ROOT / 'outputs' / 'workspace.json'
     target.write_text(json.dumps({'generatedAt': datetime.now(timezone.utc).isoformat(), 'snapshots': snapshots, 'profiles': profiles, 'groups': groups}, separators=(',', ':'), allow_nan=False))
+    calendar = {'generatedAt': datetime.now(timezone.utc).isoformat(), 'snapshots': [{'date': s['date'], 'closeDate': s['closeDate']} for s in snapshots], 'profiles': profiles, 'groups': groups}
+    (ROOT / 'outputs' / 'workspace_calendar.json').write_text(json.dumps(calendar, separators=(',', ':')))
     (ROOT / 'index.html').write_text((ROOT / 'workspace.html').read_text())
     print(f'Workspace: {len(snapshots)} preserved stock snapshots')
 
