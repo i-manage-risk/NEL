@@ -299,3 +299,74 @@ html:has(body.flow-page){overflow:auto}body.flow-page{height:auto;min-height:100
 @media(max-width:1200px){.screener-page .topd-table td{font-size:10px;padding:9px 5px}.screener-page .topd-table th{font-size:9px;padding:8px 12px 8px 4px}}
 
 .screener-page .chart-grid{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:900px){.screener-page .chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.screener-page .chart-grid{grid-template-columns:1fr}}
+
+/* Phone layouts: touch navigation, contained tables and readable controls. */
+@media(max-width:650px){
+ html:has(body.workspace){overflow-x:clip}
+ .workspace .rail{height:auto!important;min-height:56px!important;flex-wrap:wrap!important;padding:8px 12px!important;gap:8px!important;overflow:visible!important;backdrop-filter:none;background:#141414}
+ .workspace .page-menu{flex:1 0 100%;z-index:1001}
+ .workspace #page-menu-button{width:100%;min-width:0;height:42px;font-size:15px}
+ .workspace #page-menu-options{width:100%;max-height:calc(100dvh - 80px);overflow-y:auto;overscroll-behavior:contain;top:calc(100% + 4px)}
+ .workspace #page-menu-options button{min-height:46px;font-size:15px;touch-action:manipulation}
+ .workspace #header-date-controls{display:flex!important;flex:1 0 100%;min-width:0;max-width:100%;flex-wrap:wrap;gap:8px}
+ .workspace #header-date-controls input[type=date]{min-width:0;width:138px;max-width:100%;font-size:16px;height:40px}
+ .workspace #header-date-controls button{height:40px;min-width:40px;touch-action:manipulation}
+ .workspace #header-date-controls .close-calendar,.workspace #header-date-controls .cot-controls{flex-wrap:wrap;gap:6px;max-width:100%;padding:0;margin:0}
+ .workspace .rail-bottom{display:none!important}
+ .workspace .workspace-main{max-width:100%;width:100%;padding:12px!important;min-width:0}
+ .workspace .screener-header-controls{display:flex;flex:1 0 100%;gap:8px;min-width:0}
+ .workspace .screener-header-center{flex:1 0 100%;min-width:0}
+ .workspace .screener-tabs{width:100%;min-width:0}
+ .workspace .screener-tabs .segments{display:grid;grid-template-columns:1fr 1.1fr .55fr;gap:5px;width:100%}
+ .workspace .screener-tabs .segments button{font-size:10px;padding:6px 5px;white-space:normal;line-height:1.25;min-width:0}
+ .workspace .screener-header-controls>.toolbar:last-child{width:100%;flex:1 0 100%;justify-content:space-between;gap:6px}
+ .workspace .screener-header-controls .view-switch{width:auto;gap:0}
+ .workspace .screener-header-controls .primary{white-space:nowrap;font-size:11px;padding:6px 9px}
+ .workspace .screener-header-controls .segments button{min-height:40px}
+ .screener-page .kk-filters,.screener-page .topd-filters{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px;gap:12px 10px;min-width:0}
+ .screener-page .filters label{min-width:0;max-width:100%;font-size:11px}
+ .screener-page .filters label:first-child{grid-column:1/-1}
+ .screener-page .filters input,.screener-page .filters select{min-width:0;width:100%;max-width:100%;height:44px;font-size:16px;padding:8px}
+ .screener-page .filter-toggle-row{min-width:0;width:100%;align-items:stretch}
+ .screener-page .filter-toggle-row .segments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;min-width:0;gap:6px}
+ .screener-page .filter-toggle-row button{white-space:normal;min-width:0;min-height:44px;line-height:1.3;font-size:11px;padding:7px}
+ .screener-page .kk-table{max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+ .screener-page .kk-table table,.screener-page .topd-table table{min-width:950px!important}
+ .screener-page .kk-table th{font-size:10px;min-height:44px}
+ .screener-page .kk-table td{font-size:12px;height:44px}
+ .screener-page .kk-table td:first-child,.screener-page .kk-table th:first-child{position:sticky;left:0;background:#242424;z-index:2;box-shadow:1px 0 #484848}
+ .screener-page .chart-grid{grid-template-columns:1fr;gap:12px}
+ .screener-page .chart-card-head{padding:10px;gap:8px}.screener-page .chart-stats{font-size:9px;gap:5px}
+ .screener-page .tv-chart{height:330px}
+ .positioning-page .cot-header-alerts{max-width:100%;order:3;justify-content:flex-start;overflow-x:auto}
+ .positioning-page .cot-lookbacks{margin-left:auto;padding:0}
+ .positioning-page .cot-rows{grid-template-columns:minmax(0,1fr)}
+ .positioning-page .cot-row{grid-template-columns:minmax(0,1fr)}
+ .positioning-page .cot-position{padding:14px;border-right:0;border-bottom:1px solid #444}
+ .positioning-page .cot-visual{padding:10px}.positioning-page .cot-tv-chart{height:300px}
+ html:has(body.breadth-page),body.breadth-page{height:auto!important;overflow:auto!important;display:block}
+ .breadth-page .workspace-main,.breadth-page #view,.breadth-page .bm-console{height:auto!important;overflow:visible!important}
+ .breadth-page .bm-console{display:grid;grid-template-rows:auto;gap:12px!important}
+ .breadth-page .bm-console-layout{height:auto!important;grid-template-columns:minmax(0,1fr)!important}
+ .breadth-page .bm-comparison{height:auto!important}.breadth-page .bm-explorer{height:430px!important;min-height:430px}
+ .breadth-page .bm-console .bm-balance-row{min-height:48px!important;padding:8px!important}
+ .breadth-page .bm-console .bm-stockbee-table .table-box{max-height:400px;overflow:auto}
+ .breadth-page .bm-chart-ranges{flex-wrap:wrap}.breadth-page .bm-chart-ranges button{min-height:40px}
+ .flow-page .market-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .flow-page .market-index-card header>div{flex-wrap:wrap}.flow-page .market-index-card header strong{font-size:10px}
+ .flow-page .market-tv{height:190px}.flow-page .market-table-scroll{max-width:100%;overscroll-behavior-x:contain}
+ .debrief-dashboard{min-width:0}.debrief-main-grid{grid-template-columns:minmax(0,1fr)!important}
+ #flow-etf-dialog,dialog{width:calc(100vw - 16px);max-width:calc(100vw - 16px);max-height:92dvh;padding:12px;margin:auto}
+ #flow-etf-dialog .flow-dialog-grid{grid-template-columns:minmax(0,1fr);min-height:0}
+ #flow-etf-dialog .flow-dialog-head{padding:12px;gap:10px}#flow-etf-dialog .flow-dialog-close{min-width:44px;min-height:44px}
+}
+@media(max-width:650px){
+ .workspace #header-date-controls .cot-controls{flex-direction:row;align-items:center;justify-content:flex-start}
+ .breadth-page .bm-console .bm-explorer-canvas .bm-chart-label{display:flex;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:6px 14px;min-height:0!important;padding:0!important}
+ .breadth-page .bm-console .bm-chart-label .bm-chart-ranges{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));position:static!important;order:-1!important;flex:1 0 100%;width:100%!important;min-width:0;max-width:100%;gap:4px;margin:0 0 8px!important}
+ .breadth-page .bm-console .bm-chart-ranges button{min-width:0;padding:4px 3px;font-size:10px;min-height:40px}
+ .breadth-page .bm-console .bm-chart-label .bm-chart-ranges small{font-size:9px}
+ .breadth-page .bm-console .bm-explorer-canvas .bm-chart-label h3{flex:1 0 100%;font-size:14px!important;margin:0}
+ .breadth-page .bm-console .bm-explorer-canvas .bm-hover-key>b{font-size:15px!important}
+ .flow-page .market-index-card>footer{margin-top:0}
+}
