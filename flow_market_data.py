@@ -39,6 +39,10 @@ def main():
     if symbol in old.get('series',{}):series[symbol]=old['series'][symbol]
     errors[symbol]=str(error);print(symbol,'FAILED',error)
  if 'RSP' not in series:raise RuntimeError('RSP benchmark unavailable')
+ from etf_strength import expected_completed_session
+ expected=expected_completed_session().isoformat()
+ stale=[symbol for symbol in market if not series.get(symbol,{}).get('history') or series[symbol]['history'][-1]['date']!=expected]
+ if stale:raise RuntimeError('Completed market data unavailable for '+expected+': '+', '.join(stale)+'; preserving previous Flow snapshot for retry')
  # Intraday is stored independently so historical close views keep their own trace.
  from debrief_intraday import fetch_intraday
  intraday_errors={}

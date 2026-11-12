@@ -59,7 +59,7 @@ python super_liquid.py
 
 ## Automatic daily run (macOS)
 
-The installed scheduler checks once per minute and runs the scanner once after 4:25 PM New York time on regular US market days. The extra delay lets Yahoo finalize the regular-session daily close used by the ETF pages. The run refuses to publish stale ETF data and the second cloud schedule retries an hour later. Stock NEL outputs are labelled for the next US trading session, skipping weekends and market holidays. Theme and Sector snapshots keep the date of the actual completed close because they are historical studies. If the Mac wakes later that evening, it catches up automatically. It handles daylight-saving changes and writes each run to `logs/daily_scan_YYYY-MM-DD.log`.
+The installed scheduler checks once per minute and runs the scanner once after 4:25 PM New York time on regular US market days. The extra delay lets Yahoo finalize the regular-session daily close used by the ETF pages. The run refuses to publish stale ETF data and cloud schedules retry every half hour through the evening, with an overnight and pre-market catch-up window. Stock NEL outputs are labelled for the next US trading session, skipping weekends and market holidays. Theme and Sector snapshots keep the date of the actual completed close because they are historical studies. If the Mac wakes later that evening or before 9 AM New York time the next morning, it catches up automatically. Intraday stock scanning is blocked so a missed close cannot be replaced by live-session values. It handles daylight-saving changes and writes each run to `logs/daily_scan_YYYY-MM-DD.log`.
 
 The CSV files appear in `outputs/`:
 
@@ -113,3 +113,7 @@ To refresh an archived close explicitly:
 Exports contain only the symbols matching the current Top D filters. All table columns support the shared descending/ascending/default sort cycle, and List/Charts views use the same filtered records.
 
 Top D additionally requires outperforming RSP in at least 60% of positive RSP weeks, with at least 12 such weeks observed and a complete ranking score. After current filters are applied, results are ordered by Top D score and capped at 25. List, Charts and export use this same capped set.
+
+## Refresh reliability
+
+The daily GitHub workflow retries incomplete stock stages independently, preserves completed stage checkpoints in `outputs/.scan-state.json`, and publishes successful sources even if a different source fails. Detailed scanner output is streamed to Actions and retained as a seven-day log artifact. A final failed status remains visible if any required source is incomplete; later schedules retry it. Flow refuses to stamp a fresh snapshot when its eight core market ETFs do not contain the expected completed close. Manual dispatch supports `force=true` to recheck all stages. GitHub cron execution may be delayed, so the schedule provides repeated opportunities rather than guaranteeing a precise publication minute.

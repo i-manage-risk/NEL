@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import os
+import json
+import time
 import subprocess
 import sys
 from datetime import date, datetime, timedelta
@@ -71,12 +74,21 @@ def nyse_holidays(year: int) -> set[date]:
     }
 
 
+def scheduled_close(now: datetime) -> date | None:
+    """Allow post-close retries and overnight catch-up, never an intraday stock scan."""
+    now = now.astimezone(NY_TZ)
+    if (9, 0) <= (now.hour, now.minute) < (16, 25):
+        return None
+    candidate = now.date()
+    if (now.hour, now.minute) < (16, 25):
+        candidate -= timedelta(days=1)
+    while candidate.weekday() >= 5 or candidate in nyse_holidays(candidate.year):
+        candidate -= timedelta(days=1)
+    return candidate
+
+
 def should_run(now: datetime) -> bool:
-    return (
-        now.weekday() < 5
-        and now.date() not in nyse_holidays(now.year)
-        and (now.hour, now.minute) >= (16, 25)
-    )
+    return scheduled_close(now) is not None
 
 
 def next_session_date(now: datetime) -> date:
@@ -93,80 +105,62 @@ def next_session_date(now: datetime) -> date:
 
 def main() -> int:
     now = datetime.now(NY_TZ)
-    if not should_run(now):
+    close = scheduled_close(now)
+    if close is None:
+        print("Skipping stock scan during the trading/pre-close window.", flush=True)
         return 0
+    stamp = next_session_date(datetime.combine(close, datetime.min.time(), NY_TZ)).isoformat()
     LOG_DIR.mkdir(exist_ok=True)
     MARKER.parent.mkdir(exist_ok=True)
-    if MARKER.exists() and MARKER.read_text(encoding="utf-8").strip() == now.date().isoformat():
-        return 0
+    state_path = MARKER.parent / '.scan-state.json'
+    state = json.loads(state_path.read_text()) if state_path.exists() else {}
+    if state.get('close') != close.isoformat() or os.environ.get('FORCE_STOCK_REFRESH') == 'true':
+        state = {'close': close.isoformat(), 'completed': []}
     try:
         LOCK_DIR.mkdir()
     except FileExistsError:
-        return 0
+        print("Another scanner process holds the local lock.", flush=True)
+        return 1
+    failures = []
     try:
-        log_path = LOG_DIR / f"daily_scan_{now.date().isoformat()}.log"
-        local_python = PROJECT_DIR / ".venv" / "bin" / "python"
-        scanner_python = local_python if local_python.exists() else Path(sys.executable)
-        with log_path.open("a", encoding="utf-8") as log:
-            log.write(f"\n--- Scheduled run started {now.isoformat()} ---\n")
-            result = subprocess.run(
-                [str(scanner_python), "focus_list.py", "--snapshot-date", next_session_date(now).isoformat()],
-                cwd=PROJECT_DIR,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=False,
-            )
-            if result.returncode == 0:
-                result = subprocess.run(
-                    [str(scanner_python), "kk_scan.py", "--snapshot-date", next_session_date(now).isoformat()],
-                    cwd=PROJECT_DIR,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    check=False,
-                )
-            if result.returncode == 0:
-                result = subprocess.run(
-                    [str(scanner_python), "obc_scan.py", "--snapshot-date", next_session_date(now).isoformat()],
-                    cwd=PROJECT_DIR,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    check=False,
-                )
-            if result.returncode == 0:
-                top_d_result = subprocess.run(
-                    [str(scanner_python), "top_d.py", "--snapshot-date", next_session_date(now).isoformat()],
-                    cwd=PROJECT_DIR, stdout=log, stderr=subprocess.STDOUT, text=True, check=False,
-                )
-                if top_d_result.returncode:
-                    log.write("Top D refresh failed; existing history retained.\n")
-            if result.returncode == 0:
-                result = subprocess.run(
-                    [str(scanner_python), "super_liquid.py", "--snapshot-date", next_session_date(now).isoformat()],
-                    cwd=PROJECT_DIR,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    check=False,
-                )
-            if result.returncode == 0:
-                result = subprocess.run(
-                    [str(scanner_python), "etf_strength.py", "--close-date", now.date().isoformat()],
-                    cwd=PROJECT_DIR,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    check=False,
-                )
-            log.write(f"--- Scheduled run finished with exit code {result.returncode} ---\n")
-        if result.returncode == 0:
-            MARKER.write_text(now.date().isoformat() + "\n", encoding="utf-8")
-        return result.returncode
+        scanner_python = PROJECT_DIR / '.venv' / 'bin' / 'python'
+        if not scanner_python.exists():
+            scanner_python = Path(sys.executable)
+        stages = [(name, [script, '--snapshot-date', stamp]) for name,script in [
+            ('NEL','focus_list.py'), ('KK','kk_scan.py'), ('OSB','obc_scan.py'),
+            ('Top D','top_d.py'), ('Superliquid','super_liquid.py')]]
+        stages.append(('ETF studies', ['etf_strength.py','--close-date',close.isoformat()]))
+        with (LOG_DIR / f'daily_scan_{close.isoformat()}.log').open('a', encoding='utf-8') as log:
+            for name,args in stages:
+                if name in state['completed']:
+                    print(f'{name}: already refreshed for {close}; keeping completed output.', flush=True)
+                    continue
+                for attempt in range(1,3):
+                    message=f'--- {name}: close {close}, attempt {attempt}/2 ---'
+                    print(message, flush=True);log.write(message+'\n');log.flush()
+                    process=subprocess.Popen([str(scanner_python),'-u',*args],cwd=PROJECT_DIR,
+                        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+                    for line in process.stdout:
+                        print(line,end='',flush=True);log.write(line);log.flush()
+                    code=process.wait()
+                    if code == 0:
+                        state['completed'].append(name)
+                        state_path.write_text(json.dumps(state))
+                        break
+                    if attempt == 1:
+                        print(f'{name}: retrying after failure (exit {code}).',flush=True)
+                        time.sleep(10)
+                if code:
+                    failures.append(name)
+            state['failed']=failures
+            state_path.write_text(json.dumps(state))
+        if not failures:
+            MARKER.write_text(close.isoformat()+'\n',encoding='utf-8')
+        print('Refresh complete.' if not failures else 'Refresh incomplete: '+', '.join(failures),flush=True)
+        return int(bool(failures))
     finally:
         LOCK_DIR.rmdir()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

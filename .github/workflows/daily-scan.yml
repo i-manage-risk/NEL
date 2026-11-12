@@ -2,13 +2,21 @@ name: Daily NEL scan
 
 on:
   schedule:
-    # One of these two UTC times is 4:25 PM in New York; the runner ignores
-    # the other one and handles daylight-saving time itself.
-    - cron: "25 20,21 * * 1-5"
+    # Repeated post-close attempts cover DST, delays and temporary provider outages.
+    - cron: "25,55 20-23 * * 1-5"
+    - cron: "25,55 0-3 * * 2-6"
+    # Overnight/morning catch-up; the guard blocks intraday stock scans.
+    - cron: "15 12,13 * * 1-5"
   workflow_dispatch:
+    inputs:
+      force:
+        description: Recheck completed stock stages as well as failed ones
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: nel-repository-writes
@@ -17,44 +25,93 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      - name: Select completed session
+        id: session
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime
+          from scripts.run_after_close import scheduled_close, NY_TZ
+          close = scheduled_close(datetime.now(NY_TZ))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('run=' + ('true' if close else 'false') + '\n')
+          print('Refreshing close:', close, '| intraday scans are blocked')
+          PY
+
       - name: Install dependencies
+        if: steps.session.outputs.run == 'true'
         run: pip install -r requirements.txt
 
-      - name: Run after the US market close
-        run: python scripts/run_after_close.py
+      - name: Refresh stock screens and ETF studies
+        id: scan
+        if: steps.session.outputs.run == 'true'
+        continue-on-error: true
+        env:
+          FORCE_STOCK_REFRESH: ${{ inputs.force || 'false' }}
+        run: python -u scripts/run_after_close.py
 
       - name: Refresh daily breadth monitor
-        run: python breadth_dashboard.py
+        id: breadth
+        if: steps.session.outputs.run == 'true'
+        continue-on-error: true
+        run: python -u breadth_dashboard.py
+
       - name: Refresh index histories
-        run: python index_history.py
+        id: indexes
+        if: steps.session.outputs.run == 'true'
+        continue-on-error: true
+        run: python -u index_history.py
+
       - name: Refresh RSP market overview
-        run: python flow_market_data.py
+        id: flow
+        if: steps.session.outputs.run == 'true'
+        continue-on-error: true
+        run: python -u flow_market_data.py
 
       - name: Refresh benchmark context
+        if: steps.session.outputs.run == 'true'
         continue-on-error: true
         run: python market_context.py
 
       - name: Build workspace from preserved scans
+        if: steps.session.outputs.run == 'true'
         run: python workspace_data.py
 
-      - name: Commit workspace and detailed dashboards
+      - name: Commit all successfully refreshed datasets
+        if: steps.session.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add outputs industry_flow_dashboard.html index.html super-liquid.html themes.html sectors.html breadth.html data/etf_holdings_cache.json outputs/spx_history.json
-          git diff --cached --quiet || git commit -m "Update NEL scan for $(date -u +%F)"
-          # Generated files make the worktree dirty until the commit above.
-          # Rebase the committed scan result onto anything another writer
-          # published while this job collected data.
-          git pull --rebase origin main
-          # A second writer may still land during the scan. Retry once after a
-          # rebase; the shared workflow concurrency group prevents overlap
-          # between Actions jobs, while this covers external/manual commits.
-          git push || (git pull --rebase origin main && git push)
+          git add outputs industry_flow_dashboard.html index.html super-liquid.html themes.html sectors.html breadth.html data/etf_holdings_cache.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh completed market data for $(date -u +%F)"
+            git pull --rebase origin main
+            git push || (git pull --rebase origin main && git push)
+            gh api --method POST repos/${{ github.repository }}/pages/builds
+          fi
+
+      - name: Preserve detailed scanner logs
+        if: always() && steps.session.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-logs-${{ github.run_id }}
+          path: logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Report incomplete refreshes for automatic retry
+        if: >-
+          steps.scan.outcome == 'failure' || steps.breadth.outcome == 'failure' ||
+          steps.indexes.outcome == 'failure' || steps.flow.outcome == 'failure'
+        run: |
+          echo "One or more sources failed. Successful datasets were published; the next scheduled run retries incomplete stock stages."
+          exit 1
