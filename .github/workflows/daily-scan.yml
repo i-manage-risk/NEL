@@ -1,6 +1,11 @@
 name: Daily NEL scan
 
 on:
+  # Independent existing refresh jobs also wake the close scanner if its cron is delayed.
+  workflow_run:
+    workflows: ["Refresh Stockbee breadth", "Capture ETF after-hours session"]
+    types: [completed]
+    branches: [main]
   schedule:
     # Repeated post-close attempts cover DST, delays and temporary provider outages.
     - cron: "25,55 20-23 * * 1-5"
@@ -43,6 +48,8 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('run=' + ('true' if close else 'false') + '\n')
           print('Refreshing close:', close, '| intraday scans are blocked')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(f'## Daily refresh\nTarget completed close: **{close}**\n' if close else '## No refresh performed\nThis run started before the post-close window; stock scans were intentionally skipped. A green job here does not mean new data was published.\n')
           PY
 
       - name: Install dependencies
