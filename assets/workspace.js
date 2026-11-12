@@ -508,6 +508,7 @@ function mountIndexInspection(){
  svg.addEventListener('pointermove',event=>{if(frame)cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{frame=0;inspect(event);});},{passive:true});svg.addEventListener('click',()=>{pinned=Number(svg.dataset.index??-1);});svg.addEventListener('pointerleave',()=>{cancelAnimationFrame(frame);frame=0;overlay.hidden=true;update(pinned);});
  const size=()=>{const box=svg.getBoundingClientRect();svg.querySelectorAll('text').forEach(text=>{text.style.transformBox='fill-box';text.style.transformOrigin='center';text.style.transform='scale('+1000/box.width+','+380/box.height+')';});};requestAnimationFrame(size);update(-1);
 }
+let flowOverviewViews={market:'charts',segments:'table',equal_weight:'table',sectors:'table',industries:'table'},flowCategoryOrders={},flowCategoryOrderDate=null;
 let flowOverviewState=null,flowOverviewSort={market:'default',segments:'default',equal_weight:'default',sectors:'default',industries:'default'};
 function flowMarketOverview(){
  if(!flowMarket.series?.RSP)return '<p class="empty">Market overview data is not available. Run the daily market-data refresh.</p>';
@@ -519,9 +520,10 @@ function flowMarketOverview(){
  Object.values(metrics).forEach(m=>{if(!m.available)return;m.relative=finite(m.month)&&finite(benchmark.month)?100*((1+m.month/100)/(1+benchmark.month/100)-1):null;
  const rspByDate=new Map(benchmark.history.map(r=>[r.date,r.close]));let wins=0,total=0;const h=m.history;for(let i=Math.max(1,h.length-21);i<h.length;i++){const prev=h[i-1],now=h[i],rspPrev=rspByDate.get(prev.date),rspNow=rspByDate.get(now.date);if(rspPrev&&rspNow){total++;if(now.close/prev.close>rspNow/rspPrev)wins++;}}m.rsDays=total?100*wins/total:null;});
  flowOverviewState={date,metrics,benchmark,rankings:{}};
+ if(flowCategoryOrderDate!==date){flowCategoryOrders={};flowCategoryOrderDate=date;}
  const value=(v,d=1)=>finite(v)?signed(v,d)+'%':'—';
  const marketChartOrder=['SPY','QQQ','IWM','DIA','RSP','QQQE','SPMO','TLT'];
- const cards=marketChartOrder.map(symbol=>flowMarket.groups.market.find(entry=>entry.symbol===symbol)).filter(Boolean).map(({symbol,name})=>{const m=metrics[symbol],score=m?.oscillator;return '<article class="market-index-card"><header><div><b>'+symbol+'</b><span>'+escapeHTML(name)+'</span></div><strong class="'+returnTone(m?.day)+'">'+(m?.available?fmt(m.close,2)+' <small>('+value(m.day,2)+')</small>':'Unavailable')+'</strong></header><div class="market-tv" id="market-tv-'+symbol+'" data-market-chart="'+symbol+'"><span>Loading daily chart…</span></div><footer><div class="market-gauge-title"><span>50D ATR index</span><b class="'+returnTone(score)+'">'+(finite(score)?signed(score,2):'—')+'</b><small>'+(finite(m?.extension)?fmt(m.extension,2)+'×':'—')+'</small></div><div class="market-extension-gauge"><em></em><i style="left:'+(finite(score)?50+50*score:50)+'%;background:'+(score<0?'#ff3266':'#85d65d')+'"></i></div><div class="market-card-context"><small>−1</small><span>'+(symbol==='RSP'?'RSP · benchmark':'1M vs RSP <b class="'+returnTone(m?.relative)+'">'+value(m?.relative)+'</b>')+'</span><small>+1</small></div></footer></article>';}).join('');
+ const chartCard=(m,key)=>{const symbol=m.symbol,name=m.name,score=m?.oscillator;return '<article class="market-index-card"><header><div><button data-market-detail="'+symbol+'" data-market-category="'+key+'">'+symbol+'</button><span>'+escapeHTML(name)+'</span></div><strong class="'+returnTone(m?.day)+'">'+(m?.available?fmt(m.close,2)+' <small>('+value(m.day,2)+')</small>':'Unavailable')+'</strong></header><div class="market-tv" id="market-tv-'+key+'-'+symbol+'" data-market-chart="'+symbol+'"><span>Loading daily chart…</span></div><footer><div class="market-gauge-title"><span>50D ATR index</span><b class="'+returnTone(score)+'">'+(finite(score)?signed(score,2):'—')+'</b><small>'+(finite(m?.extension)?fmt(m.extension,2)+'×':'—')+'</small></div><div class="market-extension-gauge"><em></em><i style="left:'+(finite(score)?50+50*score:50)+'%;background:'+(score<0?'#ff3266':'#85d65d')+'"></i></div><div class="market-card-context"><small>−1</small><span>'+(symbol==='RSP'?'RSP · benchmark':'1M vs RSP <b class="'+returnTone(m?.relative)+'">'+value(m?.relative)+'</b>')+'</span><small>+1</small></div></footer></article>';};
  const spark=(values,relative=false)=>{
  const good=values.filter(finite);if(good.length<2)return '—';
  const high=Math.max(...good),low=Math.min(...good),highIndex=good.indexOf(high),lowIndex=good.indexOf(low),darkGreen='#348747',pink='#ff3266';
@@ -543,19 +545,30 @@ function flowMarketOverview(){
  const sort=flowOverviewSort[key];if(sort&&sort!=='default')rows.sort((a,b)=>(finite(b[sort])?b[sort]:-Infinity)-(finite(a[sort])?a[sort]:-Infinity));else if(!['market','segments'].includes(key))rows.sort((a,b)=>(b.rsMonth??-Infinity)-(a.rsMonth??-Infinity)||(b.thrust??-Infinity)-(a.thrust??-Infinity));
  const top=rows.filter(m=>m.available&&m.symbol!=='RSP').reduce((a,b)=>!a||b.relative>a.relative?b:a,null);
  const columns=[['RS 1M %','rsMonth'],['RS Thrust %','thrust'],['1M price','priceSpark'],['1M RS','rsSpark'],['50D ATR index','oscillator'],['RS vs RSP','relative'],['Intraday','intraday'],['1D','day'],['1M','month'],['Off 52W H','offHigh']];
- return '<section class="market-comparison market-comparison-'+key+'"><header><h3>'+title+'</h3><small>'+(key==='segments'?'Small → mid → large cap':top?'<b>'+top.symbol+'</b> strongest 1M return vs RSP':'')+'</small></header><div class="market-table-scroll"><table><thead><tr><th>ETF / market</th>'+columns.map(([label,k])=>'<th>'+(['priceSpark','rsSpark'].includes(k)?label:'<button data-market-sort="'+k+'" data-market-category="'+key+'">'+label+(sort===k?' ↓':'')+'</button>')+'</th>').join('')+'</tr></thead><tbody>'+rows.map(m=>'<tr><td><button data-market-detail="'+m.symbol+'" data-market-category="'+key+'"><b>'+m.symbol+'</b><span>'+escapeHTML(m.name)+'</span></button></td>'+columns.map(([,k])=>{if(k==='priceSpark'||k==='rsSpark')return '<td data-sort-value="'+(finite(k==='priceSpark'?m.month:m.relative)?(k==='priceSpark'?m.month:m.relative):'')+'">'+spark((m.history||[]).slice(-22).map(r=>k==='priceSpark'?r.close:rspMap.get(r.date)?r.close/rspMap.get(r.date):null),k==='rsSpark')+'</td>';const v=m[k];if(k==='oscillator')return '<td><div class="market-table-atr"><b class="'+returnTone(v)+'">'+(finite(v)?signed(v,2):'—')+'</b><div><em></em><i style="left:'+(finite(v)?50+50*v:50)+'%;background:'+(v<0?'#ff3266':'#85d65d')+'"></i></div><small>'+(finite(m.extension)?signed(m.extension,2)+'×':'—')+'</small></div></td>';const scoring=['rsMonth','thrust'].includes(k),positive=scoring?v>=50:v>=0,alpha=finite(v)?Math.min(.3,.04+(scoring?Math.abs(v-50)/200:Math.abs(v)/50)):0;return '<td style="color:'+(positive?'#85d65d':'#ff3266')+';background:rgba('+(positive?'133,214,93,':'255,50,102,')+alpha+')">'+(finite(v)?(scoring?fmt(v,0)+'%':value(v)):'—')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div></section>';};
- return '<div class="market-flow"><section class="market-chart-grid">'+cards+'</section><div class="market-comparison-grid">'+groupTable('market','Indexes')+groupTable('segments','Market segments')+groupTable('equal_weight','Equal-weight sectors')+groupTable('sectors','SPDR sectors')+groupTable('industries','Industry ETFs')+'</div></div>';
+ const controls='<div class="segments flow-view-toggle" role="group" aria-label="'+title+' view">'+['table','charts'].map(view=>'<button type="button" data-flow-category="'+key+'" data-flow-view="'+view+'" aria-pressed="'+(flowOverviewViews[key]===view)+'" class="'+(flowOverviewViews[key]===view?'active':'')+'">'+(view==='table'?'Table':'Charts')+'</button>').join('')+'</div>';
+ const header='<header><h3>'+title+'</h3><small>'+(key==='segments'?'Small → mid → large cap':top?'<b>'+top.symbol+'</b> strongest 1M return vs RSP':'')+'</small>'+controls+'</header>';
+ if(flowOverviewViews[key]==='charts'){
+  const order=flowCategoryOrders[key]||(key==='market'?marketChartOrder:null);
+  if(order){const positions=new Map(order.map((symbol,i)=>[symbol,i]));rows.sort((a,b)=>(positions.get(a.symbol)??999)-(positions.get(b.symbol)??999));}
+  return '<section class="market-comparison market-comparison-'+key+'" data-flow-category-section="'+key+'">'+header+'<div class="market-chart-grid flow-category-charts">'+rows.map(m=>chartCard(m,key)).join('')+'</div></section>';
+ }
+ return '<section class="market-comparison market-comparison-'+key+'" data-flow-category-section="'+key+'">'+header+'<div class="market-table-scroll"><table><thead><tr><th>ETF / market</th>'+columns.map(([label,k])=>'<th>'+(['priceSpark','rsSpark'].includes(k)?label:'<button data-market-sort="'+k+'" data-market-category="'+key+'">'+label+(sort===k?' ↓':'')+'</button>')+'</th>').join('')+'</tr></thead><tbody>'+rows.map(m=>'<tr><td><button data-market-detail="'+m.symbol+'" data-market-category="'+key+'"><b>'+m.symbol+'</b><span>'+escapeHTML(m.name)+'</span></button></td>'+columns.map(([,k])=>{if(k==='priceSpark'||k==='rsSpark')return '<td data-sort-value="'+(finite(k==='priceSpark'?m.month:m.relative)?(k==='priceSpark'?m.month:m.relative):'')+'">'+spark((m.history||[]).slice(-22).map(r=>k==='priceSpark'?r.close:rspMap.get(r.date)?r.close/rspMap.get(r.date):null),k==='rsSpark')+'</td>';const v=m[k];if(k==='oscillator')return '<td><div class="market-table-atr"><b class="'+returnTone(v)+'">'+(finite(v)?signed(v,2):'—')+'</b><div><em></em><i style="left:'+(finite(v)?50+50*v:50)+'%;background:'+(v<0?'#ff3266':'#85d65d')+'"></i></div><small>'+(finite(m.extension)?signed(m.extension,2)+'×':'—')+'</small></div></td>';const scoring=['rsMonth','thrust'].includes(k),positive=scoring?v>=50:v>=0,alpha=finite(v)?Math.min(.3,.04+(scoring?Math.abs(v-50)/200:Math.abs(v)/50)):0;return '<td style="color:'+(positive?'#85d65d':'#ff3266')+';background:rgba('+(positive?'133,214,93,':'255,50,102,')+alpha+')">'+(finite(v)?(scoring?fmt(v,0)+'%':value(v)):'—')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div></section>';};
+ return '<div class="market-flow"><div class="market-comparison-grid">'+groupTable('market','Indexes')+groupTable('segments','Market segments')+groupTable('equal_weight','Equal-weight sectors')+groupTable('sectors','SPDR sectors')+groupTable('industries','Industry ETFs')+'</div></div>';
 }
-let flowDailyCharts=[],flowLightweightPromise;
+let flowDailyCharts=[],flowLightweightPromise,flowChartObserver=null,flowChartGeneration=0;
+function disposeFlowOverviewCharts(){flowChartGeneration++;flowChartObserver?.disconnect();flowChartObserver=null;flowDailyCharts.forEach(({chart,observer})=>{observer.disconnect();chart.remove();});flowDailyCharts=[];}
 function loadFlowDailyLibrary(){
  if(window.LightweightCharts)return Promise.resolve();
  return flowLightweightPromise??=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='assets/vendor/lightweight-charts-5.0.9.js';script.onload=resolve;script.onerror=reject;document.head.append(script);});
 }
-async function mountFlowOverviewCharts(){
- flowDailyCharts.forEach(({chart,observer})=>{observer.disconnect();chart.remove();});flowDailyCharts=[];
+async function mountFlowOverviewCharts(reset=true){
+ if(reset)disposeFlowOverviewCharts();
+ else{flowChartGeneration++;flowChartObserver?.disconnect();flowDailyCharts=flowDailyCharts.filter(item=>{if(item.node.isConnected)return true;item.observer.disconnect();item.chart.remove();return false;});}
+ const generation=flowChartGeneration;
  try{await loadFlowDailyLibrary();}catch(error){document.querySelectorAll('[data-market-chart]').forEach(node=>node.textContent='Chart library unavailable');return;}
- const L=window.LightweightCharts;
- document.querySelectorAll('[data-market-chart]').forEach(node=>{
+ const L=window.LightweightCharts;if(generation!==flowChartGeneration||route!=='leadership')return;
+ const mount=node=>{
+  if(!node.isConnected||node.dataset.marketMounted)return;node.dataset.marketMounted='true';
   const m=flowOverviewState?.metrics[node.dataset.marketChart];if(!m?.available){node.textContent='No completed daily bars';return;}
   node.replaceChildren();node.setAttribute('aria-label',node.dataset.marketChart+' daily candles, one month through '+m.date);
   const chart=L.createChart(node,{width:node.clientWidth,height:node.clientHeight,layout:{background:{type:'solid',color:'#202020'},textColor:'#aaa89f',fontSize:10,attributionLogo:true},grid:{vertLines:{color:'#2b2b2b'},horzLines:{color:'#2b2b2b'}},rightPriceScale:{mode:L.PriceScaleMode.Logarithmic,borderVisible:false,scaleMargins:{top:.1,bottom:.08}},timeScale:{borderVisible:false,timeVisible:false,rightOffset:1,fixRightEdge:true},crosshair:{mode:L.CrosshairMode.Normal},handleScroll:{mouseWheel:false,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:false},handleScale:{mouseWheel:false,axisPressedMouseMove:true,pinch:true}});
@@ -565,8 +578,12 @@ async function mountFlowOverviewCharts(){
   chart.addSeries(L.LineSeries,{color:'#ffffff',lineWidth:1,lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false}).setData(points);
   const end=new Date(m.date+'T12:00:00Z'),start=new Date(end);start.setUTCMonth(start.getUTCMonth()-1);const startDate=start.toISOString().slice(0,10),first=m.history.findIndex(r=>r.date>=startDate);
   const fit=()=>chart.timeScale().setVisibleLogicalRange({from:Math.max(0,first)-.6,to:m.history.length-.2});fit();
-  const observer=new ResizeObserver(()=>{if(!node.isConnected){observer.disconnect();return;}chart.resize(node.clientWidth,node.clientHeight);fit();});observer.observe(node);flowDailyCharts.push({chart,observer});
- });
+  const observer=new ResizeObserver(()=>{if(!node.isConnected){observer.disconnect();return;}chart.resize(node.clientWidth,node.clientHeight);fit();});observer.observe(node);flowDailyCharts.push({chart,observer,node});
+ };
+ const nodes=[...document.querySelectorAll('[data-market-chart]')].filter(node=>!node.dataset.marketMounted);
+ if(!('IntersectionObserver' in window)){nodes.forEach(mount);return;}
+ flowChartObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){mount(entry.target);flowChartObserver?.unobserve(entry.target);}}),{rootMargin:'300px 0px'});
+ nodes.forEach(node=>flowChartObserver.observe(node));
 }
 function openMarketDetail(symbol,category){
  const m=flowOverviewState?.metrics[symbol];if(!m?.available)return;
@@ -999,7 +1016,7 @@ function render(){
   else{document.querySelector('#header-date-controls').innerHTML=closeCalendar();}
 
   if(route==='screener'){const slot=document.querySelector('#header-date-controls'),controls=document.createElement('div');controls.className='screener-header-controls';const tabs=document.querySelector('.screener-tabs'),toolbar=document.querySelector('#view > .toolbar:not(.screener-tabs)');const center=document.createElement('div');center.className='screener-header-center';center.append(tabs);const count=toolbar.querySelector('.note');count.classList.add('screener-result-count');const results=document.querySelector('#view > .kk-table, #view > .chart-grid, #view > .empty');document.querySelector('#view').insertBefore(count,results||document.querySelector('#view > .note'));controls.append(center,toolbar);slot.append(controls);}
-  if(route==='leadership')mountFlowOverviewCharts();
+  if(route==='leadership')mountFlowOverviewCharts();else disposeFlowOverviewCharts();
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
@@ -1029,6 +1046,14 @@ document.addEventListener('click',async event=>{
  if(node.dataset.leadership){leadershipKind=node.dataset.leadership;render();}
  if(node.dataset.indexRange){indexFrame=node.dataset.indexRange;render();return;}
  if(node.dataset.marketDetail){openMarketDetail(node.dataset.marketDetail,node.dataset.marketCategory);return;}
+ if(node.dataset.flowView){
+  const key=node.dataset.flowCategory,view=node.dataset.flowView,section=document.querySelector('[data-flow-category-section="'+key+'"]');
+  if(!section||flowOverviewViews[key]===view)return;
+  const table=section.querySelector('table');if(table)flowCategoryOrders[key]=[...table.querySelectorAll('tbody [data-market-detail]')].map(button=>button.dataset.marketDetail);
+  flowOverviewViews[key]=view;
+  const holder=document.createElement('div');holder.innerHTML=flowMarketOverview();section.replaceWith(holder.querySelector('[data-flow-category-section="'+key+'"]'));
+  mountFlowOverviewCharts(false);return;
+ }
  if(node.dataset.marketSort){flowOverviewSort[node.dataset.marketCategory]=node.dataset.marketSort;const category=node.dataset.marketCategory,old=document.querySelector('.market-comparison-grid'),holder=document.createElement('div');holder.innerHTML=flowMarketOverview();old.replaceWith(holder.querySelector('.market-comparison-grid'));return;}
  if(node.dataset.action==='market-definitions'){const guide=document.querySelector('.market-metric-guide');guide.hidden=!guide.hidden;return;}
  if(node.dataset.flowIndex){flowSelection=node.dataset.flowIndex;render();return;}
