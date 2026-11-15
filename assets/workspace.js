@@ -10,7 +10,7 @@ const money = v => finite(v) ? '$'+fmt(v/(v>=1e9?1e9:1e6),1)+(v>=1e9?'B':'M') : 
 const frames = { '1w':'1W', '1m':'1M', '3m':'3M', '6m':'6M', '1y':'1Y' };
 const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Months', '1y':'1 Year' };
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
-const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Capital flow',positioning:'Positioning',screener:'Screener',method:'Sources & definitions'};
+const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',positioning:'Positioning',screener:'Screener',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, flowMarket={}, cot={}, context={}, route='debrief', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
@@ -553,7 +553,7 @@ function flowMarketOverview(){
   return '<section class="market-comparison market-comparison-'+key+'" data-flow-category-section="'+key+'">'+header+'<div class="market-chart-grid flow-category-charts">'+rows.map(m=>chartCard(m,key)).join('')+'</div></section>';
  }
  return '<section class="market-comparison market-comparison-'+key+'" data-flow-category-section="'+key+'">'+header+'<div class="market-table-scroll"><table><thead><tr><th>ETF / market</th>'+columns.map(([label,k])=>'<th>'+(['priceSpark','rsSpark'].includes(k)?label:'<button data-market-sort="'+k+'" data-market-category="'+key+'">'+label+(sort===k?' ↓':'')+'</button>')+'</th>').join('')+'</tr></thead><tbody>'+rows.map(m=>'<tr><td><button data-market-detail="'+m.symbol+'" data-market-category="'+key+'"><b>'+m.symbol+'</b><span>'+escapeHTML(m.name)+'</span></button></td>'+columns.map(([,k])=>{if(k==='priceSpark'||k==='rsSpark')return '<td data-sort-value="'+(finite(k==='priceSpark'?m.month:m.relative)?(k==='priceSpark'?m.month:m.relative):'')+'">'+spark((m.history||[]).slice(-22).map(r=>k==='priceSpark'?r.close:rspMap.get(r.date)?r.close/rspMap.get(r.date):null),k==='rsSpark')+'</td>';const v=m[k];if(k==='oscillator')return '<td><div class="market-table-atr"><b class="'+returnTone(v)+'">'+(finite(v)?signed(v,2):'—')+'</b><div><em></em><i style="left:'+(finite(v)?50+50*v:50)+'%;background:'+(v<0?'#ff3266':'#85d65d')+'"></i></div><small>'+(finite(m.extension)?signed(m.extension,2)+'×':'—')+'</small></div></td>';const scoring=['rsMonth','thrust'].includes(k),positive=scoring?v>=50:v>=0,alpha=finite(v)?Math.min(.3,.04+(scoring?Math.abs(v-50)/200:Math.abs(v)/50)):0;return '<td style="color:'+(positive?'#85d65d':'#ff3266')+';background:rgba('+(positive?'133,214,93,':'255,50,102,')+alpha+')">'+(finite(v)?(scoring?fmt(v,0)+'%':value(v)):'—')+'</td>';}).join('')+'</tr>').join('')+'</tbody></table></div></section>';};
- return '<div class="market-flow"><div class="market-comparison-grid">'+groupTable('market','Indexes')+groupTable('segments','Market segments')+groupTable('equal_weight','Equal-weight sectors')+groupTable('sectors','SPDR sectors')+groupTable('industries','Industry ETFs')+'</div></div>';
+ return '<div class="market-flow"><div class="market-comparison-grid">'+(route==='industries'?groupTable('industries','Industry ETFs'):groupTable('market','Indexes')+groupTable('segments','Market segments')+groupTable('equal_weight','Equal-weight sectors')+groupTable('sectors','SPDR sectors'))+'</div></div>';
 }
 let flowDailyCharts=[],flowLightweightPromise,flowChartObserver=null,flowChartGeneration=0;
 function disposeFlowOverviewCharts(){flowChartGeneration++;flowChartObserver?.disconnect();flowChartObserver=null;flowDailyCharts.forEach(({chart,observer})=>{observer.disconnect();chart.remove();});flowDailyCharts=[];}
@@ -566,7 +566,7 @@ async function mountFlowOverviewCharts(reset=true){
  else{flowChartGeneration++;flowChartObserver?.disconnect();flowDailyCharts=flowDailyCharts.filter(item=>{if(item.node.isConnected)return true;item.observer.disconnect();item.chart.remove();return false;});}
  const generation=flowChartGeneration;
  try{await loadFlowDailyLibrary();}catch(error){document.querySelectorAll('[data-market-chart]').forEach(node=>node.textContent='Chart library unavailable');return;}
- const L=window.LightweightCharts;if(generation!==flowChartGeneration||route!=='leadership')return;
+ const L=window.LightweightCharts;if(generation!==flowChartGeneration||!['leadership','industries'].includes(route))return;
  const mount=node=>{
   if(!node.isConnected||node.dataset.marketMounted)return;node.dataset.marketMounted='true';
   const m=flowOverviewState?.metrics[node.dataset.marketChart];if(!m?.available){node.textContent='No completed daily bars';return;}
@@ -1003,21 +1003,21 @@ function render(){
   const savedSession=document.querySelector('#header-date-controls .session');if(savedSession)document.querySelector('.workspace-top').append(savedSession);document.querySelector('#header-date-controls').replaceChildren();
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
-  document.body.classList.toggle('flow-page',route==='leadership');
+  document.body.classList.toggle('flow-page',['leadership','industries'].includes(route));
   document.body.classList.toggle('debrief-page',route==='debrief');
   document.body.classList.toggle('screener-page',route==='screener');
-  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment'].includes(route)||(['leadership','debrief'].includes(route)&&node.matches('.research-menu')))?'none':'';});
+  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment'].includes(route)||(['leadership','industries','debrief'].includes(route)&&node.matches('.research-menu')))?'none':'';});
   $('#session-label').textContent='Close date';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);
   $('#freshness').textContent='Close '+asof()+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
-  $('#view').innerHTML=({debrief,environment,leadership,positioning,screener,method})[route]();
+  $('#view').innerHTML=({debrief,environment,leadership,industries:leadership,positioning,screener,method})[route]();
   if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
   else if(route==='positioning'){const slot=document.querySelector('#header-date-controls');slot.append(document.querySelector('[data-cot-controls]'),document.querySelector('[data-cot-alerts]'),document.querySelector('[data-cot-lookbacks]'));}
   else{document.querySelector('#header-date-controls').innerHTML=closeCalendar();}
 
   if(route==='screener'){const slot=document.querySelector('#header-date-controls'),controls=document.createElement('div');controls.className='screener-header-controls';const tabs=document.querySelector('.screener-tabs'),toolbar=document.querySelector('#view > .toolbar:not(.screener-tabs)');const center=document.createElement('div');center.className='screener-header-center';center.append(tabs);const count=toolbar.querySelector('.note');count.classList.add('screener-result-count');const results=document.querySelector('#view > .kk-table, #view > .chart-grid, #view > .empty');document.querySelector('#view').insertBefore(count,results||document.querySelector('#view > .note'));controls.append(center,toolbar);slot.append(controls);}
-  if(route==='leadership')mountFlowOverviewCharts();else disposeFlowOverviewCharts();
+  if(['leadership','industries'].includes(route))mountFlowOverviewCharts();else disposeFlowOverviewCharts();
   mountTradingViewCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
@@ -1145,7 +1145,7 @@ const pageDataSpecs={
  indexes:['outputs/index_history.json',v=>indexHistory=v],
  flow:['outputs/flow_market.json',v=>flowMarket=v]
 };
-const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
+const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
 function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
 function loadPageDataset(key){
  if(loadedPageData.has(key))return Promise.resolve();
