@@ -1,0 +1,17 @@
+let liquidLeadership={snapshots:[]},llPeriod='1m',llRelative=false;
+const llPeriods={'1d':'1D','1w':'1W','1m':'1M','3m':'3M','6m':'6M',ytd:'YTD','1y':'1Y','3y':'3Y','5y':'5Y','10y':'10Y',all:'All time'};
+function llSnapshot(){return liquidLeadership.snapshots.filter(s=>s.date<=asof()).at(-1);}
+function llRows(){const s=llSnapshot();if(!s)return [];const names=new Set(s.leaders[llPeriod]);return s.rows.filter(r=>names.has(r.symbol)).sort((a,b)=>(b.performance[llPeriod]??-Infinity)-(a.performance[llPeriod]??-Infinity)||a.symbol.localeCompare(b.symbol));}
+function liquid(){
+ const s=llSnapshot();if(!s)return '<p class="empty">No Liquid Leadership scan is saved for this close yet. Select Latest.</p>';
+ const rows=llRows(),n=s.counts[llPeriod];
+ const tabs=Object.entries(llPeriods).map(([key,label])=>'<button data-ll-period="'+key+'" class="'+(key===llPeriod?'active':'')+'" aria-pressed="'+(key===llPeriod)+'">'+label+'</button>').join('');
+ return '<section class="ll-page"><div class="ll-controls"><div class="segments ll-periods">'+tabs+'</div><button data-ll-rs="toggle" aria-pressed="'+llRelative+'" class="'+(llRelative?'active':'')+'">RS · vs RSP</button></div><p class="screen-method">Liquidity first: &gt;$100M average dollar volume · &gt;1M average daily shares. Top 2% per performance period. No ADR or extension exclusions.</p><div class="toolbar"><span class="note"><b>'+rows.length+'</b> leaders / '+n.eligible+' stocks with '+llPeriods[llPeriod]+' data · '+s.date+(s.date!==asof()?' · latest available scan':'')+'</span><span class="push"></span><button data-ll-export="true">Export symbols</button></div><div class="table-box"><table><thead><tr><th>Stock</th><th>Industry</th><th>'+llPeriods[llPeriod]+(llRelative?' RS vs RSP · pp':' return %')+'</th><th>Extension</th><th>Avg $ vol</th><th>Avg shares</th><th>ADR%</th></tr></thead><tbody>'+rows.map(r=>{const v=(llRelative?r.rs:r.performance)[llPeriod];return '<tr><td><button data-ll-stock="'+escapeHTML(r.symbol)+'">'+escapeHTML(r.symbol)+'</button></td><td>'+escapeHTML(r.industry)+'</td><td class="'+returnTone(v)+'">'+(finite(v)?signed(v,2)+(llRelative?' pp':'%'):'—')+'</td><td class="'+extensionTone(r.extension)+'">'+fmt(r.extension,2)+'×</td><td>'+money(r.dollarVolume)+'</td><td>'+fmt(r.shareVolume/1e6,2)+'M</td><td>'+pct(r.adr)+'</td></tr>';}).join('')+'</tbody></table></div><p class="note">'+(llRelative?'RS is the price-return difference versus RSP, in percentage points. Leader selection stays based on raw performance. All-time comparisons use each stock’s available start date; — means no matching RSP history.':'Returns are source price performance, not annualized. All time starts at each stock’s first available source bar; listing histories differ.')+'</p></section>';
+}
+document.addEventListener('click',event=>{
+ const b=event.target.closest('button');if(!b)return;
+ if(b.dataset.llPeriod){llPeriod=b.dataset.llPeriod;render();}
+ if(b.dataset.llRs){llRelative=!llRelative;render();}
+ if(b.dataset.llExport)download('liquid-leadership-'+llSnapshot().date+'-'+llPeriod+'.csv',llRows().map(r=>r.symbol).join('\n'),'text/csv');
+ if(b.dataset.llStock){const r=llRows().find(r=>r.symbol===b.dataset.llStock);if(!r)return;$('#stock-content').innerHTML='<h2>'+escapeHTML(r.symbol)+'</h2><p>'+escapeHTML(r.name)+'</p>'+chartGrid([{...r,leaders:[],description:r.name}],'liquid');$('#stock-dialog').showModal();mountTradingViewCharts();}
+});

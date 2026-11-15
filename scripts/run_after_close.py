@@ -127,7 +127,7 @@ def main() -> int:
         if not scanner_python.exists():
             scanner_python = Path(sys.executable)
         stages = [(name, [script, '--snapshot-date', stamp]) for name,script in [
-            ('NEL','focus_list.py'), ('KK','kk_scan.py'), ('OSB','obc_scan.py'),
+            ('Liquid Leadership','liquid_leadership.py'), ('NEL','focus_list.py'), ('KK','kk_scan.py'), ('OSB','obc_scan.py'),
             ('Top D','top_d.py'), ('Superliquid','super_liquid.py')]]
         stages.append(('ETF studies', ['etf_strength.py','--close-date',close.isoformat()]))
         with (LOG_DIR / f'daily_scan_{close.isoformat()}.log').open('a', encoding='utf-8') as log:

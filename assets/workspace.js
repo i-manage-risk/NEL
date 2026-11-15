@@ -10,7 +10,7 @@ const money = v => finite(v) ? '$'+fmt(v/(v>=1e9?1e9:1e6),1)+(v>=1e9?'B':'M') : 
 const frames = { '1w':'1W', '1m':'1M', '3m':'3M', '6m':'6M', '1y':'1Y' };
 const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Months', '1y':'1 Year' };
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
-const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',positioning:'Positioning',screener:'Screener',method:'Sources & definitions'};
+const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',liquid:'Liquid Leadership',positioning:'Positioning',screener:'Screener',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, flowMarket={}, cot={}, context={}, route='debrief', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
@@ -1011,7 +1011,7 @@ function render(){
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);
   $('#freshness').textContent='Close '+asof()+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
-  $('#view').innerHTML=({debrief,environment,leadership,industries:leadership,positioning,screener,method})[route]();
+  $('#view').innerHTML=({debrief,environment,leadership,industries:leadership,liquid,positioning,screener,method})[route]();
   if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
   else if(route==='positioning'){const slot=document.querySelector('#header-date-controls');slot.append(document.querySelector('[data-cot-controls]'),document.querySelector('[data-cot-alerts]'),document.querySelector('[data-cot-lookbacks]'));}
   else{document.querySelector('#header-date-controls').innerHTML=closeCalendar();}
@@ -1135,6 +1135,7 @@ document.addEventListener('pointerout',event=>{const svg=event.target.closest?.(
 async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
 const loadedPageData=new Set(), pendingPageData=new Map();
 const pageDataSpecs={
+ liquid:['outputs/liquid_leadership.json',v=>liquidLeadership=v],
  stocks:['outputs/workspace.json',v=>db=v],
  themes:['outputs/etf/themes_snapshots.json',v=>themes=v],
  sectors:['outputs/etf/sectors_snapshots.json',v=>sectors=v],
@@ -1145,7 +1146,7 @@ const pageDataSpecs={
  indexes:['outputs/index_history.json',v=>indexHistory=v],
  flow:['outputs/flow_market.json',v=>flowMarket=v]
 };
-const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
+const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],liquid:['liquid'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
 function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
 function loadPageDataset(key){
  if(loadedPageData.has(key))return Promise.resolve();

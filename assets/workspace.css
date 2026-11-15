@@ -382,3 +382,5 @@ html:has(body.flow-page){overflow:auto}body.flow-page{height:auto;min-height:100
 .market-tv .tv-lightweight-charts tr:hover{outline:none}
 @media(max-width:900px){.flow-page .flow-category-charts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.flow-page .flow-category-charts{grid-template-columns:1fr}}
+
+.ll-controls{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}.ll-periods{flex-wrap:wrap}.ll-page td:not(:nth-child(2)),.ll-page th:not(:nth-child(2)){text-align:center}.ll-page .table-box{overflow:auto}.ll-page table{min-width:760px}.ll-page #stock-dialog .chart-grid{grid-template-columns:1fr}
