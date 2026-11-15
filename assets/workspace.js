@@ -1003,10 +1003,11 @@ function render(){
   const savedSession=document.querySelector('#header-date-controls .session');if(savedSession)document.querySelector('.workspace-top').append(savedSession);document.querySelector('#header-date-controls').replaceChildren();
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
-  document.body.classList.toggle('flow-page',['leadership','industries'].includes(route));
+  document.body.classList.toggle('flow-page',['leadership','industries','liquid'].includes(route));
+  document.body.classList.toggle('liquid-leadership-page',route==='liquid');
   document.body.classList.toggle('debrief-page',route==='debrief');
   document.body.classList.toggle('screener-page',route==='screener');
-  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment'].includes(route)||(['leadership','industries','debrief'].includes(route)&&node.matches('.research-menu')))?'none':'';});
+  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment'].includes(route)||(['leadership','industries','liquid','debrief'].includes(route)&&node.matches('.research-menu')))?'none':'';});
   $('#session-label').textContent='Close date';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);

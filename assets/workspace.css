@@ -384,3 +384,5 @@ html:has(body.flow-page){overflow:auto}body.flow-page{height:auto;min-height:100
 @media(max-width:600px){.flow-page .flow-category-charts{grid-template-columns:1fr}}
 
 .ll-controls{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}.ll-periods{flex-wrap:wrap}.ll-page td:not(:nth-child(2)),.ll-page th:not(:nth-child(2)){text-align:center}.ll-page .table-box{overflow:auto}.ll-page table{min-width:760px}.ll-page #stock-dialog .chart-grid{grid-template-columns:1fr}
+
+.liquid-leadership-page #stock-dialog .chart-grid{grid-template-columns:1fr}.ll-page table{width:100%;table-layout:fixed}.ll-page th:nth-child(2){width:28%}.ll-page td{font-variant-numeric:tabular-nums}
