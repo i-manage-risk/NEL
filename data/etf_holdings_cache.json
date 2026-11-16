@@ -1,6 +1,58 @@
 {
-  "as_of": "2026-11-09",
+  "as_of": "2026-11-16",
   "funds": {
+    "AIPO": [
+      {
+        "name": "Quanta Services Inc",
+        "symbol": "PWR",
+        "weight": 0.0939591
+      },
+      {
+        "name": "GE Vernova Inc",
+        "symbol": "GEV",
+        "weight": 0.08561
+      },
+      {
+        "name": "Eaton Corp PLC",
+        "symbol": "ETN",
+        "weight": 0.084565
+      },
+      {
+        "name": "Vertiv Holdings Co Class A",
+        "symbol": "VRT",
+        "weight": 0.0714625
+      },
+      {
+        "name": "Bloom Energy Corp Class A",
+        "symbol": "BE",
+        "weight": 0.0455889
+      },
+      {
+        "name": "NVIDIA Corp",
+        "symbol": "NVDA",
+        "weight": 0.043492198
+      },
+      {
+        "name": "Broadcom Inc",
+        "symbol": "AVGO",
+        "weight": 0.0424703
+      },
+      {
+        "name": "Alphabet Inc Class A",
+        "symbol": "GOOGL",
+        "weight": 0.0402073
+      },
+      {
+        "name": "Constellation Energy Corp",
+        "symbol": "CEG",
+        "weight": 0.036370598
+      },
+      {
+        "name": "Cameco Corp",
+        "symbol": "CCO.TO",
+        "weight": 0.0348273
+      }
+    ],
     "AIQ": [
       {
         "name": "Palantir Technologies Inc Ordinary Shares - Class A",
@@ -789,6 +841,7 @@
         "weight": 0.023971401
       }
     ],
+    "BSOL": [],
     "BUG": [
       {
         "name": "Okta Inc Class A",
@@ -2740,11 +2793,6 @@
         "weight": 0.0338111
       },
       {
-        "name": "Churchill Capital Corp Xi",
-        "symbol": "CCXI",
-        "weight": 0.0323818
-      },
-      {
         "name": "Hexagon AB Class B",
         "symbol": "HEXA-B.ST",
         "weight": 0.026506
@@ -3918,7 +3966,7 @@
       },
       {
         "name": "Texas Capital Bancshares Inc",
-        "symbol": "TCBI",
+        "symbol": "TXCP",
         "weight": 0.0099911
       },
       {
@@ -4052,52 +4100,52 @@
       {
         "name": "Glacier Bancorp Inc",
         "symbol": "GBCI",
-        "weight": 0.0119751
+        "weight": 0.011976301
       },
       {
         "name": "United Community Banks Inc",
         "symbol": "UCB",
-        "weight": 0.011817301
+        "weight": 0.0118186
       },
       {
         "name": "Texas Capital Bancshares Inc",
-        "symbol": "TCBI",
-        "weight": 0.0117602
+        "symbol": "TXCP",
+        "weight": 0.0117615
       },
       {
         "name": "Bank OZK",
         "symbol": "OZK",
-        "weight": 0.011738501
+        "weight": 0.0117397
       },
       {
         "name": "Eastern Bankshares Inc Ordinary Shares",
         "symbol": "EBC",
-        "weight": 0.0116384
+        "weight": 0.0116396
       },
       {
         "name": "Columbia Banking System Inc",
         "symbol": "COLB",
-        "weight": 0.0116099
+        "weight": 0.011611201
       },
       {
         "name": "United Bankshares Inc",
         "symbol": "UBSI",
-        "weight": 0.011602
+        "weight": 0.0116033
       },
       {
         "name": "Valley National Bancorp",
         "symbol": "VLY",
-        "weight": 0.011596399
+        "weight": 0.0115976
       },
       {
         "name": "Pinnacle Financial Partners Inc",
         "symbol": "PNFP",
-        "weight": 0.0115723
+        "weight": 0.0115736
       },
       {
         "name": "First Interstate BancSystem Inc",
         "symbol": "FIBK",
-        "weight": 0.0115387
+        "weight": 0.011539901
       }
     ],
     "KURE": [
@@ -6246,7 +6294,6 @@
         "weight": 0.0483806
       }
     ],
-    "SOLZ": [],
     "SOXX": [
       {
         "name": "Advanced Micro Devices Inc",
@@ -6349,58 +6396,6 @@
         "name": "Merck & Co Inc",
         "symbol": "MRK",
         "weight": 0.0245031
-      }
-    ],
-    "SUPL": [
-      {
-        "name": "DHL AG",
-        "symbol": "DHL.DE",
-        "weight": 0.0519496
-      },
-      {
-        "name": "Union Pacific Corp",
-        "symbol": "UNP",
-        "weight": 0.0480331
-      },
-      {
-        "name": "Canadian National Railway Co",
-        "symbol": "CNR.TO",
-        "weight": 0.0478442
-      },
-      {
-        "name": "CSX Corp",
-        "symbol": "CSX",
-        "weight": 0.0475973
-      },
-      {
-        "name": "Norfolk Southern Corp",
-        "symbol": "NSC",
-        "weight": 0.0473348
-      },
-      {
-        "name": "Canadian Pacific Kansas City Ltd",
-        "symbol": "CP.TO",
-        "weight": 0.0458747
-      },
-      {
-        "name": "Amadeus IT Group SA",
-        "symbol": "AMS.MC",
-        "weight": 0.043659702
-      },
-      {
-        "name": "Expeditors International of Washington Inc",
-        "symbol": "EXPD",
-        "weight": 0.041708898
-      },
-      {
-        "name": "FedEx Corp",
-        "symbol": "FDX",
-        "weight": 0.0414561
-      },
-      {
-        "name": "United Parcel Service Inc Class B",
-        "symbol": "UPS",
-        "weight": 0.041403
       }
     ],
     "SVIX": [],
@@ -6879,52 +6874,52 @@
       {
         "name": "Lockheed Martin Corp",
         "symbol": "LMT",
-        "weight": 0.037186
+        "weight": 0.0371888
       },
       {
         "name": "Huntington Ingalls Industries Inc",
         "symbol": "HII",
-        "weight": 0.0345467
+        "weight": 0.0345493
       },
       {
         "name": "L3Harris Technologies Inc",
         "symbol": "LHX",
-        "weight": 0.0339429
+        "weight": 0.0339454
       },
       {
         "name": "Northrop Grumman Corp",
         "symbol": "NOC",
-        "weight": 0.0331098
+        "weight": 0.0331123
       },
       {
         "name": "Textron Inc",
         "symbol": "TXT",
-        "weight": 0.0328441
+        "weight": 0.0328466
       },
       {
         "name": "General Dynamics Corp",
         "symbol": "GD",
-        "weight": 0.0323472
+        "weight": 0.0323496
       },
       {
         "name": "Heico Corp",
         "symbol": "HEI",
-        "weight": 0.031503502
+        "weight": 0.0315058
       },
       {
         "name": "Karman Holdings Inc",
         "symbol": "KRMN",
-        "weight": 0.0314111
+        "weight": 0.0314135
       },
       {
         "name": "TransDigm Group Inc",
         "symbol": "TDG",
-        "weight": 0.0311899
+        "weight": 0.0311923
       },
       {
         "name": "Honeywell Aerospace Inc",
         "symbol": "HONA",
-        "weight": 0.0311374
+        "weight": 0.0311397
       }
     ],
     "XBI": [
@@ -7800,52 +7795,52 @@
       {
         "name": "Range Resources Corp",
         "symbol": "RRC",
-        "weight": 0.0330767
+        "weight": 0.0331082
       },
       {
         "name": "APA Corp",
         "symbol": "APA",
-        "weight": 0.029769499
+        "weight": 0.0297979
       },
       {
         "name": "Murphy Oil Corp",
         "symbol": "MUR",
-        "weight": 0.0288799
+        "weight": 0.0289074
       },
       {
         "name": "ExxonMobil Holdings Corp",
         "symbol": "XOM",
-        "weight": 0.0288154
+        "weight": 0.0288428
       },
       {
         "name": "ConocoPhillips",
         "symbol": "COP",
-        "weight": 0.0285116
+        "weight": 0.028538799
       },
       {
         "name": "Ovintiv Inc",
         "symbol": "OVV",
-        "weight": 0.028510699
+        "weight": 0.0285378
       },
       {
         "name": "EOG Resources Inc",
         "symbol": "EOG",
-        "weight": 0.0284562
+        "weight": 0.0284833
       },
       {
         "name": "Marathon Petroleum Corp",
         "symbol": "MPC",
-        "weight": 0.0281391
+        "weight": 0.028165901
       },
       {
         "name": "Chevron Corp",
         "symbol": "CVX",
-        "weight": 0.0278416
+        "weight": 0.0278682
       },
       {
         "name": "Permian Resources Corp Class A",
         "symbol": "PR",
-        "weight": 0.0278401
+        "weight": 0.0278666
       }
     ],
     "XPH": [
@@ -8061,52 +8056,52 @@
       {
         "name": "Ubiquiti Inc",
         "symbol": "UI",
-        "weight": 0.0353451
+        "weight": 0.0353232
       },
       {
         "name": "Calix Inc",
         "symbol": "CALX",
-        "weight": 0.034889802
+        "weight": 0.0348682
       },
       {
         "name": "Motorola Solutions Inc",
         "symbol": "MSI",
-        "weight": 0.0348793
+        "weight": 0.0348578
       },
       {
         "name": "Viasat Inc",
         "symbol": "VSAT",
-        "weight": 0.0347362
+        "weight": 0.034714703
       },
       {
         "name": "Digi International Inc",
         "symbol": "DGII",
-        "weight": 0.0344484
+        "weight": 0.0344271
       },
       {
         "name": "Extreme Networks Inc",
         "symbol": "EXTR",
-        "weight": 0.0343834
+        "weight": 0.0343621
       },
       {
         "name": "NetScout Systems Inc",
         "symbol": "NTCT",
-        "weight": 0.0335707
+        "weight": 0.0335499
       },
       {
         "name": "Vistance Networks Inc",
         "symbol": "VISN",
-        "weight": 0.0333224
+        "weight": 0.0333018
       },
       {
         "name": "Globalstar Inc",
         "symbol": "GSAT",
-        "weight": 0.0328823
+        "weight": 0.0328619
       },
       {
         "name": "Bandwidth Inc Class A",
         "symbol": "BAND",
-        "weight": 0.0316387
+        "weight": 0.031619202
       }
     ],
     "XTN": [
