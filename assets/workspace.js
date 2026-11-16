@@ -1040,6 +1040,7 @@ document.addEventListener('click',async event=>{
  if(['close-prev','close-next','close-latest'].includes(node.dataset.action)){const dates=closeSnapshots(),at=dates.findIndex(d=>d.date===asof()),next=node.dataset.action==='close-latest'?dates.at(-1):dates[Math.max(0,Math.min(dates.length-1,at+(node.dataset.action==='close-prev'?-1:1)))];selectCloseDate(next.date);return;}
  if(node.dataset.cotWindow){cotWindow=node.dataset.cotWindow;render();return;}
  const cotAction=node.dataset.action;
+ if(cotAction==='cot-latest'){try{await refreshPositioning(true);}catch(error){console.error('COT refresh failed',error);}return;}
  if(cotAction==='cot-prev'||cotAction==='cot-next'||cotAction==='cot-latest'){const dates=cotDates(),current=cotDate||dates.at(-1),at=dates.findLastIndex(d=>d<=current);cotDate=cotAction==='cot-latest'?'':dates[Math.max(0,Math.min(dates.length-1,at+(cotAction==='cot-prev'?-1:1)))];render();return;}
  if(node.dataset.cotJump){document.getElementById('cot-market-'+node.dataset.cotJump)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
  if(node.dataset.flowHolding&&flowETFState){flowETFState.chartSymbol=node.dataset.flowHolding;flowETFDialog();return;}
@@ -1133,7 +1134,23 @@ document.addEventListener('pointermove',event=>{
  const guide=svg.querySelector('.cot-hover-line'),gx=32+j*716/Math.max(1,history.length-1);guide.setAttribute('x1',gx);guide.setAttribute('x2',gx);guide.setAttribute('opacity','0.7');
 });
 document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget)){svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');updateCOTReadings(svg,-1);}});
-async function loadJSON(path,optional=false){const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
+async function loadJSON(path,optional=false){const url=path==='outputs/positioning.json'?path+'?cot='+Math.floor(Date.now()/300000):path;const r=await fetch(url,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
+let cotRefreshPromise=null,cotLastChecked=0;
+async function refreshPositioning(latest=false){
+ if(!cotRefreshPromise){cotRefreshPromise=loadJSON('outputs/positioning.json?refresh='+Date.now()).then(value=>{
+   if(!value.markets?.length)throw Error('No positioning reports returned');
+   cot=value;cotLastChecked=Date.now();loadedPageData.add('cot');
+ }).finally(()=>{cotRefreshPromise=null;});}
+ await cotRefreshPromise;
+ if(latest)cotDate='';
+ if(['positioning','debrief'].includes(route))render();
+}
+function checkPositioningFreshness(){
+ if(document.visibilityState==='hidden'||!['positioning','debrief'].includes(route)||!loadedPageData.has('cot')||Date.now()-cotLastChecked<300000)return;
+ refreshPositioning().catch(error=>console.warn('Positioning refresh deferred',error));
+}
+setInterval(checkPositioningFreshness,300000);
+document.addEventListener('visibilitychange',checkPositioningFreshness);
 const loadedPageData=new Set(), pendingPageData=new Map();
 const pageDataSpecs={
  liquid:['outputs/liquid_leadership.json',v=>liquidLeadership=v],
@@ -1151,7 +1168,7 @@ const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','sp
 function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
 function loadPageDataset(key){
  if(loadedPageData.has(key))return Promise.resolve();
- if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,loadJSON(path).then(value=>{assign(value);loadedPageData.add(key);}).finally(()=>pendingPageData.delete(key)));}
+ if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,loadJSON(path).then(value=>{assign(value);loadedPageData.add(key);if(key==='cot')cotLastChecked=Date.now();}).finally(()=>pendingPageData.delete(key)));}
  return pendingPageData.get(key);
 }
 let pageLoadRequest=0;
