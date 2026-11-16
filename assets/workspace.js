@@ -668,7 +668,7 @@ function arrangeBreadthDashboard(){
  const dates=breadth.map(r=>r.date).sort();
  const controls=document.createElement('span');controls.className='bm-date-controls';
  controls.innerHTML='<button aria-label="Previous session">←</button><button aria-label="Next session">→</button><button>Latest</button>';
- controls.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>{breadthPinned=-1;const at=dates.indexOf(breadthHoverLatest.date);breadthDate=i===2?'':dates[Math.max(0,Math.min(dates.length-1,at+(i===0?-1:1)))];render();});
+ controls.querySelectorAll('button').forEach((button,i)=>button.onclick=async()=>{if(i===2){try{await refreshSiteData(true);breadthPinned=-1;breadthDate='';render();}catch(error){console.warn('Breadth refresh failed',error);}return;}breadthPinned=-1;const at=dates.indexOf(breadthHoverLatest.date);breadthDate=i===2?'':dates[Math.max(0,Math.min(dates.length-1,at+(i===0?-1:1)))];render();});
  page.querySelector('[data-breadth-date]').parentElement.after(controls);
  document.onkeydown=event=>{if(event.key==='Escape'&&document.querySelector('.bm-workstation')){breadthPinned=-1;setBreadthHover(-1);}};
  page.classList.add('bm-console');
@@ -1037,6 +1037,7 @@ function showStock(symbol,kind){
 }
 document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group],[data-flow-group],[data-flow-index]');if(!node)return;
+ if(node.dataset.action==='close-latest'){try{await refreshSiteData(true);$('#session').value=db.snapshots.at(-1).date;render();}catch(error){console.warn('Latest refresh failed',error);}return;}
  if(['close-prev','close-next','close-latest'].includes(node.dataset.action)){const dates=closeSnapshots(),at=dates.findIndex(d=>d.date===asof()),next=node.dataset.action==='close-latest'?dates.at(-1):dates[Math.max(0,Math.min(dates.length-1,at+(node.dataset.action==='close-prev'?-1:1)))];selectCloseDate(next.date);return;}
  if(node.dataset.cotWindow){cotWindow=node.dataset.cotWindow;render();return;}
  const cotAction=node.dataset.action;
@@ -1134,7 +1135,8 @@ document.addEventListener('pointermove',event=>{
  const guide=svg.querySelector('.cot-hover-line'),gx=32+j*716/Math.max(1,history.length-1);guide.setAttribute('x1',gx);guide.setAttribute('x2',gx);guide.setAttribute('opacity','0.7');
 });
 document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget)){svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');updateCOTReadings(svg,-1);}});
-async function loadJSON(path,optional=false){const url=path==='outputs/positioning.json'?path+'?cot='+Math.floor(Date.now()/300000):path;const r=await fetch(url,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}return r.json();}
+const dataETags=new Map();
+async function loadJSON(path,optional=false){const base=path.split('?')[0],url=path.includes('?')?path:path+'?data='+Math.floor(Date.now()/300000);const r=await fetch(url,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}const value=await r.json();dataETags.set(base,r.headers.get('etag')||r.headers.get('last-modified'));return value;}
 let cotRefreshPromise=null,cotLastChecked=0;
 async function refreshPositioning(latest=false){
  if(!cotRefreshPromise){cotRefreshPromise=loadJSON('outputs/positioning.json?refresh='+Date.now()).then(value=>{
@@ -1149,8 +1151,7 @@ function checkPositioningFreshness(){
  if(document.visibilityState==='hidden'||!['positioning','debrief'].includes(route)||!loadedPageData.has('cot')||Date.now()-cotLastChecked<300000)return;
  refreshPositioning().catch(error=>console.warn('Positioning refresh deferred',error));
 }
-setInterval(checkPositioningFreshness,300000);
-document.addEventListener('visibilitychange',checkPositioningFreshness);
+
 const loadedPageData=new Set(), pendingPageData=new Map();
 const pageDataSpecs={
  liquid:['outputs/liquid_leadership.json',v=>liquidLeadership=v],
@@ -1166,11 +1167,36 @@ const pageDataSpecs={
 };
 const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],liquid:['liquid'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
 function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
-function loadPageDataset(key){
- if(loadedPageData.has(key))return Promise.resolve();
- if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,loadJSON(path).then(value=>{assign(value);loadedPageData.add(key);if(key==='cot')cotLastChecked=Date.now();}).finally(()=>pendingPageData.delete(key)));}
+function loadPageDataset(key,refresh=false){
+ if(loadedPageData.has(key)&&!refresh)return Promise.resolve();
+ if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,loadJSON(refresh?path+'?refresh='+Date.now():path).then(value=>{assign(value);loadedPageData.add(key);if(key==='cot')cotLastChecked=Date.now();}).finally(()=>pendingPageData.delete(key)));}
  return pendingPageData.get(key);
 }
+let siteRefreshPromise=null,siteLastChecked=Date.now();
+async function refreshSiteData(force=false){
+ if(siteRefreshPromise)return siteRefreshPromise;
+ siteRefreshPromise=(async()=>{
+  const page=route,oldLatest=db.snapshots?.at(-1)?.date,selectedDate=$('#session').value,wasLatest=!selectedDate||selectedDate===oldLatest;
+  const calendar=await loadJSON('outputs/workspace_calendar.json?refresh='+Date.now());
+  let changed=false;
+  if(calendar.snapshots?.length&&JSON.stringify(calendar.snapshots.map(s=>s.date))!==JSON.stringify(db.snapshots?.map(s=>s.date))){
+   db=calendar;loadedPageData.delete('stocks');changed=true;
+   $('#session').innerHTML=calendar.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+(s.closeDate||s.date)+'</option>').join('');
+   $('#session').value=wasLatest?calendar.snapshots.at(-1).date:selectedDate;
+  }
+  await Promise.all((pageDataNeeds[page]||[]).map(async key=>{
+   const [path]=pageDataSpecs[key];let update=force||!loadedPageData.has(key);
+   if(!update){const response=await fetch(path+'?check='+Math.floor(Date.now()/300000),{method:'HEAD',cache:'no-cache'});if(!response.ok)throw Error('Could not check '+path);const version=response.headers.get('etag')||response.headers.get('last-modified');update=!version||version!==dataETags.get(path);}
+   if(update){await loadPageDataset(key,true);changed=true;}
+  }));
+  siteLastChecked=Date.now();
+  if(changed&&route===page)render();
+ })().finally(()=>{siteRefreshPromise=null;});
+ return siteRefreshPromise;
+}
+function checkSiteFreshness(){if(document.visibilityState!=='hidden'&&Date.now()-siteLastChecked>=300000)refreshSiteData().catch(error=>console.warn('Data refresh deferred',error));}
+setInterval(checkSiteFreshness,300000);
+document.addEventListener('visibilitychange',checkSiteFreshness);
 let pageLoadRequest=0;
 async function loadRouteData(page){
  const request=++pageLoadRequest;

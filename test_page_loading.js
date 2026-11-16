@@ -2,7 +2,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('assets/workspace.js','utf8');
 const block=source.slice(source.indexOf('const loadedPageData='),source.indexOf('async function start(){'));
 let requests=[];
-const ctx={db:{},themes:{},sectors:{},breadth:[],spxHistory:[],cot:{},context:{},indexHistory:{},flowMarket:{},loadJSON:async path=>{requests.push(path);return {source:path}},$(){return {}},titles:{},escapeHTML:s=>s,render(){}};
+const ctx={setInterval(){},document:{addEventListener(){}},db:{},themes:{},sectors:{},breadth:[],spxHistory:[],cot:{},context:{},indexHistory:{},flowMarket:{},loadJSON:async path=>{requests.push(path);return {source:path}},$(){return {}},titles:{},escapeHTML:s=>s,render(){}};
 vm.createContext(ctx);vm.runInContext(block,ctx);
 (async()=>{
  await vm.runInContext("Promise.all(pageDataNeeds.leadership.map(loadPageDataset))",ctx);
