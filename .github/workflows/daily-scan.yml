@@ -7,8 +7,9 @@ on:
     types: [completed]
     branches: [main]
   schedule:
-    # Hourly, away from the busy start of the hour. NY close guard prevents intraday stock replacement.
-    - cron: "17 * * * *"
+    # Five-minute post-close / overnight attempts; the NY guard handles DST.
+    - cron: "*/5 20-23 * * 1-5"
+    - cron: "*/5 0-13 * * 2-6"
   workflow_dispatch:
     inputs:
       force:
@@ -36,72 +37,35 @@ jobs:
 
       - name: Select completed session
         id: session
+        env:
+          FORCE_REFRESH: ${{ inputs.force || 'false' }}
         run: |
           python - <<'PY'
           import os
           from datetime import datetime
           from scripts.run_after_close import scheduled_close, NY_TZ
-          close = scheduled_close(datetime.now(NY_TZ))
+          from scripts.refresh_pages import freshness
+          now = datetime.now(NY_TZ)
+          close = scheduled_close(now)
+          current = close is not None and all(s['current'] for s in freshness(close, now).values())
+          needed = close is not None and (not current or os.environ.get('FORCE_REFRESH') == 'true')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write('run=' + ('true' if close else 'false') + '\n')
-          print('Refreshing close:', close, '| intraday scans are blocked')
+              out.write('run=' + ('true' if needed else 'false') + '\n')
+          print('Target close:', close, '| all pages current:', current, '| refresh needed:', needed)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              summary.write(f'## Daily refresh\nTarget completed close: **{close}**\n' if close else '## No refresh performed\nThis run started before the post-close window; stock scans were intentionally skipped. A green job here does not mean new data was published.\n')
+              summary.write(f'## Page freshness\nTarget close: **{close}** · Already current: **{current}** · Refresh needed: **{needed}**\n')
           PY
 
       - name: Install dependencies
         if: steps.session.outputs.run == 'true'
         run: pip install -r requirements.txt
 
-      - name: Refresh stock screens and ETF studies
-        id: scan
+      - name: Retry each stale source every five minutes and publish progress
         if: steps.session.outputs.run == 'true'
-        continue-on-error: true
         env:
           FORCE_STOCK_REFRESH: ${{ inputs.force || 'false' }}
-        run: python -u scripts/run_after_close.py
-
-      - name: Refresh daily breadth monitor
-        id: breadth
-        if: steps.session.outputs.run == 'true'
-        continue-on-error: true
-        run: python -u breadth_dashboard.py
-
-      - name: Refresh index histories
-        id: indexes
-        if: steps.session.outputs.run == 'true'
-        continue-on-error: true
-        run: python -u index_history.py
-
-      - name: Refresh RSP market overview
-        id: flow
-        if: steps.session.outputs.run == 'true'
-        continue-on-error: true
-        run: python -u flow_market_data.py
-
-      - name: Refresh benchmark context
-        if: steps.session.outputs.run == 'true'
-        continue-on-error: true
-        run: python market_context.py
-
-      - name: Build workspace from preserved scans
-        if: steps.session.outputs.run == 'true'
-        run: python workspace_data.py
-
-      - name: Commit all successfully refreshed datasets
-        if: steps.session.outputs.run == 'true'
-        env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add outputs industry_flow_dashboard.html index.html super-liquid.html themes.html sectors.html breadth.html data/etf_holdings_cache.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Refresh completed market data for $(date -u +%F)"
-            git pull --rebase origin main
-            git push || (git pull --rebase origin main && git push)
-            gh api --method POST repos/${{ github.repository }}/pages/builds
-          fi
+        run: python -u scripts/refresh_pages.py --watch-minutes 35 --publish
 
       - name: Preserve detailed scanner logs
         if: always() && steps.session.outputs.run == 'true'
@@ -112,10 +76,3 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Report incomplete refreshes for automatic retry
-        if: >-
-          steps.scan.outcome == 'failure' || steps.breadth.outcome == 'failure' ||
-          steps.indexes.outcome == 'failure' || steps.flow.outcome == 'failure'
-        run: |
-          echo "One or more sources failed. Successful datasets were published; the next scheduled run retries incomplete stock stages."
-          exit 1
