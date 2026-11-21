@@ -57,7 +57,10 @@ def publish():
  if subprocess.run(['git','diff','--cached','--quiet'],cwd=ROOT).returncode==0:return
  subprocess.run(['git','commit','-m','Refresh completed page sources'],cwd=ROOT,check=True,timeout=120)
  for attempt in range(3):
-  subprocess.run(['git','pull','--rebase','origin','main'],cwd=ROOT,check=True,timeout=120)
+  try:subprocess.run(['git','pull','--rebase','origin','main'],cwd=ROOT,check=True,timeout=120)
+  except subprocess.CalledProcessError:
+   subprocess.run(['git','rebase','--abort'],cwd=ROOT,timeout=30)
+   raise RuntimeError('Concurrent data changed. Preserving remote history; next five-minute run starts from latest main.')
   if subprocess.run(['git','push','origin','main'],cwd=ROOT,timeout=120).returncode==0:break
  else:raise RuntimeError('Unable to publish refreshed data')
  command(['gh','api','--method','POST',f'repos/{os.environ["GITHUB_REPOSITORY"]}/pages/builds'],60)
@@ -100,7 +103,9 @@ def main():
   if summary:
    with open(summary,'a') as out:
     out.write('\n| Source | Available | Required | Current |\n|---|---|---|---|\n'+''.join(f"| {key} | {value['asof']} | {value['target']} | {value['current']} |\n" for key,value in states.items()))
-  if args.publish:publish()
+  if args.publish:
+   publish()
+   status['complete']=not errors and all(s['current'] for s in freshness(close,datetime.now(NY_TZ)).values())
   if status['complete']:return 0
   if time.monotonic()+300>=deadline:return 1
   # Don't run closing stock scans after the pre-market safety window opens.
