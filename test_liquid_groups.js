@@ -10,4 +10,8 @@ for(const period of Object.keys(snapshot.leaders)){
  const rows=ctx.llAllRows();const bands=vm.runInContext('llBands',ctx);assert.equal(bands.reduce((n,b)=>n+rows.filter(r=>finite(r.extension)&&b[2](r.extension)).length,0),rows.filter(r=>finite(r.extension)).length);
 }
 vm.runInContext("llPeriod='all';llRelative=true",ctx);html=ctx.liquid();assert(html.includes('vs SPX'));assert(snapshot.rows.some(r=>r.rsBenchmark.all==='SPX'&&finite(r.rs.all)));
+vm.runInContext("llDisplay='charts'",ctx);
+html=ctx.liquid();assert.equal((html.match(/data-tv-symbol=/g)||[]).length,ctx.llRows().length);assert(html.includes('data-ll-display="table"'));assert(html.includes('data-ll-display="charts"'));
+ctx.group=ctx.llAllRows()[0].industry;vm.runInContext('llGroup=group',ctx);html=ctx.liquid();assert.equal((html.match(/data-tv-symbol=/g)||[]).length,ctx.llRows().length);assert(ctx.llRows().every(r=>r.industry===ctx.group));
+vm.runInContext("llDisplay='table'",ctx);html=ctx.liquid();assert(!html.includes('data-tv-symbol='));assert(ctx.llRows().every(r=>r.industry===ctx.group));
 console.log('Groups: full-universe coverage, leader counts, medians, exhaustive extension bands and SPX fallback passed.');
