@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the daily scanner once, 10 minutes after a regular US market close."""
+"""Run the daily scanner after delayed regular-session closing quotes are available."""
 
 from __future__ import annotations
 
@@ -77,10 +77,10 @@ def nyse_holidays(year: int) -> set[date]:
 def scheduled_close(now: datetime) -> date | None:
     """Allow post-close retries and overnight catch-up, never an intraday stock scan."""
     now = now.astimezone(NY_TZ)
-    if (9, 0) <= (now.hour, now.minute) < (16, 25):
+    if (9, 0) <= (now.hour, now.minute) < (16, 15):
         return None
     candidate = now.date()
-    if (now.hour, now.minute) < (16, 25):
+    if (now.hour, now.minute) < (16, 15):
         candidate -= timedelta(days=1)
     while candidate.weekday() >= 5 or candidate in nyse_holidays(candidate.year):
         candidate -= timedelta(days=1)

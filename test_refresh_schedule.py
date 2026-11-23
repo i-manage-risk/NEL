@@ -4,11 +4,11 @@ from scripts.run_after_close import scheduled_close, next_session_date, NY_TZ
 class RefreshScheduleTests(unittest.TestCase):
     def at(self,s):return datetime.fromisoformat(s).replace(tzinfo=NY_TZ)
     def test_close_and_overnight_are_same_session(self):
-        self.assertEqual(scheduled_close(self.at('2026-11-11T16:25')),date(2026,11,11))
+        self.assertEqual(scheduled_close(self.at('2026-11-11T16:15')),date(2026,11,11))
         self.assertEqual(scheduled_close(self.at('2026-11-12T02:00')),date(2026,11,11))
         self.assertEqual(scheduled_close(self.at('2026-11-12T08:15')),date(2026,11,11))
     def test_intraday_is_blocked(self):
-        for time in ['09:00','09:30','12:00','16:00','16:24']:
+        for time in ['09:00','09:30','12:00','16:00','16:14']:
             self.assertIsNone(scheduled_close(self.at('2026-11-12T'+time)))
     def test_weekend_holiday_and_dst(self):
         self.assertEqual(scheduled_close(self.at('2026-11-16T08:00')),date(2026,11,13))
