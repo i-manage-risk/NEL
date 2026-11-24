@@ -13,6 +13,7 @@ class PageRefreshTests(unittest.TestCase):
   self.write('outputs/flow_market.json',{'series':{s:{'history':[{'date':'2026-11-20'}]} for s in ['SPY','QQQ','IWM','DIA','RSP','QQQE','SPMO','TLT']}})
   self.write('outputs/index_history.json',{s:{'history':[{'date':'2026-11-20'}]} for s in ['spx','nasdaq','russell','dow']})
   self.write('outputs/breadth_market_monitor.json',[{'date':'2026-11-20'}])
+  self.write('outputs/debrief_data.json',{'market':{'series':{'RSP':{'history':[{'date':'2026-11-20'}]}}}})
   self.write('outputs/positioning.json',{'markets':[{'history':[{'date':'2026-11-17'}]} for _ in range(10)]})
   self.write('outputs/workspace_calendar.json',{'snapshots':[{'closeDate':'2026-11-20'}]})
  def tearDown(self):self.tmp.cleanup()
@@ -25,7 +26,7 @@ class PageRefreshTests(unittest.TestCase):
   self.write('outputs/breadth_market_monitor.json',[{'date':'2026-11-19'}]);self.write('outputs/positioning.json',{'markets':[]});calls=[]
   def run(args,**kw):calls.append(args[-1]);return args[-1]!='breadth_dashboard.py'
   states,errors=run_round(self.close,self.now,self.root,run)
-  self.assertEqual(calls,['breadth_dashboard.py','positioning.py']);self.assertEqual(errors,['breadth']);self.assertFalse(states['breadth']['current'])
+  self.assertEqual(calls,['breadth_dashboard.py','positioning.py','scripts/build_debrief_data.py']);self.assertEqual(errors,['breadth']);self.assertFalse(states['breadth']['current'])
  def test_missing_stock_file_is_not_reported_current(self):
   (self.root/'outputs/kk_liquid_leaders_2026-11-23.csv').unlink();self.assertFalse(freshness(self.close,self.now,self.root)['stocks']['current'])
  def test_holiday_release_is_due_monday_not_friday(self):

@@ -2,26 +2,17 @@ name: Refresh Scans watchlist
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Daily NEL scan", "Capture ETF after-hours session"]
+    types: [completed]
+    branches: [main]
   schedule:
-    # Retry within the pre-market capture window.
-    - cron: "0,7,12 9 * * 1-5"
-      timezone: America/New_York
-    # Delayed regular-session quotes, including the final quotes after the bell.
-    - cron: "47 9 * * 1-5"
-      timezone: America/New_York
-    - cron: "2,17,32,47 10-15 * * 1-5"
-      timezone: America/New_York
-    - cron: "2,17 16 * * 1-5"
-      timezone: America/New_York
-    # Early closes, regular closes and a catch-up before the next open.
-    - cron: "23 13,16 * * 1-5"
-      timezone: America/New_York
-    - cron: "38 16 * * 1-5"
-      timezone: America/New_York
-    - cron: "5 17 * * 1-5"
-      timezone: America/New_York
-    - cron: "45 8 * * 1-5"
-      timezone: America/New_York
+    # UTC pairs cover both offsets. The scanner applies New York market hours.
+    - cron: "2,7,12 13,14 * * 1-5"
+    - cron: "17,32,47 14-21 * * 1-5"
+    - cron: "23,38 17,18,20,21 * * 1-5"
+    - cron: "11 22,23 * * 1-5"
+    - cron: "45 12,13 * * 1-5"
 
 permissions:
   contents: write

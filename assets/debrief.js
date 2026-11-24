@@ -26,7 +26,7 @@ function buildDebriefModel({closeDate,marketData,breadthData,cotData}){
 }
 let lastDebriefModel;
 function debrief(){
- const model=buildDebriefModel({closeDate:asof(),marketData:flowMarket,breadthData:breadth,cotData:cot});
+ const model=buildDebriefModel({closeDate:asof(),marketData:debriefData.market,breadthData:debriefData.breadth,cotData:debriefData.cot});
  lastDebriefModel=model;
  const b=model.breadth,old=model.previousBreadth,delta=model.breadthDelta;
  const tone=v=>!finite(v)?'':v>0?'positive':v<0?'negative':'',p=(v,d=1)=>finite(v)?signed(v,d)+'%':'—',change=(v,suffix='')=>finite(v)?signed(v,2)+suffix:'—';

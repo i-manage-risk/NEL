@@ -33,7 +33,8 @@ def freshness(close,now,root=ROOT):
  breadth=read('outputs/breadth_market_monitor.json',root);breadth_date=latest(breadth if isinstance(breadth,list) else [])
  cot=read('outputs/positioning.json',root);markets=cot.get('markets',[]);cot_date=min((latest(m.get('history',[])) for m in markets),default='');expected=cot_expected(now)
  calendar=read('outputs/workspace_calendar.json',root);calendar_date=max((s.get('closeDate','') for s in calendar.get('snapshots',[])),default='')
- return {'stocks':{'current':bool(stock_ok),'asof':state.get('close'),'target':target},'flow':{'current':all(d>=target for d in dates),'asof':min(dates),'target':target},'indexes':{'current':all(d>=target for d in index_dates),'asof':min(index_dates),'target':target},'breadth':{'current':breadth_date>=target,'asof':breadth_date,'target':target},'positioning':{'current':len(markets)==10 and cot_date>=expected,'asof':cot_date,'target':expected},'workspace':{'current':calendar_date>=target,'asof':calendar_date,'target':target}}
+ debrief=read('outputs/debrief_data.json',root);debrief_rows=debrief.get('market',{}).get('series',{}).get('RSP',{}).get('history',[]);debrief_date=latest(debrief_rows)
+ return {'debrief':{'current':debrief_date>=target,'asof':debrief_date,'target':target},'stocks':{'current':bool(stock_ok),'asof':state.get('close'),'target':target},'flow':{'current':all(d>=target for d in dates),'asof':min(dates),'target':target},'indexes':{'current':all(d>=target for d in index_dates),'asof':min(index_dates),'target':target},'breadth':{'current':breadth_date>=target,'asof':breadth_date,'target':target},'positioning':{'current':len(markets)==10 and cot_date>=expected,'asof':cot_date,'target':expected},'workspace':{'current':calendar_date>=target,'asof':calendar_date,'target':target}}
 
 def command(args,timeout=600):
  print('Running:',*args,flush=True)
@@ -85,6 +86,8 @@ def run_round(close,now,root=ROOT,run=command):
  after=freshness(close,now,root)
  if not before['stocks']['current'] or not after['workspace']['current']:
   if not run([sys.executable,'workspace_data.py']):errors.append('workspace')
+ if any(not before[key]['current'] for key in ('debrief','flow','breadth','positioning','workspace')):
+  if not run([sys.executable,'scripts/build_debrief_data.py']):errors.append('debrief')
  return freshness(close,now,root),errors
 
 def main():
