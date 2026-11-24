@@ -1262,7 +1262,7 @@ const stockbeeKeys=['date','up4','down4','ratio5','ratio10','up25q','down25q','u
 let directBreadth=[], savedBreadth=[], breadthLastCheck=0, breadthRequest=null;
 
 function parseStockbeeLatest(text){
-  const fields=line=>line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(value=>value.replace(/^"|"$/g,'').trim().replace(/ +/g,' '));
+  const fields=line=>line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(value=>value.trim().replace(/^"|"$/g,'').replace(/ +/g,' '));
   const lines=text.split(String.fromCharCode(10)), header=lines.findIndex(line=>line.startsWith('Date,'));
   if(header<0)return [];
   const columns=fields(lines[header]);
