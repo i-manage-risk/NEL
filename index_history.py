@@ -9,11 +9,13 @@ import yfinance as yf
 
 MARKETS=[('spx','S&P 500 · SPY','SPY'),('nasdaq','Nasdaq 100 · QQQ','QQQ'),('russell','Russell 2000 · IWM','IWM'),('dow','Dow Jones · DIA','DIA')]
 
-def calculate(frame):
+def calculate(frame, *, through=None):
     bars=[];closes=deque(maxlen=50);atr=None;seed=[];previous=None;positive=[];negative=[]
     now=datetime.now(ZoneInfo('America/New_York'))
     for stamp,row in frame.iterrows():
-        if stamp.date()==now.date() and now.hour<16:continue
+        if through is not None:
+            if stamp.date()>through:break
+        elif stamp.date()==now.date() and now.hour<16:continue
         c,h,l=map(float,(row['Close'],row['High'],row['Low']))
         if not all(__import__('math').isfinite(v) for v in (c,h,l)):continue
         tr=h-l if previous is None else max(h-l,abs(h-previous),abs(l-previous));seed.append(tr)

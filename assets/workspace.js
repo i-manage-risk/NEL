@@ -10,7 +10,7 @@ const money = v => finite(v) ? '$'+fmt(v/(v>=1e9?1e9:1e6),1)+(v>=1e9?'B':'M') : 
 const frames = { '1w':'1W', '1m':'1M', '3m':'3M', '6m':'6M', '1y':'1Y' };
 const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Months', '1y':'1 Year' };
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
-const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',liquid:'Liquid Leadership',positioning:'Positioning',screener:'Screener',method:'Sources & definitions'};
+const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',positioning:'Positioning',screener:'Screener',scans:'Scans',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, flowMarket={}, cot={}, context={}, route='debrief', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
@@ -982,9 +982,222 @@ function sessionVerdict(current,previous){
 function method(){
  return card('How to use this workspace','<p>Start with Environment, inspect Leadership, then use the Screener to prepare a chart-review list. Positioning is a separate weekly context layer. Debrief automatically compares the completed session with the information available at the prior close.</p><details open><summary>Dates and data freshness</summary><p>Stock lists are named for the next trading session. ETF and breadth readings use the actual close date. Debrief and daily pages use actual close dates. Stored archive identifiers remain mapped to their source close. COT always shows its report date and is not represented as daily or historical point-in-time data.</p></details><details open><summary>Relative strength, themes, and odds</summary><p>Performance versus SPY is a return difference in percentage points. Theme strength scores rank ETF performance. “Bought” and “sold” describe close-to-close price response, not reported fund flows. None of these measures is a probability of a profitable trade. Chart review still determines whether a setup is usable.</p><p>Your uploaded group definitions are available when editing a stock. Three owner-supplied Crypto overrides seed the mapping. Remaining stocks use explicitly labelled vendor groups until reviewed. New mappings apply from their effective snapshot date. Local edits affect this workspace and can be exported; they do not silently rewrite historical CSVs or sync between devices.</p></details><details open><summary>COT methodology</summary><p>CFTC Legacy futures-only reports; commercials, noncommercials, and nonreportables. Five-year min/max normalization of net long minus short. Thresholds 5 and 95 flag range extremes. CMR’s proprietary index is not reproduced, and the uploaded crypto direction reversal is not assumed to be a validated strategy. Commercial net positioning balances speculative net positioning; the three readings are not independent confirmations.</p></details><details><summary>What still requires verification</summary><p>The four INDEX 20-day breadth feeds did not return data through the available scanner endpoint. Their source links and your alert levels are shown rather than substituted values. Jeff’s exact RS Thrust formula was not provided or verified. Current group rankings use the existing documented score.</p></details><p class="source-list"><a href="https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm">CFTC official report definitions</a> · <a href="https://www.crowdedmarketreport.com/wp-content/uploads/2023/04/CMR-New-Member-Guide-2023.pdf">CMR methodology guide</a> · <a href="https://stockbee.blogspot.com/p/mm.html">Stockbee Market Monitor</a></p>');
 }
+const scanDirections=['Leading','Mediocre','Lagging','Unclassified'];
+const scanReturns=[
+  ['change','1D % chg','Price vs. prior regular close'],
+  ['from_open','Intraday % chg','Price vs. regular-session open'],
+  ['month','1M perf %','TradingView 1-month performance'],
+];
+let scanData=null, scanError=false, scanRequest=null, scanView='table';
+let selectedScanBucket='';
+
+function scanTicker(row){
+  const ticker=row.ticker, symbol=escapeHTML(row.values?.symbol||ticker.split(':').at(-1));
+  return '<a class="scan-ticker" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(ticker)+
+    '" target="_blank" rel="noopener" aria-label="Open '+symbol+' in TradingView">'+symbol+'</a>';
+}
+
+function scanGroupRows(bucket){
+  return scanData.watch.filter(row=>(row.bucket||'Unclassified')===bucket).sort((a,b)=>
+    Number(b.shelf==='Superliquid')-Number(a.shelf==='Superliquid')||
+    (b.values?.dollars??0)-(a.values?.dollars??0)||a.ticker.localeCompare(b.ticker));
+}
+
+function scanATRIndex(values){
+  const score=values?.atr_index;
+  if(!finite(score))return '—';
+  const context='50-day SMA is zero · '+fmt(values.atr_observations,0)+' daily observations';
+  return '<span class="'+returnTone(score)+'" title="'+escapeHTML(context)+'">'+signed(score,2)+'</span>';
+}
+
+function scanATRExt(values){
+  return finite(values?.atr_extension)?signed(values.atr_extension,2)+'×':'—';
+}
+
+function scanPerformance(row){
+  const quote=scanData.quotes;
+  return quote?.session>row.close?quote.rows[row.ticker]??{}:row.values??{};
+}
+
+function scanReturn(values,key){
+  const value=values[key];
+  return '<span class="'+returnTone(value)+'">'+(finite(value)?signed(value,2)+'%':'—')+'</span>';
+}
+
+function scanTickerLabel(row){
+  return scanTicker(row)+(row.shelf==='Superliquid'?'<span class="scan-superliquid-label">Superliquid</span>':'');
+}
+
+function scanTableGroup(bucket,rows){
+  const body=rows.map(row=>{
+    const values=row.values, perf=scanPerformance(row);
+    return '<tr class="scan-stock-row'+(row.shelf==='Superliquid'?' scan-superliquid':'')+'"><th scope="row">'+scanTickerLabel(row)+'</th>'+
+      '<td class="scan-industry">'+escapeHTML(values?.industry||'—')+'</td><td>'+money(values?.dollars)+'</td>'+
+      '<td>'+pct(values?.adr)+'</td><td>'+scanATRIndex(values)+'</td><td>'+scanATRExt(values)+'</td>'+
+      scanReturns.map(([key])=>'<td>'+scanReturn(perf,key)+'</td>').join('')+'</tr>';
+  }).join('');
+  return '<div class="table-box scan-table"><table aria-label="'+bucket+' watchlist"><thead><tr>'+
+    '<th scope="col">Ticker</th><th scope="col">Industry</th><th scope="col">Daily $ vol</th><th scope="col">ADR%</th>'+
+    '<th scope="col" title="Historical ATR extension index from −1 to +1, centered on the 50-day SMA">ATR Index</th>'+
+    '<th scope="col" title="Raw extension from the 50-day SMA, in ATR multiples">ATR Ext</th>'+
+    scanReturns.map(([,label,title])=>'<th scope="col" title="'+title+'">'+label+'</th>').join('')+
+    '</tr></thead><tbody>'+(body||'<tr><td colspan="9" class="scan-empty">No tickers in this group</td></tr>')+'</tbody></table></div>';
+}
+
+function scanChartReturns(row){
+  const values=scanPerformance(row);
+  return scanReturns.map(([key,label])=>'<span>'+label+' <b>'+scanReturn(values,key)+'</b></span>').join('');
+}
+
+function scanChartGroup(rows,groupIndex){
+  return rows.length?'<div class="chart-grid scan-chart-grid">'+rows.map((row,index)=>{
+      const values=row.values,ticker=escapeHTML(row.ticker);
+      return '<article class="chart-card'+(row.shelf==='Superliquid'?' scan-superliquid':'')+'"><div class="chart-card-head"><div>'+
+        scanTickerLabel(row)+'<small>'+escapeHTML(values?.industry||'')+'</small></div><div class="chart-stats">'+
+        '<span>$ vol <b>'+money(values?.dollars)+'</b></span><span>ADR <b>'+pct(values?.adr)+'</b></span>'+
+        '<span>ATR Index <b>'+scanATRIndex(values)+'</b></span><span>ATR Ext <b>'+scanATRExt(values)+'</b></span>'+
+        '<span data-scan-chart-returns="'+ticker+'">'+scanChartReturns(row)+'</span>'+
+        '</div></div><div id="scan-chart-'+groupIndex+'-'+index+'" class="tv-chart" data-tv-symbol="'+ticker+
+        '" aria-label="Daily chart for '+ticker+'">Loading daily chart…</div></article>';
+    }).join('')+'</div>':'<p class="scan-empty scan-chart-empty">No tickers in this group</p>';
+}
+
+function scanCaption(){
+  const close=scanData.watch.map(row=>row.close).filter(Boolean).sort().at(-1);
+  const quote=scanData.quotes;
+  return scanData.watch.length+' tickers'+(close?' · Buckets as of '+escapeHTML(close)+' close':'')+
+    (quote?.session>close?' · Returns '+escapeHTML(quote.session)+' (TradingView delayed)':' · Returns from latest completed session');
+}
+
+function scanViewControl(){
+  const exportLabel=selectedScanBucket?'Export '+selectedScanBucket+' watchlist CSV':'Select a bucket to export its watchlist';
+  return '<div class="segments scan-view-toggle" role="group" aria-label="Scans display">'+
+    [['charts','Charts'],['table','Table']].map(([key,label])=>'<button type="button" data-action="custom-scan-view" data-scan-view="'+key+
+      '" class="'+(scanView===key?'active':'')+'" aria-pressed="'+(scanView===key)+'">'+label+'</button>').join('')+'</div>'+
+    '<button type="button" class="scan-export-button" data-action="custom-scan-export" aria-label="'+escapeHTML(exportLabel)+
+    '" title="'+escapeHTML(exportLabel)+'"'+(selectedScanBucket?'':' disabled')+'>Export CSV</button>';
+}
+
+function exportScanWatchlist(){
+  if(!scanData||!scanDirections.includes(selectedScanBucket))return;
+  const rows=scanGroupRows(selectedScanBucket);
+  const fields=['ticker','industry','bucket','liquidity','daily_dollar_volume','adr_pct','atr_index','atr_ext_multiple',
+    'day_change_pct','intraday_change_pct','month_perf_pct'];
+  const records=rows.map(row=>{
+    const values=row.values??{}, perf=scanPerformance(row);
+    return [values.symbol||row.ticker.split(':').at(-1),values.industry,selectedScanBucket,row.shelf,values.dollars,
+      values.adr,values.atr_index,values.atr_extension,perf.change,perf.from_open,perf.month];
+  });
+  const cell=value=>{
+    let text=String(value??'');
+    if(typeof value==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;
+    return '"'+text.replaceAll('"','""')+'"';
+  };
+  const csv=[fields,...records].map(record=>record.map(cell).join(',')).join('\r\n')+'\r\n';
+  download('nel-'+selectedScanBucket.toLowerCase()+'-watchlist.csv',csv,'text/csv;charset=utf-8');
+}
+
+function scanBucketBreadth(rows){
+  let up=0,down=0,flat=0;
+  for(const row of rows){
+    const change=scanPerformance(row).change;
+    if(!finite(change))continue;
+    if(change>0)up++;
+    else if(change<0)down++;
+    else flat++;
+  }
+  const known=up+down+flat;
+  const label='<small>1D breadth</small>';
+  if(!known)return label+'<strong>—</strong>';
+  const coverage=flat+' flat · '+(rows.length-known)+' unavailable';
+  return label+'<strong title="'+coverage+'"><span class="positive">'+up+' up</span> · <span class="negative">'+down+' down</span></strong>';
+}
+
+function scanBucketOverview(bucket,rows){
+  const counts=new Map();
+  for(const row of rows){
+    const industry=row.values?.industry||'Unknown industry';
+    counts.set(industry,(counts.get(industry)||0)+1);
+  }
+  const industries=[...counts].sort(([a,countA],[b,countB])=>countB-countA||a.localeCompare(b));
+  const top=industries.slice(0,3).map(([name,count])=>'<span class="scan-industry-chip"><span title="'+escapeHTML(name)+'">'+escapeHTML(name)+'</span><b>'+count+'</b></span>');
+  const changes=scanData.bucket_comparison?.changes[bucket];
+  const net=changes?changes.entered-changes.left:0;
+  const movement=changes?'<small title="'+changes.entered+' in · '+changes.left+' out">Bucket change</small>'+
+    '<strong class="'+returnTone(net)+'">'+signed(net,0)+'</strong> <span class="scan-flow-count">'+changes.entered+' in · '+changes.left+' out</span>':
+    '<small>Bucket change</small><strong>—</strong>';
+  const superliquid=rows.filter(row=>row.shelf==='Superliquid').length;
+  return '<button type="button" id="scan-bucket-'+bucket.toLowerCase()+'" class="scan-bucket-card scan-bucket-'+bucket.toLowerCase()+
+    '" data-action="custom-scan-bucket" data-scan-bucket="'+bucket+'" aria-controls="scan-bucket-content" aria-expanded="'+
+    (selectedScanBucket===bucket)+'"><span class="scan-bucket-title"><strong>'+bucket+'</strong>'+
+    '<span class="scan-bucket-chevron" aria-hidden="true"></span></span>'+
+    '<span class="scan-bucket-main"><span class="scan-bucket-count">'+rows.length+' <small>'+(rows.length===1?'ticker':'tickers')+'</small></span>'+
+    (superliquid?'<span class="scan-superliquid-label">'+superliquid+' Superliquid</span>':'')+'</span>'+
+    '<span class="scan-bucket-movement"><span>'+movement+'</span><span data-scan-breadth="'+bucket+'">'+scanBucketBreadth(rows)+'</span></span>'+
+    '<span class="scan-bucket-industries">'+(top.join('')||'<span class="note">No tickers</span>')+'</span></button>';
+}
+
+function scanBucketContent(bucket,rows){
+  return scanView==='charts'?scanChartGroup(rows,scanDirections.indexOf(bucket)):scanTableGroup(bucket,rows);
+}
+
+function scans(){
+  if(!scanData)return scanError
+    ? '<p class="note" role="status">The Scans watchlist is temporarily unavailable.</p>'
+    : '<p class="note" role="status">Loading scans…</p>';
+  const groups=scanDirections.map(bucket=>[bucket,scanGroupRows(bucket)]);
+  const active=groups.find(([bucket])=>bucket===selectedScanBucket);
+  return '<section class="scan-board" aria-label="Scans and watchlist"><div class="scan-overview-caption">'+
+    '<p id="scan-caption" class="note">'+scanCaption()+'</p>'+
+    (scanData.bucket_comparison?'<p class="note">Bucket changes vs. '+escapeHTML(scanData.bucket_comparison.baseline)+' close</p>':'')+
+    '</div><div class="scan-bucket-cards">'+groups.map(([bucket,rows])=>scanBucketOverview(bucket,rows)).join('')+
+    '</div><section id="scan-bucket-content"'+(active?' aria-labelledby="scan-bucket-'+active[0].toLowerCase()+'">'+
+    scanBucketContent(...active):' hidden>')+'</section></section>';
+}
+
+
+function refreshScans(){
+  if(scanRequest)return;
+  const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname);
+  const source=local?'api/scans':'outputs/scan_watchlist.json?refresh='+Math.floor(Date.now()/60000);
+  scanRequest=fetch(source,{cache:'no-store'}).then(response=>{
+    if(!response.ok)throw Error('Scan data unavailable');
+    return response.json();
+  }).then(value=>{
+    if(!value?.scans||!Array.isArray(value.watch))throw Error('Invalid scan data');
+    const changed=scanError||JSON.stringify(value.watch)!==JSON.stringify(scanData?.watch)||
+      JSON.stringify(value.bucket_comparison)!==JSON.stringify(scanData?.bucket_comparison);
+    const quotesChanged=JSON.stringify(value.quotes)!==JSON.stringify(scanData?.quotes);
+    scanData=value;scanError=false;
+    if(route!=='scans')return;
+    if(changed)render();
+    else if(quotesChanged){
+      const caption=$('#scan-caption');
+      if(caption)caption.textContent=scanCaption();
+      document.querySelectorAll('[data-scan-breadth]').forEach(node=>{
+        node.innerHTML=scanBucketBreadth(scanGroupRows(node.dataset.scanBreadth));
+      });
+      if(!selectedScanBucket)return;
+      if(scanView==='table'){
+        $('#scan-bucket-content').innerHTML=scanBucketContent(selectedScanBucket,scanGroupRows(selectedScanBucket));
+        return;
+      }
+      const rows=new Map(scanData.watch.map(row=>[row.ticker,row]));
+      document.querySelectorAll('[data-scan-chart-returns]').forEach(node=>{
+        const row=rows.get(node.dataset.scanChartReturns);
+        if(row)node.innerHTML=scanChartReturns(row);
+      });
+    }
+  }).catch(()=>{
+    const changed=!scanError;scanError=true;
+    if(changed&&route==='scans')render();
+  }).finally(()=>{scanRequest=null;});
+}
+window.addEventListener('hashchange',()=>{if(location.hash==='#scans'||location.hash==='#liquid')refreshScans();});
+setInterval(()=>{if(route==='scans'&&document.visibilityState!=='hidden')refreshScans();},30000);
 function render(){
  document.querySelector('.bm-workstation')?._chartObserver?.disconnect();
-  route=location.hash.slice(1)||'debrief';if(['briefing','review'].includes(route)||!titles[route]){route='debrief';history.replaceState(null,'','#debrief');}
+  route=location.hash.slice(1)||'debrief';if(route==='liquid'){route='scans';history.replaceState(null,'','#scans');}if(['briefing','review'].includes(route)||!titles[route]){route='debrief';history.replaceState(null,'','#debrief');}
   $('#page-title').textContent=titles[route];
   const menuButton=document.querySelector('#page-menu-button'),menu=document.querySelector('#page-menu-options');
   menuButton.querySelector('span').textContent=menu.querySelector('[data-page="'+route+'"]')?.textContent||titles[route];
@@ -1003,18 +1216,23 @@ function render(){
   const savedSession=document.querySelector('#header-date-controls .session');if(savedSession)document.querySelector('.workspace-top').append(savedSession);document.querySelector('#header-date-controls').replaceChildren();
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
-  document.body.classList.toggle('flow-page',['leadership','industries','liquid'].includes(route));
-  document.body.classList.toggle('liquid-leadership-page',route==='liquid');
+  document.body.classList.toggle('flow-page',['leadership','industries'].includes(route));
   document.body.classList.toggle('debrief-page',route==='debrief');
   document.body.classList.toggle('screener-page',route==='screener');
-  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment'].includes(route)||(['leadership','industries','liquid','debrief'].includes(route)&&node.matches('.research-menu')))?'none':'';});
+  document.body.classList.toggle('scans-page',route==='scans');
+  document.querySelectorAll('.session,.research-menu').forEach(node=>{node.style.display=(['positioning','environment','scans'].includes(route)||(['leadership','industries','debrief'].includes(route)&&node.matches('.research-menu')))?'none':'';});
   $('#session-label').textContent='Close date';
   document.querySelectorAll('.rail nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+route));
   const b=breadthRows()[0],e=latestETF(themes);
   $('#freshness').textContent='Close '+asof()+'  ·  Breadth '+(b?.date||'unavailable')+'  ·  ETFs '+(e?.date||'unavailable');
-  $('#view').innerHTML=({debrief,environment,leadership,industries:leadership,liquid,positioning,screener,method})[route]();
+  $('#view').innerHTML=({debrief,environment,leadership,industries:leadership,positioning,screener,scans,method})[route]();
   if(route==='environment'){arrangeBreadthDashboard();setBreadthHover(-1);bindBreadthHover();const header=document.querySelector('.bm-compact-header'),slot=document.querySelector('#header-date-controls');[...header.children].filter(node=>node.matches('label,.bm-date-controls,[data-bm-unpin]')).forEach(node=>slot.append(node));header.remove();}
   else if(route==='positioning'){const slot=document.querySelector('#header-date-controls');slot.append(document.querySelector('[data-cot-controls]'),document.querySelector('[data-cot-alerts]'),document.querySelector('[data-cot-lookbacks]'));}
+  else if(route==='scans'){
+    $('#freshness').textContent='';
+    $('#header-date-controls').innerHTML=scanViewControl();
+    if(!scanData&&!scanError)refreshScans();
+  }
   else{document.querySelector('#header-date-controls').innerHTML=closeCalendar();}
 
   if(route==='screener'){const slot=document.querySelector('#header-date-controls'),controls=document.createElement('div');controls.className='screener-header-controls';const tabs=document.querySelector('.screener-tabs'),toolbar=document.querySelector('#view > .toolbar:not(.screener-tabs)');const center=document.createElement('div');center.className='screener-header-center';center.append(tabs);const count=toolbar.querySelector('.note');count.classList.add('screener-result-count');const results=document.querySelector('#view > .kk-table, #view > .chart-grid, #view > .empty');document.querySelector('#view').insertBefore(count,results||document.querySelector('#view > .note'));controls.append(center,toolbar);slot.append(controls);}
@@ -1070,6 +1288,20 @@ document.addEventListener('click',async event=>{
  if(action==='breadth-metric'){breadthMetric=node.dataset.metric;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-range'){breadthRange=node.dataset.range;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-window'){const page=document.querySelector('.bm-console');if(page?._setWindow){page._setWindow(Number(node.dataset.window));}else{breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();}return;}
+ if(action==='custom-scan-bucket'){
+  const bucket=node.dataset.scanBucket;
+  selectedScanBucket=selectedScanBucket===bucket?'':bucket;
+  render();
+  document.getElementById('scan-bucket-'+bucket.toLowerCase())?.focus();
+  return;
+ }
+ if(action==='custom-scan-export'){exportScanWatchlist();return;}
+ if(action==='custom-scan-view'){
+  if(scanView===node.dataset.scanView)return;
+  scanView=node.dataset.scanView;render();
+  document.querySelector('[data-scan-view="'+scanView+'"]')?.focus();
+  return;
+ }
  if(action==='select-screen'){screenerView=node.dataset.screen;render();return;}
  if(action==='screener-view'){screenerDisplay=node.dataset.view;render();return;}
  if(action==='kk-sort'){const key=node.dataset.sortKey;kkSort={key,direction:kkSort.key===key&&kkSort.direction==='desc'?'asc':'desc'};render();return;}
@@ -1154,7 +1386,6 @@ function checkPositioningFreshness(){
 
 const loadedPageData=new Set(), pendingPageData=new Map();
 const pageDataSpecs={
- liquid:['outputs/liquid_leadership.json',v=>liquidLeadership=v],
  stocks:['outputs/workspace.json',v=>db=v],
  themes:['outputs/etf/themes_snapshots.json',v=>themes=v],
  sectors:['outputs/etf/sectors_snapshots.json',v=>sectors=v],
@@ -1165,7 +1396,7 @@ const pageDataSpecs={
  indexes:['outputs/index_history.json',v=>indexHistory=v],
  flow:['outputs/flow_market.json',v=>flowMarket=v]
 };
-const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],liquid:['liquid'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
+const pageDataNeeds={debrief:['flow','breadth','cot'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
 function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
 function loadPageDataset(key,refresh=false){
  if(loadedPageData.has(key)&&!refresh)return Promise.resolve();

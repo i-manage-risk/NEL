@@ -1,0 +1,68 @@
+name: Refresh Scans watchlist
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Retry within the pre-market capture window.
+    - cron: "0,7,12 9 * * 1-5"
+      timezone: America/New_York
+    # Delayed regular-session quotes, including the final quotes after the bell.
+    - cron: "47 9 * * 1-5"
+      timezone: America/New_York
+    - cron: "2,17,32,47 10-15 * * 1-5"
+      timezone: America/New_York
+    - cron: "2,17 16 * * 1-5"
+      timezone: America/New_York
+    # Early closes, regular closes and a catch-up before the next open.
+    - cron: "23 13,16 * * 1-5"
+      timezone: America/New_York
+    - cron: "38 16 * * 1-5"
+      timezone: America/New_York
+    - cron: "5 17 * * 1-5"
+      timezone: America/New_York
+    - cron: "45 8 * * 1-5"
+      timezone: America/New_York
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: nel-scan-watchlist
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Capture scans and watchlist
+        id: refresh
+        run: python -u nel2/publish.py
+      - name: Publish changed snapshots
+        if: ${{ !cancelled() && (steps.refresh.outcome == 'success' || steps.refresh.outcome == 'failure') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add outputs/scan_watchlist.json outputs/scan_bucket_history
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Refresh Scans watchlist'
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push origin HEAD:main; then
+              gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+              exit 0
+            fi
+          done
+          exit 1
