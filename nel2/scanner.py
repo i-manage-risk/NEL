@@ -82,6 +82,9 @@ def connect(path=DB):
             ticker TEXT, close TEXT, adr REAL, oscillator REAL, extension REAL,
             observations INTEGER, attempted REAL, PRIMARY KEY (ticker, close)
         );
+        CREATE TABLE IF NOT EXISTS scan_chart_history (
+            ticker TEXT, close TEXT, bars TEXT NOT NULL, PRIMARY KEY (ticker, close)
+        );
         CREATE TABLE IF NOT EXISTS bucket_snapshots (
             session TEXT PRIMARY KEY, captured TEXT NOT NULL, payload TEXT NOT NULL
         );
@@ -283,21 +286,46 @@ def bucket_comparison(db, watch, session):
     return {"baseline": baseline, "changes": changes}
 
 
-def status(path=DB):
-    with closing(connect(path)) as db:
-        scans, watch = scan_snapshot(db)
-        dates = sorted({close for _, close in metric_targets(scans, watch)})
-        placeholders = ",".join("?" for _ in dates)
-        metrics = {(ticker, close): values for ticker, close, *values in db.execute(
-            f"SELECT ticker, close, adr, oscillator, extension, observations FROM scan_index_metrics WHERE close IN ({placeholders})",
-            dates,
-        )} if dates else {}
-        for ticker, close, row in metric_rows(scans, watch):
-            adr, oscillator, extension, observations = metrics.get((ticker, close), (None, None, None, None))
+def add_scan_metrics(db, rows):
+    rows = list(rows)
+    for close in {stamp for _, stamp, _ in rows}:
+        metrics = {ticker: values for ticker, *values in db.execute(
+            "SELECT ticker, adr, oscillator, extension, observations FROM scan_index_metrics WHERE close=?",
+            (close,),
+        )}
+        for ticker, stamp, row in rows:
+            if stamp != close or ticker not in metrics:
+                continue
+            adr, oscillator, extension, observations = metrics[ticker]
             if row.get("adr") is None:
                 row["adr"] = adr
             row.update(atr_index=oscillator, atr_extension=extension, atr_observations=observations)
+
+
+def archived_watchlist(db, session):
+    saved = db.execute("SELECT captured, payload FROM bucket_snapshots WHERE session=?", (session,)).fetchone()
+    if saved is None:
+        return None
+    captured, payload = saved
+    members = json.loads(payload)
+    add_scan_metrics(db, metric_rows({}, members))
+    charts = {ticker: json.loads(bars) for ticker, bars in db.execute(
+        "SELECT ticker, bars FROM scan_chart_history WHERE close=? ORDER BY ticker", (session,),
+    )}
+    return {
+        "session": session, "captured": captured, "members": members,
+        "bucket_comparison": bucket_comparison(db, members, datetime.fromisoformat(session).date()),
+        "charts": {member["ticker"]: charts[member["ticker"]] for member in members if member["ticker"] in charts},
+    }
+
+
+def status(path=DB):
+    with closing(connect(path)) as db:
+        scans, watch = scan_snapshot(db)
+        add_scan_metrics(db, metric_rows(scans, watch))
         session = datetime.now(NY_TZ).date()
         if not trading_day(session):
             session = adjacent_session(session, -1)
-        return {"scans": scans, "watch": watch, "bucket_comparison": bucket_comparison(db, watch, session)}
+        dates = [close for (close,) in db.execute("SELECT session FROM bucket_snapshots ORDER BY session")]
+        return {"scans": scans, "watch": watch, "history_dates": dates,
+                "bucket_comparison": bucket_comparison(db, watch, session)}

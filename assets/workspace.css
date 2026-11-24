@@ -474,3 +474,20 @@ html:has(body.flow-page){overflow:auto}body.flow-page{height:auto;min-height:100
  .scan-bucket-main{gap:3px}
  .scan-bucket-count{font-size:28px}
 }
+
+/* Industry groups use the document scrollbar. */
+html:has(body.industry-groups-page){height:auto;overflow:auto}
+body.industry-groups-page{height:auto;overflow:visible}
+.industry-groups-page .market-flow{max-width:none}
+.industry-groups-page .market-comparison-industries{border:0;border-radius:0;background:transparent;overflow:visible}
+.industry-groups-page .market-comparison-industries .market-table-scroll{max-height:none;overflow-x:auto}
+.scans-page .scan-date-controls{display:flex;align-items:center;gap:5px}
+.scans-page .scan-date-controls button[aria-pressed=true]{background:var(--text);color:var(--bg)}
+.scans-page .scan-date-controls button:disabled{opacity:.45;cursor:default}
+.scans-page .scan-date-controls input{min-width:0}
+@media(min-width:651px) and (max-width:1100px){
+ .scans-page .scan-view-toggle{position:static;transform:none}
+}
+@media(max-width:650px){
+ .scans-page .scan-date-controls{grid-row:2;grid-column:1/-1;justify-self:end}
+}

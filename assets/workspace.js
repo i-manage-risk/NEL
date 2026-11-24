@@ -10,7 +10,7 @@ const money = v => finite(v) ? '$'+fmt(v/(v>=1e9?1e9:1e6),1)+(v>=1e9?'B':'M') : 
 const frames = { '1w':'1W', '1m':'1M', '3m':'3M', '6m':'6M', '1y':'1Y' };
 const frameNames = { '1w':'1 Week', '1m':'1 Month', '3m':'3 Months', '6m':'6 Months', '1y':'1 Year' };
 const frameRoles = { '1w':'Fast', '1m':'Swing', '3m':'Trend', '6m':'Cycle', '1y':'Long' };
-const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',positioning:'Positioning',screener:'Screener',scans:'Scans',method:'Sources & definitions'};
+const titles = {debrief:'Debrief',environment:'Breadth',leadership:'Market Strength',industries:'Industry Group Strength',positioning:'Positioning',screener:'Screener',scans:'Liquid Leadership',method:'Sources & definitions'};
 const store = {get(key,fallback){try{return JSON.parse(localStorage.getItem('nel-'+key))??fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('nel-'+key,JSON.stringify(value));return true;}catch{return false;}}};
 let db={}, themes={}, sectors={}, breadth=[], spxHistory=[], indexHistory={}, flowMarket={}, cot={}, context={}, route='debrief', frame='1m', leadershipKind='themes';
 let flowFrame='1m', flowMode='strength', flowSort={key:'rank',direction:'asc'}, flowSelection='';
@@ -988,11 +988,13 @@ const scanReturns=[
   ['from_open','Intraday % chg','Price vs. regular-session open'],
   ['month','1M perf %','TradingView 1-month performance'],
 ];
-let scanData=null, scanError=false, scanRequest=null, scanView='table';
+let scanData=null, scanLatest=null, scanError=false, scanRequest=null, scanView='table';
+let scanArchiveDate='', scanArchiveRequest=0;
 let selectedScanBucket='';
 
 function scanTicker(row){
   const ticker=row.ticker, symbol=escapeHTML(row.values?.symbol||ticker.split(':').at(-1));
+  if(scanArchiveDate)return '<strong class="scan-ticker">'+symbol+'</strong>';
   return '<a class="scan-ticker" href="https://www.tradingview.com/chart/?symbol='+encodeURIComponent(ticker)+
     '" target="_blank" rel="noopener" aria-label="Open '+symbol+' in TradingView">'+symbol+'</a>';
 }
@@ -1057,24 +1059,43 @@ function scanChartGroup(rows,groupIndex){
         '<span>$ vol <b>'+money(values?.dollars)+'</b></span><span>ADR <b>'+pct(values?.adr)+'</b></span>'+
         '<span>ATR Index <b>'+scanATRIndex(values)+'</b></span><span>ATR Ext <b>'+scanATRExt(values)+'</b></span>'+
         '<span data-scan-chart-returns="'+ticker+'">'+scanChartReturns(row)+'</span>'+
-        '</div></div><div id="scan-chart-'+groupIndex+'-'+index+'" class="tv-chart" data-tv-symbol="'+ticker+
-        '" aria-label="Daily chart for '+ticker+'">Loading daily chart…</div></article>';
+        '</div></div><div id="scan-chart-'+groupIndex+'-'+index+'" class="tv-chart" '+
+        (scanArchiveDate?'data-scan-history-chart':'data-tv-symbol')+'="'+ticker+
+        '" aria-label="Daily chart for '+ticker+(scanArchiveDate?' through '+scanArchiveDate:'')+'">Loading daily chart…</div></article>';
     }).join('')+'</div>':'<p class="scan-empty scan-chart-empty">No tickers in this group</p>';
 }
 
 function scanCaption(){
+  if(scanArchiveDate)return scanData.watch.length+' tickers · Saved close '+scanArchiveDate+(scanView==='charts'?' · Charts locked to this date':'');
   const close=scanData.watch.map(row=>row.close).filter(Boolean).sort().at(-1);
   const quote=scanData.quotes;
   return scanData.watch.length+' tickers'+(close?' · Buckets as of '+escapeHTML(close)+' close':'')+
     (quote?.session>close?' · Returns '+escapeHTML(quote.session)+' (TradingView delayed)':' · Returns from latest completed session');
 }
 
+function scanDates(){
+  return scanLatest?.history_dates||[];
+}
+
+function scanDateControls(){
+  const dates=scanDates();
+  if(!dates.length)return '';
+  const index=scanArchiveDate?dates.indexOf(scanArchiveDate):dates.length;
+  const latest=[scanLatest.quotes?.session||'',dates.at(-1)].sort().at(-1);
+  return '<div class="scan-date-controls" aria-label="Liquid Leadership dates">'+
+    '<button type="button" data-action="scan-earlier" aria-label="Previous saved date"'+(index<=0?' disabled':'')+'>‹</button>'+
+    '<input type="date" data-scan-date aria-label="Saved Liquid Leadership close date" min="'+escapeHTML(dates[0])+
+      '" max="'+escapeHTML(latest)+'" value="'+escapeHTML(scanArchiveDate||latest)+'">'+
+    '<button type="button" data-action="scan-later" aria-label="Next saved date"'+(scanArchiveDate?'':' disabled')+'>›</button>'+
+    '<button type="button" data-action="scan-latest"'+(scanArchiveDate?'':' class="active" aria-pressed="true"')+'>Latest</button></div>';
+}
+
 function scanViewControl(){
   const exportLabel=selectedScanBucket?'Export '+selectedScanBucket+' watchlist CSV':'Select a bucket to export its watchlist';
-  return '<div class="segments scan-view-toggle" role="group" aria-label="Scans display">'+
+  return '<div class="segments scan-view-toggle" role="group" aria-label="Liquid Leadership display">'+
     [['charts','Charts'],['table','Table']].map(([key,label])=>'<button type="button" data-action="custom-scan-view" data-scan-view="'+key+
       '" class="'+(scanView===key?'active':'')+'" aria-pressed="'+(scanView===key)+'">'+label+'</button>').join('')+'</div>'+
-    '<button type="button" class="scan-export-button" data-action="custom-scan-export" aria-label="'+escapeHTML(exportLabel)+
+    scanDateControls()+'<button type="button" class="scan-export-button" data-action="custom-scan-export" aria-label="'+escapeHTML(exportLabel)+
     '" title="'+escapeHTML(exportLabel)+'"'+(selectedScanBucket?'':' disabled')+'>Export CSV</button>';
 }
 
@@ -1094,7 +1115,7 @@ function exportScanWatchlist(){
     return '"'+text.replaceAll('"','""')+'"';
   };
   const csv=[fields,...records].map(record=>record.map(cell).join(',')).join('\r\n')+'\r\n';
-  download('nel-'+selectedScanBucket.toLowerCase()+'-watchlist.csv',csv,'text/csv;charset=utf-8');
+  download('nel-'+selectedScanBucket.toLowerCase()+'-watchlist'+(scanArchiveDate?'-'+scanArchiveDate:'')+'.csv',csv,'text/csv;charset=utf-8');
 }
 
 function scanBucketBreadth(rows){
@@ -1143,11 +1164,11 @@ function scanBucketContent(bucket,rows){
 
 function scans(){
   if(!scanData)return scanError
-    ? '<p class="note" role="status">The Scans watchlist is temporarily unavailable.</p>'
-    : '<p class="note" role="status">Loading scans…</p>';
+    ? '<p class="note" role="status">'+(scanArchiveDate?'No saved watchlist is available for '+scanArchiveDate+'.':'Liquid Leadership is temporarily unavailable.')+'</p>'
+    : '<p class="note" role="status">'+(scanArchiveDate?'Loading saved watchlist…':'Loading Liquid Leadership…')+'</p>';
   const groups=scanDirections.map(bucket=>[bucket,scanGroupRows(bucket)]);
   const active=groups.find(([bucket])=>bucket===selectedScanBucket);
-  return '<section class="scan-board" aria-label="Scans and watchlist"><div class="scan-overview-caption">'+
+  return '<section class="scan-board" aria-label="Liquid Leadership watchlist"><div class="scan-overview-caption">'+
     '<p id="scan-caption" class="note">'+scanCaption()+'</p>'+
     (scanData.bucket_comparison?'<p class="note">Bucket changes vs. '+escapeHTML(scanData.bucket_comparison.baseline)+' close</p>':'')+
     '</div><div class="scan-bucket-cards">'+groups.map(([bucket,rows])=>scanBucketOverview(bucket,rows)).join('')+
@@ -1156,21 +1177,92 @@ function scans(){
 }
 
 
+const scanLocal=()=>['127.0.0.1','localhost','[::1]'].includes(location.hostname);
+
+async function selectScanDate(date){
+  const request=++scanArchiveRequest;
+  scanArchiveDate=date;
+  scanData=date?null:scanLatest;
+  scanError=false;
+  if(route==='scans')render();
+  if(!date){refreshScans();return;}
+  try{
+    const source=scanLocal()?'api/scans?close='+encodeURIComponent(date):'outputs/scan_bucket_history/'+encodeURIComponent(date)+'.json';
+    const response=await fetch(source,{cache:'no-cache'});
+    if(!response.ok)throw Error('Saved watchlist unavailable');
+    const archive=await response.json();
+    if(archive.session!==date||!Array.isArray(archive.members))throw Error('Invalid saved watchlist');
+    if(request!==scanArchiveRequest)return;
+    scanData={watch:archive.members,charts:archive.charts||{},bucket_comparison:archive.bucket_comparison};
+  }catch{
+    if(request!==scanArchiveRequest)return;
+    scanError=true;
+  }
+  if(route==='scans')render();
+}
+
+document.addEventListener('change',event=>{
+  if(!event.target.matches('[data-scan-date]'))return;
+  const dates=scanDates(), value=event.target.value;
+  const close=value<=dates.at(-1)?dates.findLast(date=>date<=value):null;
+  selectScanDate(close||'');
+});
+
+let scanHistoryCharts=[],scanHistoryObserver=null;
+async function mountHistoricalScanCharts(){
+  scanHistoryObserver?.disconnect();
+  scanHistoryObserver=null;
+  scanHistoryCharts.forEach(chart=>chart.remove());
+  scanHistoryCharts=[];
+  const nodes=[...document.querySelectorAll('[data-scan-history-chart]')];
+  if(!nodes.length)return;
+  const close=scanArchiveDate, series=scanData.charts;
+  try{await loadFlowDailyLibrary();}
+  catch{nodes.forEach(node=>{if(node.isConnected)node.textContent='Chart library unavailable';});return;}
+  if(!nodes[0].isConnected)return;
+  const L=window.LightweightCharts;
+  const mount=node=>{
+    if(!node.isConnected)return;
+    const bars=(series[node.dataset.scanHistoryChart]||[]).filter(([date])=>date<=close);
+    if(!bars.length){node.textContent='No daily candles saved for this close';return;}
+    node.replaceChildren();
+    const chart=L.createChart(node,{autoSize:true,
+      layout:{background:{type:'solid',color:'#202020'},textColor:'#aaa89f',attributionLogo:true},
+      grid:{vertLines:{color:'#2b2b2b'},horzLines:{color:'#2b2b2b'}},
+      timeScale:{fixLeftEdge:true,fixRightEdge:true},handleScroll:false,handleScale:false});
+    chart.addSeries(L.CandlestickSeries,{upColor:'#85d65d',downColor:'#ff3266',borderVisible:false,
+      wickUpColor:'#85d65d',wickDownColor:'#ff3266'}).setData(bars.map(([time,open,high,low,close])=>({time,open,high,low,close})));
+    chart.timeScale().fitContent();
+    scanHistoryCharts.push(chart);
+  };
+  if(!('IntersectionObserver' in window)){nodes.forEach(mount);return;}
+  const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{
+    if(entry.isIntersecting){mount(entry.target);observer.unobserve(entry.target);}
+  }),{rootMargin:'300px 0px'});
+  scanHistoryObserver=observer;
+  nodes.forEach(node=>observer.observe(node));
+}
+
 function refreshScans(){
   if(scanRequest)return;
-  const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname);
-  const source=local?'api/scans':'outputs/scan_watchlist.json?refresh='+Math.floor(Date.now()/60000);
+  const source=scanLocal()?'api/scans':'outputs/scan_watchlist.json?refresh='+Math.floor(Date.now()/60000);
   scanRequest=fetch(source,{cache:'no-store'}).then(response=>{
     if(!response.ok)throw Error('Scan data unavailable');
     return response.json();
   }).then(value=>{
     if(!value?.scans||!Array.isArray(value.watch))throw Error('Invalid scan data');
+    const datesChanged=JSON.stringify(value.history_dates)!==JSON.stringify(scanLatest?.history_dates);
+    scanLatest=value;
+    if(scanArchiveDate){
+      if(datesChanged&&route==='scans')$('#header-date-controls').innerHTML=scanViewControl();
+      return;
+    }
     const changed=scanError||JSON.stringify(value.watch)!==JSON.stringify(scanData?.watch)||
       JSON.stringify(value.bucket_comparison)!==JSON.stringify(scanData?.bucket_comparison);
     const quotesChanged=JSON.stringify(value.quotes)!==JSON.stringify(scanData?.quotes);
     scanData=value;scanError=false;
     if(route!=='scans')return;
-    if(changed)render();
+    if(changed||datesChanged)render();
     else if(quotesChanged){
       const caption=$('#scan-caption');
       if(caption)caption.textContent=scanCaption();
@@ -1189,6 +1281,7 @@ function refreshScans(){
       });
     }
   }).catch(()=>{
+    if(scanArchiveDate)return;
     const changed=!scanError;scanError=true;
     if(changed&&route==='scans')render();
   }).finally(()=>{scanRequest=null;});
@@ -1217,6 +1310,7 @@ function render(){
   document.body.classList.toggle('positioning-page',route==='positioning');
   document.body.classList.toggle('breadth-page',route==='environment');
   document.body.classList.toggle('flow-page',['leadership','industries'].includes(route));
+  document.body.classList.toggle('industry-groups-page',route==='industries');
   document.body.classList.toggle('debrief-page',route==='debrief');
   document.body.classList.toggle('screener-page',route==='screener');
   document.body.classList.toggle('scans-page',route==='scans');
@@ -1238,6 +1332,7 @@ function render(){
   if(route==='screener'){const slot=document.querySelector('#header-date-controls'),controls=document.createElement('div');controls.className='screener-header-controls';const tabs=document.querySelector('.screener-tabs'),toolbar=document.querySelector('#view > .toolbar:not(.screener-tabs)');const center=document.createElement('div');center.className='screener-header-center';center.append(tabs);const count=toolbar.querySelector('.note');count.classList.add('screener-result-count');const results=document.querySelector('#view > .kk-table, #view > .chart-grid, #view > .empty');document.querySelector('#view').insertBefore(count,results||document.querySelector('#view > .note'));controls.append(center,toolbar);slot.append(controls);}
   if(['leadership','industries'].includes(route))mountFlowOverviewCharts();else disposeFlowOverviewCharts();
   mountTradingViewCharts();
+  mountHistoricalScanCharts();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
     if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);updateCOTReadings(row.querySelector('[data-cot-chart]'),-1);}
@@ -1288,6 +1383,12 @@ document.addEventListener('click',async event=>{
  if(action==='breadth-metric'){breadthMetric=node.dataset.metric;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-range'){breadthRange=node.dataset.range;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-window'){const page=document.querySelector('.bm-console');if(page?._setWindow){page._setWindow(Number(node.dataset.window));}else{breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();}return;}
+ if(action==='scan-earlier'||action==='scan-later'||action==='scan-latest'){
+  const dates=scanDates(),index=scanArchiveDate?dates.indexOf(scanArchiveDate):dates.length;
+  const next=action==='scan-earlier'?dates[index-1]:action==='scan-later'&&index<dates.length-1?dates[index+1]:'';
+  selectScanDate(next||'');
+  return;
+ }
  if(action==='custom-scan-bucket'){
   const bucket=node.dataset.scanBucket;
   selectedScanBucket=selectedScanBucket===bucket?'':bucket;

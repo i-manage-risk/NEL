@@ -1,6 +1,6 @@
 # NEL custom scans
 
-Open [the local dashboard](http://127.0.0.1:8765/#scans). From the NEL repository root,
+Open [Liquid Leadership](http://127.0.0.1:8765/#scans). From the NEL repository root,
 start the scheduler and dashboard with `.venv/bin/python nel2/serve.py` if the
 macOS service is unloaded. Run `.venv/bin/python nel2/serve.py --once` to check
 for due scans without starting another server.
@@ -66,6 +66,9 @@ The existing NEL site reads `outputs/scan_watchlist.json`. The Refresh Scans
 watchlist workflow rebuilds the snapshot from the latest published state, runs
 any due scans, and publishes delayed regular-session returns about every 15
 minutes. GitHub Actions queue and Pages build times can delay those updates.
-Daily bucket membership is archived in `outputs/scan_bucket_history/`.
+Daily watchlists and up to 90 completed candles per ticker are archived in
+`outputs/scan_bucket_history/`. The date picker only opens saved dates, so
+historical charts stop at the chosen close. Latest uses the live TradingView
+chart and shows current delayed quote data when available.
 Use `python nel2/publish.py --seed-local` to initialize a new deployment from
 the local database.

@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 
 from scan_metrics import refresh_metrics
-from scanner import DB, NY_TZ, ROOT, connect, due, intraday_returns, metric_rows, quote_window, run, status
+from scanner import DB, NY_TZ, ROOT, archived_watchlist, connect, due, intraday_returns, metric_rows, quote_window, run, status
 
 OUTPUT = ROOT / "outputs" / "scan_watchlist.json"
 HISTORY = ROOT / "outputs" / "scan_bucket_history"
@@ -26,19 +26,29 @@ def restore(payload, path, history=HISTORY):
             (row["ticker"], json.dumps(row)) for row in watch
         ])
         metrics = {}
-        for ticker, close, row in metric_rows(scans, watch):
-            if row.get("atr_observations") is not None:
-                metrics[ticker, close] = (
-                    row.get("adr"), row.get("atr_index"), row.get("atr_extension"), row["atr_observations"],
-                )
+        for archive in sorted(history.glob("*.json"))[-3:]:
+            snapshot = json.loads(archive.read_text())
+            members = snapshot["members"]
+            db.execute("INSERT INTO bucket_snapshots VALUES (?, ?, ?)", (
+                archive.stem, snapshot["captured"], json.dumps(members),
+            ))
+            db.executemany("INSERT INTO scan_chart_history VALUES (?,?,?)", [
+                (ticker, archive.stem, json.dumps(bars))
+                for ticker, bars in snapshot.get("charts", {}).items()
+            ])
+            store_metrics(metrics, metric_rows({}, members))
+        store_metrics(metrics, metric_rows(scans, watch))
         db.executemany("INSERT INTO scan_index_metrics VALUES (?,?,?,?,?,?,0)", [
             (ticker, close, *values) for (ticker, close), values in metrics.items()
         ])
-        for archive in sorted(history.glob("*.json"))[-2:]:
-            snapshot = json.loads(archive.read_text())
-            db.execute("INSERT INTO bucket_snapshots VALUES (?, ?, ?)", (
-                archive.stem, snapshot["captured"], json.dumps(snapshot["members"]),
-            ))
+
+
+def store_metrics(metrics, rows):
+    for ticker, close, row in rows:
+        if row.get("atr_observations") is not None:
+            metrics[ticker, close] = (
+                row.get("adr"), row.get("atr_index"), row.get("atr_extension"), row["atr_observations"],
+            )
 
 
 def save_json(path, data):
@@ -51,16 +61,16 @@ def save_json(path, data):
 
 
 def save_history(path, history=HISTORY):
-    """Archive bucket and liquidity membership, independent of the latest display."""
+    """Archive watchlist rows, measures and daily candles as of each close."""
     with closing(connect(path)) as db:
-        for session, captured, payload in db.execute("SELECT * FROM bucket_snapshots ORDER BY session"):
+        for (session,) in db.execute("SELECT session FROM bucket_snapshots ORDER BY session"):
             target = history / f"{session}.json"
-            if not target.exists():
-                members = [
-                    {key: row[key] for key in ("ticker", "bucket", "shelf")}
-                    for row in json.loads(payload)
-                ]
-                save_json(target, {"captured": captured, "members": members})
+            snapshot = archived_watchlist(db, session)
+            if target.exists():
+                previous = json.loads(target.read_text())
+                if snapshot["bucket_comparison"] is None:
+                    snapshot["bucket_comparison"] = previous.get("bucket_comparison")
+            save_json(target, snapshot)
 
 
 def publish_snapshot(path, quotes=None, output=OUTPUT, history=HISTORY):
@@ -68,6 +78,7 @@ def publish_snapshot(path, quotes=None, output=OUTPUT, history=HISTORY):
     if not any(snapshot["scans"].values()):
         raise RuntimeError("No completed scans are available to publish")
     save_history(path, history)
+    snapshot["history_dates"] = sorted(archive.stem for archive in history.glob("*.json"))
     save_json(output, dict(snapshot, quotes=quotes))
 
 

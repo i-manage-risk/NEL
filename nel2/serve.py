@@ -2,14 +2,15 @@
 import argparse
 import json
 import logging
-from datetime import datetime
+from contextlib import closing
+from datetime import date, datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Event, Thread
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from scan_metrics import refresh_metrics
-from scanner import NY_TZ, due, intraday_returns, quote_window, run, seed_current_snapshot, status, watch_tickers
+from scanner import NY_TZ, archived_watchlist, connect, due, intraday_returns, quote_window, run, seed_current_snapshot, status, watch_tickers
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = {"/", "/index.html", "/workspace.html", "/breadth.html", "/themes.html",
@@ -78,8 +79,23 @@ class Handler(SimpleHTTPRequestHandler):
                    for prefix, name in directory.items())
 
     def do_GET(self):
-        if urlsplit(self.path).path == "/api/scans":
-            body = json.dumps(dict(status(), quotes=quote_snapshot)).encode()
+        url = urlsplit(self.path)
+        if url.path == "/api/scans":
+            query = parse_qs(url.query)
+            if "close" in query:
+                try:
+                    close = date.fromisoformat(query["close"][0]).isoformat()
+                except ValueError:
+                    self.send_error(400)
+                    return
+                with closing(connect()) as db:
+                    snapshot = archived_watchlist(db, close)
+                if snapshot is None:
+                    self.send_error(404)
+                    return
+            else:
+                snapshot = dict(status(), quotes=quote_snapshot)
+            body = json.dumps(snapshot).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
