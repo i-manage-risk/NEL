@@ -860,9 +860,14 @@ function createTradingView(options){
  // STD;EMA resolves to a hosted Pine study whose defaults ignore these overrides.
  // The native EMA exposes its plot defaults and supports an explicit 9-bar input.
  return new TradingView.widget({...options,
+  hide_legend:true,
+  disabled_features:[...new Set([...(options.disabled_features||[]),'legend_widget'])],
   studies:[{id:'MAExp@tv-basicstudies',inputs:{length:9,source:'close'}}],
   toolbar_bg:'#202020',backgroundColor:'#202020',
-  overrides:{...options.overrides,'paneProperties.backgroundType':'solid','paneProperties.background':'#202020'},
+  overrides:{...options.overrides,'paneProperties.backgroundType':'solid','paneProperties.background':'#202020',
+   'paneProperties.legendProperties.showLegend':false,'paneProperties.legendProperties.showSeriesTitle':false,
+   'paneProperties.legendProperties.showSeriesOHLC':false,'paneProperties.legendProperties.showStudyTitles':false,
+   'paneProperties.legendProperties.showStudyValues':false},
   studies_overrides:{
    'moving average exponential.length':9,
    'moving average exponential.plot.color':'#FFFFFF',
