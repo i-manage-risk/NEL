@@ -10,7 +10,7 @@ import time
 from bisect import bisect_right, insort
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -306,6 +306,11 @@ def build_page(rows: list[dict]) -> str:
 def main() -> None:
     rows, history = load_rows()
     OUT.parent.mkdir(exist_ok=True)
+    previous = json.loads(OUT.read_text()) if OUT.exists() else []
+    refreshed_at = previous[0].pop("refreshedAt", None) if previous else None
+    if rows != previous or not refreshed_at:
+        refreshed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    rows[0]["refreshedAt"] = refreshed_at
     OUT.write_text(json.dumps(rows, separators=(",", ":")))
     SPX_HISTORY_OUT.write_text(json.dumps(history, separators=(",", ":")))
     Path("breadth.html").write_text(build_page(rows))

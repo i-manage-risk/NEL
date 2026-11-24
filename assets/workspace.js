@@ -1193,7 +1193,7 @@ async function selectScanDate(date){
     const archive=await response.json();
     if(archive.session!==date||!Array.isArray(archive.members))throw Error('Invalid saved watchlist');
     if(request!==scanArchiveRequest)return;
-    scanData={watch:archive.members,charts:archive.charts||{},bucket_comparison:archive.bucket_comparison};
+    scanData={watch:archive.members,charts:archive.charts||{},captured:archive.captured,bucket_comparison:archive.bucket_comparison};
   }catch{
     if(request!==scanArchiveRequest)return;
     scanError=true;
@@ -1259,7 +1259,7 @@ const stockbeeColumns=[
   'Worden Common stock universe','T2108','S&P',
 ];
 const stockbeeKeys=['date','up4','down4','ratio5','ratio10','up25q','down25q','up25m','down25m','up50m','down50m','up13d34','down13d34','universe','t2108','sp'];
-let directBreadth=[], savedBreadth=[], breadthLastCheck=0, breadthRequest=null;
+let directBreadth=[], savedBreadth=[], breadthLastCheck=0, breadthRequest=null, directBreadthRefreshedAt=null;
 
 function parseStockbeeLatest(text){
   const fields=line=>line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(value=>value.trim().replace(/^"|"$/g,'').replace(/ +/g,' '));
@@ -1305,6 +1305,7 @@ function refreshSourceBreadth(){
     if(!rows.length||JSON.stringify(rows)===JSON.stringify(directBreadth))return;
     const before=breadth[0]?.date;
     directBreadth=rows;
+    directBreadthRefreshedAt=new Date().toISOString();
     if(savedBreadth.length){
       breadth=withLatestBreadth(savedBreadth);
       if(route==='environment'&&breadth[0]?.date!==before)render();
@@ -1334,7 +1335,7 @@ async function refreshBrowserScanQuotes(watch){
       rows[ticker]={change,from_open:open>0&&finite(price)?100*(price/open-1):null,month};
     }
     if(Object.keys(rows).length){
-      directScanQuotes={session,rows};
+      directScanQuotes={session,rows,fetched:new Date().toISOString()};
       if(!scanArchiveDate&&route==='scans'&&scanData)applyLatestScanQuotes();
     }
   }).catch(()=>{}).finally(()=>{scanQuoteRequest=null;});
@@ -1342,6 +1343,7 @@ async function refreshBrowserScanQuotes(watch){
 
 function updateScanReturns(){
   const caption=$('#scan-caption');if(caption)caption.textContent=scanCaption();
+  updatePageRefreshTime();
   document.querySelectorAll('[data-scan-breadth]').forEach(node=>{
     node.innerHTML=scanBucketBreadth(scanGroupRows(node.dataset.scanBreadth));
   });
@@ -1395,6 +1397,54 @@ function refreshScans(){
 window.addEventListener('hashchange',()=>{if(location.hash==='#scans'||location.hash==='#liquid')refreshScans();});
 setInterval(()=>{if(route==='scans'&&document.visibilityState!=='hidden')refreshScans();},60000);
 document.addEventListener('visibilitychange',()=>{if(route==='scans'&&document.visibilityState==='visible')refreshScans();});
+function latestRefreshInstant(...candidates){
+  return Math.max(0,...candidates.map(value=>typeof value==='string'&&value.includes('T')?Date.parse(value):NaN).filter(Number.isFinite));
+}
+
+function pageRefreshInstant(){
+  if(route==='debrief')return latestRefreshInstant(debriefData?.generatedAt);
+  if(route==='environment'){
+    const newest=savedBreadth.reduce((latest,row)=>row.date>latest?row.date:latest,'');
+    return latestRefreshInstant(savedBreadth[0]?.refreshedAt,
+      directBreadth[0]?.date>newest?directBreadthRefreshedAt:null);
+  }
+  if(route==='leadership'||route==='industries')return latestRefreshInstant(flowMarket.generated_at);
+  if(route==='positioning')return latestRefreshInstant(cot.fetchedAt);
+  if(route==='screener'||route==='method')return latestRefreshInstant(db.generatedAt);
+  if(route==='scans'){
+    if(scanArchiveDate)return latestRefreshInstant(scanData?.captured);
+    const runs=Object.values(scanData?.scans||{}).map(run=>run?.fetched);
+    return latestRefreshInstant(scanData?.quotes?.fetched,...runs);
+  }
+  return 0;
+}
+
+function relativeRefreshTime(stamp,now=Date.now()){
+  if(!stamp)return 'Unknown';
+  const minutes=Math.max(0,Math.floor((now-stamp)/60000));
+  if(minutes<1)return 'Just now';
+  if(minutes<60)return minutes+' min ago';
+  const hours=Math.floor(minutes/60);
+  if(hours<24)return hours+(hours===1?' hour ago':' hours ago');
+  const days=Math.floor(hours/24);
+  return days+(days===1?' day ago':' days ago');
+}
+
+function updatePageRefreshTime(){
+  const time=$('#page-refresh-status time');
+  if(!time)return;
+  const stamp=pageRefreshInstant();
+  time.textContent=relativeRefreshTime(stamp);
+  if(stamp){
+    time.dateTime=new Date(stamp).toISOString();
+    time.title=new Date(stamp).toLocaleString();
+  }else{
+    time.removeAttribute('datetime');
+    time.removeAttribute('title');
+  }
+}
+setInterval(updatePageRefreshTime,15000);
+
 function render(){
  document.querySelector('.bm-workstation')?._chartObserver?.disconnect();
   route=location.hash.slice(1)||'debrief';if(route==='liquid'){route='scans';history.replaceState(null,'','#scans');}if(['briefing','review'].includes(route)||!titles[route]){route='debrief';history.replaceState(null,'','#debrief');}
@@ -1440,6 +1490,7 @@ function render(){
   if(['leadership','industries'].includes(route))mountFlowOverviewCharts();else disposeFlowOverviewCharts();
   mountTradingViewCharts();
   mountHistoricalScanCharts();
+  updatePageRefreshTime();
   document.querySelectorAll('.cot-row').forEach(row=>{
     const readings=row.querySelector('.cot-hover-read'),left=row.querySelector('.cot-position');
     if(readings&&left){left.querySelector('.cot-actuals')?.remove();left.appendChild(readings);updateCOTReadings(row.querySelector('[data-cot-chart]'),-1);}

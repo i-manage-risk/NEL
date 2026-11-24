@@ -108,8 +108,8 @@ def refresh():
         if update_quotes and snapshot["watch"] and now.date().isoformat() > latest_close:
             try:
                 rows = intraday_returns([item["ticker"] for item in snapshot["watch"]], now.date())
-                if rows:
-                    quote = {"session": now.date().isoformat(), "rows": rows}
+                if rows and (not quote or quote["session"] != now.date().isoformat() or quote["rows"] != rows or not quote.get("fetched")):
+                    quote = {"session": now.date().isoformat(), "rows": rows, "fetched": now.isoformat(timespec="seconds")}
             except Exception:
                 failed = True
                 logging.exception("Could not refresh watchlist returns")

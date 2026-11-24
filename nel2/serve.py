@@ -31,7 +31,7 @@ def schedule_quotes(stop):
             try:
                 rows = intraday_returns(watch_tickers(), session)
                 if rows:
-                    quote_snapshot = {"session": session.isoformat(), "rows": rows}
+                    quote_snapshot = {"session": session.isoformat(), "rows": rows, "fetched": now.isoformat(timespec="seconds")}
             except Exception:
                 logging.exception("Scan quote refresh failed.")
         stop.wait(60)

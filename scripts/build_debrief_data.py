@@ -1,4 +1,5 @@
 """Publish only the inputs the Debrief needs for its saved session selector."""
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 
@@ -54,12 +55,16 @@ def build(outputs):
 def main():
     outputs = ROOT / "outputs"
     target = outputs / "debrief_data.json"
-    body = json.dumps(build(outputs), separators=(",", ":"), allow_nan=False) + "\n"
-    if not target.exists() or target.read_text() != body:
+    payload = build(outputs)
+    previous = json.loads(target.read_text()) if target.exists() else {}
+    generated_at = previous.pop("generatedAt", None)
+    if payload != previous or not generated_at:
+        payload["generatedAt"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        body = json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
         staged = target.with_suffix(".tmp")
         staged.write_text(body)
         staged.replace(target)
-    print(f"Debrief payload: {len(body):,} bytes")
+    print(f"Debrief payload: {target.stat().st_size:,} bytes")
 
 
 if __name__ == "__main__":
