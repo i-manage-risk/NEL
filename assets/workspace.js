@@ -665,10 +665,16 @@ function arrangeBreadthDashboard(){
  const legend=document.createElement('p');legend.className='bm-board-legend';legend.textContent='Bar length: share of qualifying upside/downside moves. Brightness: historical rarity of each count. These are not percentages of all stocks.';board.append(legend);
  const unpin=document.createElement('button');unpin.dataset.bmUnpin='';unpin.textContent='Unpin';unpin.hidden=true;unpin.onclick=()=>{breadthPinned=-1;setBreadthHover(-1);};page.querySelector('[data-bm-date]').after(unpin);
  const freshness=document.createElement('small');freshness.className='bm-data-dates';freshness.textContent='Latest available · Breadth '+breadth.map(r=>r.date).sort().at(-1);page.querySelector('.bm-compact-header').after(freshness);
- const dates=breadth.map(r=>r.date).sort();
+ const dates=breadth.map(r=>r.date).sort(),at=dates.indexOf(breadthHoverLatest.date);
  const controls=document.createElement('span');controls.className='bm-date-controls';
- controls.innerHTML='<button aria-label="Previous session">←</button><button aria-label="Next session">→</button><button>Latest</button>';
- controls.querySelectorAll('button').forEach((button,i)=>button.onclick=async()=>{if(i===2){try{await refreshSiteData(true);breadthPinned=-1;breadthDate='';render();}catch(error){console.warn('Breadth refresh failed',error);}return;}breadthPinned=-1;const at=dates.indexOf(breadthHoverLatest.date);breadthDate=i===2?'':dates[Math.max(0,Math.min(dates.length-1,at+(i===0?-1:1)))];render();});
+ controls.innerHTML='<button type="button" aria-label="Previous session"'+(at<=0?' disabled':'')+'>←</button>'+
+  '<button type="button" aria-label="Next session"'+(at>=dates.length-1?' disabled':'')+'>→</button><button type="button">Latest</button>';
+ controls.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>{
+  breadthPinned=-1;
+  breadthDate=i===2?'':dates[at+(i===0?-1:1)];
+  render();
+  if(i===2){refreshSourceBreadth();checkSiteFreshness(true);}
+ });
  page.querySelector('[data-breadth-date]').parentElement.after(controls);
  document.onkeydown=event=>{if(event.key==='Escape'&&document.querySelector('.bm-workstation')){breadthPinned=-1;setBreadthHover(-1);}};
  page.classList.add('bm-console');
@@ -1091,7 +1097,7 @@ function scanDateControls(){
     '<button type="button" data-action="scan-earlier" aria-label="Previous saved date"'+(index<=0?' disabled':'')+'>‹</button>'+
     '<input type="date" data-scan-date aria-label="Saved Liquid Leadership close date" min="'+escapeHTML(dates[0])+
       '" max="'+escapeHTML(latest)+'" value="'+escapeHTML(scanArchiveDate||latest)+'">'+
-    '<button type="button" data-action="scan-later" aria-label="Next saved date"'+(scanArchiveDate?'':' disabled')+'>›</button>'+
+    '<button type="button" data-action="scan-later" aria-label="Next saved date"'+(scanArchiveDate&&index<dates.length-1?'':' disabled')+'>›</button>'+
     '<button type="button" data-action="scan-latest"'+(scanArchiveDate?'':' class="active" aria-pressed="true"')+'>Latest</button></div>';
 }
 
@@ -1571,12 +1577,27 @@ function showStock(symbol,kind){
 }
 document.addEventListener('click',async event=>{
  const node=event.target.closest('button,[data-filter-group],[data-flow-group],[data-flow-index]');if(!node)return;
- if(node.dataset.action==='close-latest'){try{await refreshSiteData(true);$('#session').value=db.snapshots.at(-1).date;render();}catch(error){console.warn('Latest refresh failed',error);}return;}
- if(['close-prev','close-next','close-latest'].includes(node.dataset.action)){const dates=closeSnapshots(),at=dates.findIndex(d=>d.date===asof()),next=node.dataset.action==='close-latest'?dates.at(-1):dates[Math.max(0,Math.min(dates.length-1,at+(node.dataset.action==='close-prev'?-1:1)))];selectCloseDate(next.date);return;}
+ if(node.dataset.action==='close-latest'){
+  const newest=closeSnapshots().at(-1);
+  if(newest)selectCloseDate(newest.date);
+  checkSiteFreshness(true);
+  return;
+ }
+ if(node.dataset.action==='close-prev'||node.dataset.action==='close-next'){
+  const dates=closeSnapshots(),at=dates.findIndex(d=>d.date===asof());
+  const next=dates[at+(node.dataset.action==='close-prev'?-1:1)];
+  if(next)selectCloseDate(next.date);
+  return;
+ }
  if(node.dataset.cotWindow){cotWindow=node.dataset.cotWindow;render();return;}
  const cotAction=node.dataset.action;
- if(cotAction==='cot-latest'){try{await refreshPositioning(true);}catch(error){console.error('COT refresh failed',error);}return;}
- if(cotAction==='cot-prev'||cotAction==='cot-next'||cotAction==='cot-latest'){const dates=cotDates(),current=cotDate||dates.at(-1),at=dates.findLastIndex(d=>d<=current);cotDate=cotAction==='cot-latest'?'':dates[Math.max(0,Math.min(dates.length-1,at+(cotAction==='cot-prev'?-1:1)))];render();return;}
+ if(cotAction==='cot-latest'){cotDate='';render();checkSiteFreshness(true);return;}
+ if(cotAction==='cot-prev'||cotAction==='cot-next'){
+  const dates=cotDates(),current=cotDate||dates.at(-1),at=dates.findLastIndex(d=>d<=current);
+  const next=dates[at+(cotAction==='cot-prev'?-1:1)];
+  if(next){cotDate=next;render();}
+  return;
+ }
  if(node.dataset.cotJump){document.getElementById('cot-market-'+node.dataset.cotJump)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
  if(node.dataset.flowHolding&&flowETFState){flowETFState.chartSymbol=node.dataset.flowHolding;flowETFDialog();return;}
  if(node.dataset.flowEtf){openFlowETF(node.dataset.flowEtf,node.dataset.flowGroup);return;}
@@ -1607,8 +1628,9 @@ document.addEventListener('click',async event=>{
  if(action==='breadth-window'){const page=document.querySelector('.bm-console');if(page?._setWindow){page._setWindow(Number(node.dataset.window));}else{breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();}return;}
  if(action==='scan-earlier'||action==='scan-later'||action==='scan-latest'){
   const dates=scanDates(),index=scanArchiveDate?dates.indexOf(scanArchiveDate):dates.length;
-  const next=action==='scan-earlier'?dates[index-1]:action==='scan-later'&&index<dates.length-1?dates[index+1]:'';
-  selectScanDate(next||'');
+  const next=action==='scan-earlier'?dates[index-1]:dates[index+1];
+  if(action==='scan-latest')selectScanDate('');
+  else if(next)selectScanDate(next);
   return;
  }
  if(action==='custom-scan-bucket'){
@@ -1693,13 +1715,13 @@ document.addEventListener('pointerout',event=>{const svg=event.target.closest?.(
 const dataETags=new Map();
 async function loadJSON(path,optional=false){const base=path.split('?')[0];const r=await fetch(path,{cache:'no-cache',signal:AbortSignal.timeout(12000)});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}const value=await r.json();dataETags.set(base,r.headers.get('etag')||r.headers.get('last-modified'));return value;}
 let cotRefreshPromise=null,cotLastChecked=0;
-async function refreshPositioning(latest=false){
- if(!cotRefreshPromise){cotRefreshPromise=loadJSON('outputs/positioning.json?refresh='+Date.now()).then(value=>{
+async function refreshPositioning(){
+ if(!cotRefreshPromise){cotRefreshPromise=readPageDataset('cot','outputs/positioning.json',true).then(value=>{
    if(!value.markets?.length)throw Error('No positioning reports returned');
-   cot=value;cotLastChecked=Date.now();loadedPageData.add('cot');
+   if(pageDatasetVersion(value)>=pageDatasetVersion(cot))cot=value;
+   cotLastChecked=Date.now();loadedPageData.add('cot');
  }).finally(()=>{cotRefreshPromise=null;});}
  await cotRefreshPromise;
- if(latest)cotDate='';
  if(['positioning','debrief'].includes(route))render();
 }
 function checkPositioningFreshness(){
@@ -1751,7 +1773,7 @@ async function readPageDataset(key,path,refresh){
 }
 async function pageDatasetChanged(key,path){
  const source=publishedBreadthPath(key,path);
- const query='?check='+Math.floor(Date.now()/300000);
+ const query='?check='+Math.floor(Date.now()/60000);
  const check=async target=>{
   const response=await fetch(target+query,{method:'HEAD',cache:'no-cache'});
   if(!response.ok)throw Error('Could not check '+target);
@@ -1774,8 +1796,9 @@ let siteRefreshPromise=null,siteLastChecked=Date.now();
 async function refreshSiteData(force=false){
  if(siteRefreshPromise)return siteRefreshPromise;
  siteRefreshPromise=(async()=>{
-  const page=route,oldLatest=db.snapshots?.at(-1)?.date,selectedDate=$('#session').value,wasLatest=!selectedDate||selectedDate===oldLatest;
+  const page=route;
   const calendar=await readPageDataset('calendar','outputs/workspace_calendar.json',force);
+  const oldLatest=db.snapshots?.at(-1)?.date,selectedDate=$('#session').value,wasLatest=!selectedDate||selectedDate===oldLatest;
   let changed=false;
   if(calendar.snapshots?.length&&calendar.snapshots.at(-1).date>=oldLatest&&JSON.stringify(calendar.snapshots.map(s=>s.date))!==JSON.stringify(db.snapshots?.map(s=>s.date))){
    db=calendar;loadedPageData.delete('stocks');changed=true;
@@ -1792,10 +1815,12 @@ async function refreshSiteData(force=false){
  })().finally(()=>{siteRefreshPromise=null;});
  return siteRefreshPromise;
 }
-function checkSiteFreshness(){if(document.visibilityState!=='hidden'&&Date.now()-siteLastChecked>=300000)refreshSiteData().catch(error=>console.warn('Data refresh deferred',error));}
-setInterval(checkSiteFreshness,300000);
+function checkSiteFreshness(navigate=false){
+ if(route!=='scans'&&document.visibilityState!=='hidden'&&(navigate||Date.now()-siteLastChecked>=60000))refreshSiteData().catch(error=>console.warn('Data refresh deferred',error));
+}
+setInterval(checkSiteFreshness,60000);
 setInterval(()=>{if(route==='environment'&&document.visibilityState==='visible')refreshSourceBreadth();},60000);
-document.addEventListener('visibilitychange',()=>{checkSiteFreshness();if(route==='environment'&&document.visibilityState==='visible')refreshSourceBreadth();});
+document.addEventListener('visibilitychange',()=>{checkSiteFreshness(true);if(route==='environment'&&document.visibilityState==='visible')refreshSourceBreadth();});
 let pageLoadRequest=0;
 async function loadRouteData(page){
  const request=++pageLoadRequest;
@@ -1813,6 +1838,7 @@ async function start(){
  if(!db.snapshots?.length)throw Error('No saved stock snapshots available.');
  $('#session').innerHTML=db.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+(s.closeDate||s.date)+'</option>').join('');
  $('#session').addEventListener('change',render);render();
+ window.addEventListener('hashchange',()=>checkSiteFreshness(true));
  }catch(error){$('#view').innerHTML='<p class="alert">'+escapeHTML(error.message)+'</p><a href="industry_flow_dashboard.html">Open saved detailed stock dashboard ↗</a>';}
 }
 start();
