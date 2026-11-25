@@ -1708,7 +1708,7 @@ function checkPositioningFreshness(){
 }
 
 let debriefData=null;
-const loadedPageData=new Set(), pendingPageData=new Map();
+const loadedPageData=new Set(), pendingPageData=new Map(), pageDatasetVersions=new Map();
 const pageDataSpecs={
  debrief:['outputs/debrief_data.json',v=>debriefData=v],
  stocks:['outputs/workspace.json',v=>db=v],
@@ -1726,16 +1726,28 @@ function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loaded
 function publishedBreadthPath(key,path){
  return typeof location!=='undefined'&&scanLocal()?publishedNEL+path:path;
 }
+function pageDatasetVersion(value){
+ const stamp=value?.generatedAt||value?.generated_at||value?.fetchedAt||value?.[0]?.refreshedAt;
+ const parsed=Date.parse(stamp);
+ if(Number.isFinite(parsed))return parsed;
+ const date=value?.snapshots?.at(-1)?.closeDate||value?.snapshots?.at(-1)?.date||value?.[0]?.date;
+ return Date.parse(date)||0;
+}
 async function readPageDataset(key,path,refresh){
  const source=publishedBreadthPath(key,path);
  const suffix=refresh?'?refresh='+Date.now():'';
- const sources=refresh&&typeof location!=='undefined'?[originNEL+path,source,path]:[source,path];
- let failure;
- for(const candidate of new Set(sources)){
-  try{return await loadJSON(candidate+suffix);}
-  catch(error){failure=error;}
+ if(refresh&&typeof location!=='undefined'){
+  const attempts=await Promise.allSettled([source,originNEL+path].map(url=>loadJSON(url+suffix)));
+  const available=attempts.filter(result=>result.status==='fulfilled').map(result=>result.value);
+  if(available.length)return available.sort((a,b)=>pageDatasetVersion(b)-pageDatasetVersion(a))[0];
+  if(source!==path)return loadJSON(path+suffix);
+  throw attempts[0].reason;
  }
- throw failure;
+ try{return await loadJSON(source+suffix);}
+ catch(error){
+  if(source===path)throw error;
+  return loadJSON(path+suffix);
+ }
 }
 async function pageDatasetChanged(key,path){
  const source=publishedBreadthPath(key,path);
@@ -1755,7 +1767,7 @@ async function pageDatasetChanged(key,path){
 
 function loadPageDataset(key,refresh=false){
  if(loadedPageData.has(key)&&!refresh)return Promise.resolve();
- if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,readPageDataset(key,path,refresh).then(value=>{assign(value);loadedPageData.add(key);if(key==='cot')cotLastChecked=Date.now();}).finally(()=>pendingPageData.delete(key)));}
+ if(!pendingPageData.has(key)){const [path,assign]=pageDataSpecs[key];pendingPageData.set(key,readPageDataset(key,path,refresh).then(value=>{const version=pageDatasetVersion(value);if(version&&version<(pageDatasetVersions.get(key)||0))return;pageDatasetVersions.set(key,version);assign(value);loadedPageData.add(key);if(key==='cot')cotLastChecked=Date.now();}).finally(()=>pendingPageData.delete(key)));}
  return pendingPageData.get(key);
 }
 let siteRefreshPromise=null,siteLastChecked=Date.now();
@@ -1765,7 +1777,7 @@ async function refreshSiteData(force=false){
   const page=route,oldLatest=db.snapshots?.at(-1)?.date,selectedDate=$('#session').value,wasLatest=!selectedDate||selectedDate===oldLatest;
   const calendar=await readPageDataset('calendar','outputs/workspace_calendar.json',force);
   let changed=false;
-  if(calendar.snapshots?.length&&JSON.stringify(calendar.snapshots.map(s=>s.date))!==JSON.stringify(db.snapshots?.map(s=>s.date))){
+  if(calendar.snapshots?.length&&calendar.snapshots.at(-1).date>=oldLatest&&JSON.stringify(calendar.snapshots.map(s=>s.date))!==JSON.stringify(db.snapshots?.map(s=>s.date))){
    db=calendar;loadedPageData.delete('stocks');changed=true;
    $('#session').innerHTML=calendar.snapshots.toReversed().map(s=>'<option value="'+s.date+'">'+(s.closeDate||s.date)+'</option>').join('');
    $('#session').value=wasLatest?calendar.snapshots.at(-1).date:selectedDate;
