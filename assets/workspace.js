@@ -1184,24 +1184,63 @@ function scans(){
 
 const scanLocal=()=>['127.0.0.1','localhost','[::1]'].includes(location.hostname);
 
-async function selectScanDate(date){
+const publishedNEL='https://i-manage-risk.github.io/NEL/';
+const originNEL='https://raw.githubusercontent.com/i-manage-risk/NEL/main/';
+
+async function scanSnapshotSource(url,force,validate){
+  const suffix=force?(url.includes('?')?'&':'?')+'refresh='+Date.now():'';
+  const response=await fetch(url+suffix,{cache:'no-cache',signal:AbortSignal.timeout(10000)});
+  if(!response.ok)throw Error('Watchlist unavailable');
+  const data=await response.json();
+  if(!validate(data))throw Error('Invalid watchlist snapshot');
+  return data;
+}
+
+function scanSnapshotTime(data){
+  return latestRefreshInstant(data.quotes?.fetched,...Object.values(data.scans).map(run=>run?.fetched));
+}
+
+async function readLatestScans(force){
+  const relative='outputs/scan_watchlist.json';
+  const sources=scanLocal()?['api/scans',publishedNEL+relative]:[relative];
+  if(force)sources.push(originNEL+relative);
+  const read=source=>scanSnapshotSource(source,force,data=>data?.scans&&Array.isArray(data.watch));
+  const results=await Promise.allSettled(sources.map(read));
+  const snapshots=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
+  if(!snapshots.length&&!force)return read(originNEL+relative);
+  if(!snapshots.length)throw Error('Watchlist unavailable');
+  const close=data=>data.scans.potent?.session||data.history_dates?.at(-1)||'';
+  const morning=data=>data.scans.premarket?.session||'';
+  return snapshots.sort((a,b)=>close(b).localeCompare(close(a))||morning(b).localeCompare(morning(a))||
+    scanSnapshotTime(b)-scanSnapshotTime(a))[0];
+}
+
+async function selectScanDate(date,force=false){
   const request=++scanArchiveRequest;
   scanArchiveDate=date;
-  scanData=date?null:scanLatest;
+  if(!force)scanData=date?null:scanLatest;
   scanError=false;
   if(route==='scans')render();
   if(!date){refreshScans();return;}
   try{
-    const source=scanLocal()?'api/scans?close='+encodeURIComponent(date):'outputs/scan_bucket_history/'+encodeURIComponent(date)+'.json';
-    const response=await fetch(source,{cache:'no-cache'});
-    if(!response.ok)throw Error('Saved watchlist unavailable');
-    const archive=await response.json();
-    if(archive.session!==date||!Array.isArray(archive.members))throw Error('Invalid saved watchlist');
+    const file='outputs/scan_bucket_history/'+encodeURIComponent(date)+'.json';
+    const sources=scanLocal()?['api/scans?close='+encodeURIComponent(date),publishedNEL+file]:[file];
+    if(force)sources.unshift(originNEL+file);
+    else sources.push(originNEL+file);
+    let archive;
+    for(const source of sources){
+      try{
+        archive=await scanSnapshotSource(source,force,data=>data.session===date&&Array.isArray(data.members));
+        break;
+      }catch{}
+    }
+    if(!archive)throw Error('Saved watchlist unavailable');
     if(request!==scanArchiveRequest)return;
     scanData={watch:archive.members,charts:archive.charts||{},captured:archive.captured,bucket_comparison:archive.bucket_comparison};
   }catch{
     if(request!==scanArchiveRequest)return;
     scanError=true;
+    if(force)throw Error('Saved watchlist unavailable');
   }
   if(route==='scans')render();
 }
@@ -1370,14 +1409,9 @@ function applyLatestScanQuotes(){
   updateScanReturns();
 }
 
-function refreshScans(){
-  if(scanRequest)return;
-  const source=scanLocal()?'api/scans':'outputs/scan_watchlist.json';
-  scanRequest=fetch(source,{cache:'no-cache'}).then(response=>{
-    if(!response.ok)throw Error('Scan data unavailable');
-    return response.json();
-  }).then(value=>{
-    if(!value?.scans||!Array.isArray(value.watch))throw Error('Invalid scan data');
+function refreshScans(force=false){
+  if(scanRequest)return force?scanRequest.then(()=>refreshScans(true)):scanRequest;
+  scanRequest=readLatestScans(force).then(value=>{
     const datesChanged=JSON.stringify(value.history_dates)!==JSON.stringify(scanLatest?.history_dates);
     scanLatest=value;
     if(scanArchiveDate){
@@ -1393,11 +1427,14 @@ function refreshScans(){
     if(changed||datesChanged)render();
     else if(quotesChanged)updateScanReturns();
     refreshBrowserScanQuotes(value.watch);
-  }).catch(()=>{
-    if(scanArchiveDate)return;
-    const changed=!scanError;scanError=true;
-    if(changed&&route==='scans')render();
+  }).catch(error=>{
+    if(!scanArchiveDate){
+      const changed=!scanError;scanError=true;
+      if(changed&&route==='scans')render();
+    }
+    if(force)throw error;
   }).finally(()=>{scanRequest=null;});
+  return scanRequest;
 }
 window.addEventListener('hashchange',()=>{if(location.hash==='#scans'||location.hash==='#liquid')refreshScans();});
 setInterval(()=>{if(route==='scans'&&document.visibilityState!=='hidden')refreshScans();},60000);
@@ -1449,6 +1486,27 @@ function updatePageRefreshTime(){
   }
 }
 setInterval(updatePageRefreshTime,15000);
+
+async function forcePageRefresh(button){
+  const status=$('#page-refresh-message');
+  button.disabled=true;
+  status.textContent='Checking for updates…';
+  const before=pageRefreshInstant();
+  try{
+    if(route==='scans'){
+      if(scanArchiveDate)await selectScanDate(scanArchiveDate,true);
+      else await refreshScans(true);
+    }else{
+      if(route==='environment')refreshSourceBreadth();
+      await refreshSiteData(true);
+    }
+    status.textContent=pageRefreshInstant()>before?'Updated.':'Checked. No newer data available.';
+  }catch{
+    status.textContent='Refresh unavailable. Showing the last loaded data.';
+  }finally{
+    button.disabled=false;
+  }
+}
 
 function render(){
  document.querySelector('.bm-workstation')?._chartObserver?.disconnect();
@@ -1543,6 +1601,7 @@ document.addEventListener('click',async event=>{
  if(node.dataset.filterGroup){filters.group=node.dataset.filterGroup;location.hash='screener';}
  if(node.dataset.stock)showStock(node.dataset.stock,node.dataset.kind);
  const action=node.dataset.action;
+ if(action==='force-page-refresh'){await forcePageRefresh(node);return;}
  if(action==='breadth-metric'){breadthMetric=node.dataset.metric;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-range'){breadthRange=node.dataset.range;render();document.querySelector('.bm-details').open=true;return;}
  if(action==='breadth-window'){const page=document.querySelector('.bm-console');if(page?._setWindow){page._setWindow(Number(node.dataset.window));}else{breadthPinned=-1;breadthWindow=Number(node.dataset.window);render();}return;}
@@ -1632,7 +1691,7 @@ document.addEventListener('pointermove',event=>{
 });
 document.addEventListener('pointerout',event=>{const svg=event.target.closest?.('[data-cot-chart]');if(svg&&!svg.contains(event.relatedTarget)){svg.querySelector('.cot-hover-line')?.setAttribute('opacity','0');updateCOTReadings(svg,-1);}});
 const dataETags=new Map();
-async function loadJSON(path,optional=false){const base=path.split('?')[0];const r=await fetch(path,{cache:'no-cache'});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}const value=await r.json();dataETags.set(base,r.headers.get('etag')||r.headers.get('last-modified'));return value;}
+async function loadJSON(path,optional=false){const base=path.split('?')[0];const r=await fetch(path,{cache:'no-cache',signal:AbortSignal.timeout(12000)});if(!r.ok){if(optional)return {};throw Error('Could not load '+path);}const value=await r.json();dataETags.set(base,r.headers.get('etag')||r.headers.get('last-modified'));return value;}
 let cotRefreshPromise=null,cotLastChecked=0;
 async function refreshPositioning(latest=false){
  if(!cotRefreshPromise){cotRefreshPromise=loadJSON('outputs/positioning.json?refresh='+Date.now()).then(value=>{
@@ -1665,19 +1724,18 @@ const pageDataSpecs={
 const pageDataNeeds={debrief:['debrief'],environment:['breadth','spx'],leadership:['flow'],industries:['flow'],positioning:['cot','indexes'],screener:['stocks'],method:['themes','sectors','context']};
 function routeDataReady(page){return (pageDataNeeds[page]||[]).every(key=>loadedPageData.has(key));}
 function publishedBreadthPath(key,path){
- if((key==='breadth'||key==='spx')&&typeof location!=='undefined'&&scanLocal()){
-  return 'https://i-manage-risk.github.io/NEL/'+path;
- }
- return path;
+ return typeof location!=='undefined'&&scanLocal()?publishedNEL+path:path;
 }
 async function readPageDataset(key,path,refresh){
  const source=publishedBreadthPath(key,path);
  const suffix=refresh?'?refresh='+Date.now():'';
- try{return await loadJSON(source+suffix);}
- catch(error){
-  if(source===path)throw error;
-  return loadJSON(path+suffix);
+ const sources=refresh&&typeof location!=='undefined'?[originNEL+path,source,path]:[source,path];
+ let failure;
+ for(const candidate of new Set(sources)){
+  try{return await loadJSON(candidate+suffix);}
+  catch(error){failure=error;}
  }
+ throw failure;
 }
 async function pageDatasetChanged(key,path){
  const source=publishedBreadthPath(key,path);
@@ -1705,7 +1763,7 @@ async function refreshSiteData(force=false){
  if(siteRefreshPromise)return siteRefreshPromise;
  siteRefreshPromise=(async()=>{
   const page=route,oldLatest=db.snapshots?.at(-1)?.date,selectedDate=$('#session').value,wasLatest=!selectedDate||selectedDate===oldLatest;
-  const calendar=await loadJSON('outputs/workspace_calendar.json?refresh='+Date.now());
+  const calendar=await readPageDataset('calendar','outputs/workspace_calendar.json',force);
   let changed=false;
   if(calendar.snapshots?.length&&JSON.stringify(calendar.snapshots.map(s=>s.date))!==JSON.stringify(db.snapshots?.map(s=>s.date))){
    db=calendar;loadedPageData.delete('stocks');changed=true;
@@ -1736,7 +1794,7 @@ async function loadRouteData(page){
 async function start(){
  try{
  const initial=location.hash.slice(1)||'debrief';
- const calendar=loadJSON('outputs/workspace_calendar.json');
+ const calendar=readPageDataset('calendar','outputs/workspace_calendar.json',false);
  const preload=Promise.all((pageDataNeeds[initial]||[]).map(key=>loadPageDataset(key))).catch(()=>{});
  db=await calendar;
  await preload;

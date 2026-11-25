@@ -497,3 +497,5 @@ body.industry-groups-page{height:auto;overflow:visible}
 .breadth-page .workspace-main{display:flex;flex-direction:column}
 .breadth-page #view{height:auto;flex:1 1 auto;min-height:0}
 .breadth-page #page-refresh-status{flex:none;margin-top:5px}
+#page-refresh-status{display:flex;justify-content:flex-end;align-items:center;gap:8px 12px;flex-wrap:wrap}
+#page-refresh-status button{padding:3px 8px;font-size:12px}
